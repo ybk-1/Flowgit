@@ -72,9 +72,11 @@ function wrapCaption(text, perLine = 12, maxLines = 3) {
   return out.join("\n");
 }
 
-// drawtext gained text_align in FFmpeg 6.1; older builds left-align multi-line text.
-const drawtextHelp = spawnSync("ffmpeg", ["-hide_banner", "-h", "filter=drawtext"], { encoding: "utf8" }).stdout ?? "";
-const CENTER = drawtextHelp.includes("text_align") ? ":text_align=C" : "";
+// Feature checks: drawtext text_align (FFmpeg 6.1), gradients (6.0), xfade (4.3).
+const help = (filter) => spawnSync("ffmpeg", ["-hide_banner", "-h", `filter=${filter}`], { encoding: "utf8" }).stdout ?? "";
+const CENTER = help("drawtext").includes("text_align") ? ":text_align=C" : "";
+const HAS_GRADIENTS = help("gradients").includes("gradients");
+const HAS_XFADE = help("xfade").includes("xfade");
 
 function run(args, label) {
   const r = spawnSync("ffmpeg", ["-hide_banner", "-loglevel", "error", "-y", ...args], { encoding: "utf8" });
@@ -84,51 +86,112 @@ function run(args, label) {
   }
 }
 
+const clips = timeline.clips ?? [];
+if (!clips.length) {
+  console.error(say("timeline.json 里没有镜头", "timeline.json has no clips"));
+  process.exit(1);
+}
+const durations = clips.map((clip) => Math.max(0.5, Number(clip.duration) || 3));
+const total = durations.reduce((a, b) => a + b, 0);
+
+// Transition between clips. timeline.transition = { "type": "fade" | "none", "duration": seconds }.
+// Each clip but the last is rendered T seconds longer and overlaps the next one, so the
+// video keeps the timeline's total length.
+const wantFade = (timeline.transition?.type ?? "fade") !== "none";
+const T = wantFade && HAS_XFADE && clips.length > 1 ? Math.min(Math.max(Number(timeline.transition?.duration ?? 0.4) || 0, 0), 1, Math.min(...durations) / 2) : 0;
+
+// Blurred, darkened copy of the picture fills the frame; the whole picture sits on top.
+// No black bars when a landscape photo goes into a vertical video.
+const fill = (w, h, out) =>
+  `split[a][b];[a]scale=${w}:${h}:force_original_aspect_ratio=increase,crop=${w}:${h},gblur=sigma=${Math.round(w / 40)},eq=brightness=-0.12[bg];` +
+  `[b]scale=${w}:${h}:force_original_aspect_ratio=decrease[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2${out ? `[${out}]` : ""}`;
+
+const textFile = (name, text) => {
+  const file = path.join(work, name);
+  fs.writeFileSync(file, text);
+  return esc(file);
+};
+
 const segments = [];
-timeline.clips.forEach((clip, i) => {
-  const dur = Math.max(0.5, Number(clip.duration) || 3);
+clips.forEach((clip, i) => {
+  const dur = durations[i];
+  const len = dur + (i < clips.length - 1 ? T : 0);
+  const frames = Math.round(len * FPS);
   const out = path.join(work, `seg-${String(i).padStart(3, "0")}.mp4`);
-  const fit = `scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fps=${FPS},format=yuv420p`;
   const filters = [];
   let inputArgs;
   const src = clip.source ?? { kind: "card" };
   const srcPath = src.path ? path.join(dir, src.path) : undefined;
   if (src.kind === "image" && srcPath && fs.existsSync(srcPath)) {
-    inputArgs = ["-loop", "1", "-t", String(dur), "-i", srcPath];
-    filters.push(fit);
+    // Slow zoom ("Ken Burns"): in on even clips, out on odd ones; clip.motion = "zoom-in" | "zoom-out" | "none".
+    // Compose at 2x and let zoompan scale down, which keeps the motion smooth.
+    const motion = clip.motion ?? (i % 2 === 0 ? "zoom-in" : "zoom-out");
+    const zoom = motion === "zoom-in" ? `1+0.1*on/${frames}` : motion === "zoom-out" ? `1.1-0.1*on/${frames}` : "1";
+    inputArgs = ["-i", srcPath];
+    filters.push(
+      fill(W * 2, H * 2),
+      `zoompan=z='${zoom}':d=${frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=${W}x${H}:fps=${FPS}`,
+      "setsar=1",
+      "format=yuv420p",
+    );
   } else if (src.kind === "video" && srcPath && fs.existsSync(srcPath)) {
-    inputArgs = ["-stream_loop", "-1", "-t", String(dur), "-i", srcPath];
-    filters.push(fit);
+    inputArgs = ["-stream_loop", "-1", "-t", String(len), "-i", srcPath];
+    filters.push(fill(W, H), `fps=${FPS}`, "setsar=1", "format=yuv420p");
   } else {
-    const color = PALETTE[i % PALETTE.length];
-    inputArgs = ["-f", "lavfi", "-t", String(dur), "-i", `color=c=${color}:s=${W}x${H}:r=${FPS}`];
+    // Text card: a slowly moving two-colour gradient (flat colour on FFmpeg < 6.0).
+    const c0 = PALETTE[i % PALETTE.length];
+    const c1 = PALETTE[(i + 2) % PALETTE.length];
+    const bg = HAS_GRADIENTS
+      ? `gradients=s=${W}x${H}:r=${FPS}:c0=${c0}:c1=${c1}:x0=0:y0=0:x1=${W}:y1=${H}:speed=0.008:d=${len}`
+      : `color=c=${c0}:s=${W}x${H}:r=${FPS}`;
+    inputArgs = ["-f", "lavfi", "-t", String(len), "-i", bg];
     filters.push("format=yuv420p");
     if (font && clip.narration) {
-      // text card: show the narration in the middle when there is no asset
-      const cardFile = path.join(work, `card-${i}.txt`);
-      fs.writeFileSync(cardFile, wrapCaption(clip.narration, 11, 7));
+      // no asset: show the narration in the middle
       filters.push(
-        `drawtext=fontfile='${esc(font)}':textfile='${esc(cardFile)}':fontsize=${Math.round(W / 16)}:fontcolor=white:line_spacing=${Math.round(W / 40)}${CENTER}:x=(w-text_w)/2:y=(h-text_h)/2`,
+        `drawtext=fontfile='${esc(font)}':textfile='${textFile(`card-${i}.txt`, wrapCaption(clip.narration, 11, 7))}':fontsize=${Math.round(W / 16)}:fontcolor=white:shadowcolor=black@0.35:shadowx=3:shadowy=3:line_spacing=${Math.round(W / 40)}${CENTER}:x=(w-text_w)/2:y=(h-text_h)/2`,
       );
     }
   }
-  if (font && clip.caption) {
-    const capFile = path.join(work, `cap-${i}.txt`);
-    fs.writeFileSync(capFile, wrapCaption(clip.caption, 12));
+  if (font && i === 0 && timeline.title) {
+    // Title over the first clip for about 2.5 seconds, then it fades away.
     filters.push(
-      `drawtext=fontfile='${esc(font)}':textfile='${esc(capFile)}':fontsize=${Math.round(W / 18)}:fontcolor=white:borderw=4:bordercolor=black@0.8:line_spacing=12${CENTER}:x=(w-text_w)/2:y=h*0.78`,
+      `drawtext=fontfile='${esc(font)}':textfile='${textFile("title.txt", wrapCaption(timeline.title, 10, 2))}':fontsize=${Math.round(W / 13)}:fontcolor=white:box=1:boxcolor=black@0.5:boxborderw=${Math.round(W / 36)}:line_spacing=${Math.round(W / 60)}${CENTER}:x=(w-text_w)/2:y=h*0.12:alpha='if(lt(t,2.2),1,max(0,(2.8-t)/0.6))':enable='lt(t,2.8)'`,
     );
   }
-  run([...inputArgs, "-vf", filters.join(","), "-an", "-c:v", "libx264", "-preset", "veryfast", "-r", String(FPS), "-pix_fmt", "yuv420p", out], `clip ${clip.id}`);
+  if (font && clip.caption) {
+    filters.push(
+      `drawtext=fontfile='${esc(font)}':textfile='${textFile(`cap-${i}.txt`, wrapCaption(clip.caption, 12))}':fontsize=${Math.round(W / 18)}:fontcolor=white:box=1:boxcolor=black@0.45:boxborderw=${Math.round(W / 45)}:line_spacing=12${CENTER}:x=(w-text_w)/2:y=h*0.76`,
+    );
+  }
+  run([...inputArgs, "-filter_complex", `[0:v]${filters.join(",")}[v]`, "-map", "[v]", "-frames:v", String(frames), "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-r", String(FPS), "-pix_fmt", "yuv420p", out], `clip ${clip.id}`);
   segments.push(out);
   const what = { image: say("图片", "image"), video: say("视频", "video"), card: say("文字卡", "text card") }[src.kind] ?? src.kind;
-  console.log(`${say("镜头", "clip")} ${i + 1}/${timeline.clips.length} ${clip.id}: ${what}${src.path ? ` ${src.path}` : ""}, ${dur}${say(" 秒", "s")}`);
+  console.log(`${say("镜头", "clip")} ${i + 1}/${clips.length} ${clip.id}: ${what}${src.path ? ` ${src.path}` : ""}, ${dur}${say(" 秒", "s")}`);
 });
 
-const list = path.join(work, "list.txt");
-fs.writeFileSync(list, segments.map((s) => `file '${s.replace(/'/g, "'\\''")}'`).join("\n"));
+// Join: cross-fade between clips, with a short fade in from and out to black.
 const finalPath = path.join(dir, "final.mp4");
-run(["-f", "concat", "-safe", "0", "-i", list, "-c", "copy", "-movflags", "+faststart", finalPath], "concat");
+const graph = [];
+segments.forEach((_, k) => graph.push(`[${k}:v]fps=${FPS},settb=AVTB,setpts=PTS-STARTPTS[s${k}]`));
+let last = "s0";
+if (T > 0) {
+  let offset = 0;
+  for (let k = 1; k < segments.length; k++) {
+    offset += durations[k - 1];
+    graph.push(`[${last}][s${k}]xfade=transition=fade:duration=${T}:offset=${offset.toFixed(3)}[x${k}]`);
+    last = `x${k}`;
+  }
+} else if (segments.length > 1) {
+  graph.push(`${segments.map((_, k) => `[s${k}]`).join("")}concat=n=${segments.length}:v=1:a=0[c]`);
+  last = "c";
+}
+const edge = Math.min(0.4, total / 4);
+graph.push(`[${last}]fade=t=in:st=0:d=${edge},fade=t=out:st=${(total - edge).toFixed(3)}:d=${edge},format=yuv420p[out]`);
+run(
+  [...segments.flatMap((s) => ["-i", s]), "-filter_complex", graph.join(";"), "-map", "[out]", "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-r", String(FPS), "-pix_fmt", "yuv420p", "-movflags", "+faststart", finalPath],
+  "join",
+);
 fs.rmSync(work, { recursive: true, force: true });
 
 const probe = spawnSync("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "default=nw=1:nk=1", finalPath], { encoding: "utf8" });

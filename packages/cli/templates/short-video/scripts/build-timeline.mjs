@@ -64,6 +64,8 @@ const timeline = {
   height: h,
   fps: 30,
   duration: Number(t.toFixed(3)),
+  // 镜头之间的转场：type 可以是 "fade" 或 "none"。 / Transition between clips: type "fade" or "none".
+  transition: { type: "fade", duration: 0.4 },
   clips,
 };
 

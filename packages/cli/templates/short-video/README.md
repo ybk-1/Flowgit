@@ -51,6 +51,33 @@ FLOWGIT_LLM_MOCK_DIR=demo-replies flowgit run all --input topic=为什么猫喜�
 
 Put images or videos in `assets/`, named after the shot ids in the storyboard, e.g. `s1.jpg`, `s2.mp4`. A shot with no asset becomes a text card showing its narration.
 
+## 画面 / Look
+
+- **图片**会慢慢推近或拉远（单数镜头推近、双数镜头拉远）。横图放进竖屏时，背景用同一张图模糊、压暗后铺满，不会有黑边。
+- **视频**同样用模糊背景铺满画面。
+- **没有素材的镜头**是缓慢流动的双色渐变文字卡（FFmpeg 6.0 以上；更旧的版本用纯色）。
+- **标题**在第一个镜头上显示约 2.5 秒后淡出；**字幕**放在半透明底框上。
+- **转场**：镜头之间交叉淡化，开头淡入、结尾淡出，总时长不变。
+
+- **Images** slowly zoom in or out (in on odd shots, out on even ones). A landscape picture in a vertical video sits on a blurred, darkened copy of itself instead of black bars.
+- **Videos** get the same blurred fill.
+- **Shots without an asset** become text cards on a slowly moving two-colour gradient (FFmpeg 6.0+; a flat colour on older builds).
+- **The title** shows over the first shot for about 2.5 seconds, then fades; **captions** sit on a translucent box.
+- **Transitions**: clips cross-fade, with a fade in at the start and out at the end; the total length stays the same.
+
+在 `timeline.json` 里可以调整 / You can tweak these in `timeline.json`:
+
+```json
+{
+  "transition": { "type": "fade", "duration": 0.4 },
+  "clips": [{ "id": "s1", "motion": "zoom-out" }]
+}
+```
+
+`transition.type` 写 `"none"` 关掉转场；镜头的 `motion` 可以是 `"zoom-in"`、`"zoom-out"` 或 `"none"`（只对图片有效）。
+
+Set `transition.type` to `"none"` to turn transitions off; a clip's `motion` can be `"zoom-in"`, `"zoom-out"` or `"none"` (images only).
+
 ## 改一步，重跑后面 / Change one step, re-run what follows
 
 - 不满意分镜：直接改 `storyboard.json`，或改 `prompts/storyboard.md` 后 `flowgit run storyboard`。
