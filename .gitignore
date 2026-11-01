@@ -14,3 +14,9 @@ packages/cli/templates/*/timeline.json
 packages/cli/templates/*/final.mp4
 packages/cli/templates/*/assets/
 packages/cli/templates/*/SKILL.md
+packages/cli/templates/*/knowledge/
+packages/cli/templates/*/knowledge.md
+packages/cli/templates/*/sop.md
+packages/cli/templates/*/cases.json
+packages/cli/templates/*/report.md
+packages/cli/templates/*/skill/

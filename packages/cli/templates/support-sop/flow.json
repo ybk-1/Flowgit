@@ -1,0 +1,84 @@
+{
+  "format": "flowgit",
+  "version": "0.1",
+  "id": "support-sop",
+  "name": "客服 SOP",
+  "description": "把产品资料整理成客服规程，再用对话用例检查缺口，最后收成一份可评测的 Skill。 / Turn product notes into a support SOP, check it against sample conversations, and package an evaluable skill.",
+  "language": "zh",
+  "author": { "name": "Flowgit" },
+  "license": "Apache-2.0",
+  "tags": ["support", "sop", "customer-service", "starter"],
+  "inputs": {
+    "product": {
+      "type": "string",
+      "description": "产品名称，例如：澄光台灯 / Product name, e.g. Chenguang desk lamp",
+      "required": true
+    },
+    "tone": {
+      "type": "string",
+      "description": "客服语气 / Tone of the replies",
+      "default": "亲切、简洁"
+    },
+    "language": {
+      "type": "string",
+      "enum": ["zh", "en"],
+      "default": "zh",
+      "description": "输出语言：zh 中文，en English。决定规程、用例、检查报告和脚本日志的语言 / Output language: zh or en. Sets the language of the SOP, cases, review and script logs"
+    }
+  },
+  "stages": [
+    {
+      "id": "knowledge",
+      "name": "资料",
+      "description": "放入 FAQ、产品说明和退换货政策。 / Add the FAQ, product notes and return policy.",
+      "executor": {
+        "type": "human",
+        "instructions": "把 FAQ、产品说明和退换货政策放进 knowledge/，文件用 .md 或 .txt。可以先复制 example-knowledge/：把 example-knowledge/ 里的文件复制到 knowledge/。 / Put the FAQ, product notes and return policy in knowledge/ as .md or .txt files. To start, copy the files from example-knowledge/ into knowledge/."
+      },
+      "outputs": [{ "type": "dir", "path": "knowledge/" }]
+    },
+    {
+      "id": "collect",
+      "name": "汇总",
+      "description": "按文件名把 knowledge/ 里的文本合并成一份 knowledge.md。模型阶段只能看到文件夹的文件列表，所以必须先汇总。 / Merge the text files in knowledge/ into knowledge.md, one heading per file name. Model stages only see a directory as a file list, so this step is required.",
+      "inputs": ["knowledge"],
+      "executor": { "type": "script", "run": "node scripts/collect-knowledge.mjs" },
+      "outputs": [{ "type": "text/markdown", "path": "knowledge.md" }]
+    },
+    {
+      "id": "sop",
+      "name": "规程",
+      "description": "写出适用范围、常见意图、每个意图的处理步骤、何时转人工，以及绝对不能说的话。 / Write the scope, common intents, handling steps for each intent, when to hand off to a human, and what never to say.",
+      "inputs": ["collect"],
+      "executor": { "type": "llm", "prompt": "prompts/sop.md", "effort": "medium" },
+      "outputs": [{ "type": "text/markdown", "path": "sop.md" }]
+    },
+    {
+      "id": "cases",
+      "name": "用例",
+      "description": "根据规程编一组测试对话：顾客原话、意图、期望处理。 / Write test conversations from the SOP: the customer's words, the intent, and the expected handling.",
+      "inputs": ["collect", "sop"],
+      "executor": { "type": "llm", "prompt": "prompts/cases.md", "effort": "medium" },
+      "outputs": [{ "type": "application/json", "path": "cases.json" }]
+    },
+    {
+      "id": "check",
+      "name": "检查",
+      "description": "对照每条用例，写出规程是否覆盖、缺口和修改建议。 / For each case, say whether the SOP handles it, plus gaps and suggested fixes.",
+      "inputs": ["collect", "sop", "cases"],
+      "executor": { "type": "llm", "prompt": "prompts/check.md", "effort": "medium" },
+      "outputs": [{ "type": "text/markdown", "path": "report.md" }]
+    },
+    {
+      "id": "skill",
+      "name": "技能",
+      "description": "把规程收成 Skill（name、description，正文是 SOP），并带上用例作为评测集。 / Package the SOP as a skill (name, description, body is the SOP) plus the cases as an eval set.",
+      "inputs": ["check", "sop", "cases"],
+      "executor": { "type": "script", "run": "node scripts/build-skill.mjs" },
+      "outputs": [
+        { "type": "text/markdown", "path": "skill/SKILL.md" },
+        { "type": "application/json", "path": "skill/cases.json" }
+      ]
+    }
+  ]
+}

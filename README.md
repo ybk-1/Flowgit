@@ -81,6 +81,15 @@ FLOWGIT_LLM_MOCK_DIR=demo-replies flowgit run all
 
 CLI messages and errors are bilingual. What a template produces (script, captions, its own messages) follows the `language` input you choose.
 
+## 模板 / Templates
+
+| 模板 / Template | 命令 / Command | 做什么 | What it does |
+| --- | --- | --- | --- |
+| `short-video` | `flowgit init` | 短视频：脚本 → 分镜 → 素材 → 剪辑 → 导出 | Short video: script → storyboard → assets → edit → export |
+| `support-sop` | `flowgit init -t support-sop` | 客服 SOP：资料 → 汇总 → 规程 → 用例 → 检查 → 技能 | Customer-support SOP: knowledge → collect → SOP → cases → check → skill |
+
+各模板的说明在自己的 README 里。/ Each template's README is in its own folder.
+
 ## 命令 / Commands
 
 | 命令 / Command | 作用 | What it does |
@@ -197,6 +206,7 @@ packages/
   core/   @flowgit/core  格式、校验、版本记录、执行器 / format, validation, runs, executors
   cli/    flowgit        命令行工具和模板 / CLI and templates
     templates/short-video/  短视频示例流程 / the short-video example flow
+    templates/support-sop/  客服 SOP 示例流程 / the customer-support SOP example flow
 docs/
   spec.md                  格式规范 / format spec
 ```
