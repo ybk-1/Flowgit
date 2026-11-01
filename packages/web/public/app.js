@@ -3,11 +3,14 @@ const token = document.querySelector('meta[name="flowgit-token"]')?.getAttribute
 const STATES = {
   ok: { icon: "✓", zh: "已完成", en: "ok" },
   stale: { icon: "↻", zh: "需重跑（上游或配置变了）", en: "stale" },
-  edited: { icon: "✎", zh: "产物被手动修改", en: "edited" },
+  edited: { icon: "✎", zh: "已手动修改", en: "edited" },
   error: { icon: "✗", zh: "上次运行失败", en: "error" },
   "never-run": { icon: "○", zh: "可以运行", en: "never-run" },
   "waiting-upstream": { icon: "…", zh: "等上游", en: "waiting-upstream" },
 };
+
+const EDIT_NOTE =
+  "下次运行这个阶段前，这次修改会存成单独的版本，不会丢失。 / Before this stage next runs, the edit is saved as its own version and is not lost.";
 
 const boardEl = document.getElementById("board");
 const bannerEl = document.getElementById("banner");
@@ -79,6 +82,7 @@ function renderCard(stage) {
     el("p", "executor", `执行 / executor · ${stage.executor || ""}`),
     el("p", "badge", `${label.icon} ${label.zh} ${label.en}`),
   );
+  if (stage.state === "edited") card.append(el("p", "edit-note", EDIT_NOTE));
 
   const version = el("p", "version");
   if (stage.latest) {
@@ -94,7 +98,7 @@ function renderCard(stage) {
     const button = document.createElement("button");
     button.type = "button";
     button.textContent = output.directory ? `${output.path}/` : output.path;
-    button.addEventListener("click", () => openOutput(output.path));
+    button.addEventListener("click", () => openOutput(output, stage));
     outputs.append(button);
   }
   card.append(outputs);
@@ -110,7 +114,8 @@ function closePanel() {
   }
 }
 
-async function openOutput(rel) {
+async function openOutput(output, stage) {
+  const rel = output.path;
   panelEl.hidden = false;
   document.body.classList.add("panel-open");
   panelTitle.textContent = rel;
@@ -127,13 +132,21 @@ async function openOutput(rel) {
     return;
   }
   if (!res.ok) {
+    if (res.status === 404 && output.directory && stage && stage.executor === "human") {
+      renderFileList(rel, [], stage);
+      return;
+    }
     const message = res.status === 404 ? "找不到这个产物 / output not found" : `无法打开 / could not open (${res.status})`;
     panelBody.replaceChildren(el("p", "panel-error", message));
     return;
   }
   if (res.headers.get("X-Flowgit-Kind") === "directory") {
     const data = await res.json();
-    renderFileList(rel, Array.isArray(data.files) ? data.files : []);
+    renderFileList(rel, Array.isArray(data.files) ? data.files : [], stage);
+    return;
+  }
+  if (output.text) {
+    renderEditor(rel, await res.text());
     return;
   }
   const type = (res.headers.get("Content-Type") || "").toLowerCase();
@@ -161,8 +174,57 @@ async function openOutput(rel) {
   panelBody.replaceChildren(pre);
 }
 
-function renderFileList(dir, files) {
+function renderEditor(rel, text) {
+  const wrap = el("div", "editor");
+  const area = document.createElement("textarea");
+  area.value = text;
+  area.spellcheck = false;
+  area.setAttribute("aria-label", rel);
+  const save = document.createElement("button");
+  save.type = "button";
+  save.className = "save";
+  save.textContent = "保存 Save";
+  const status = el("p", "save-status");
+  status.hidden = true;
+  save.addEventListener("click", () => saveText(rel, area.value, save, status));
+  wrap.append(el("p", "edit-hint", EDIT_NOTE), area, save, status);
+  panelBody.replaceChildren(wrap);
+  area.focus();
+}
+
+async function saveText(rel, text, button, status) {
+  button.disabled = true;
+  status.hidden = true;
+  try {
+    const res = await fetch(`/api/file?path=${encodeURIComponent(rel)}`, {
+      method: "PUT",
+      headers: { ...headers(), "Content-Type": "text/plain; charset=utf-8" },
+      body: text,
+      cache: "no-store",
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      status.hidden = false;
+      status.className = "panel-error";
+      status.textContent = data.error || `没有保存 / not saved (${res.status})`;
+      return;
+    }
+    status.hidden = false;
+    status.className = "save-ok";
+    status.textContent = "已保存 / saved";
+    await refresh();
+  } catch {
+    status.hidden = false;
+    status.className = "panel-error";
+    status.textContent = "没有保存 / not saved";
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function renderFileList(dir, files, stage) {
   panelBody.replaceChildren();
+  if (stage && stage.executor === "human") panelBody.append(uploadControl(stage, dir));
   if (!files.length) {
     panelBody.append(el("p", null, "空文件夹 / empty folder"));
     return;
@@ -173,12 +235,54 @@ function renderFileList(dir, files) {
     button.type = "button";
     button.textContent = file;
     const child = `${dir.replace(/\/+$/, "")}/${file}`;
-    button.addEventListener("click", () => openOutput(child));
+    button.addEventListener("click", () => openOutput({ path: child, directory: false, text: false }, stage));
     const item = document.createElement("li");
     item.append(button);
     list.append(item);
   }
   panelBody.append(list);
+}
+
+function uploadControl(stage, dir) {
+  const form = el("div", "upload");
+  const label = el("label", "upload-label");
+  label.append(el("span", null, "上传文件 / Upload a file"));
+  const input = document.createElement("input");
+  input.type = "file";
+  input.addEventListener("change", () => {
+    const file = input.files && input.files[0];
+    input.value = "";
+    if (file) void uploadInto(stage, dir, file);
+  });
+  label.append(input);
+  const status = el("p", "upload-status");
+  status.hidden = true;
+  form.append(label, status);
+  return form;
+}
+
+async function uploadInto(stage, dir, file) {
+  const status = panelBody.querySelector(".upload-status");
+  if (status) {
+    status.hidden = false;
+    status.className = "upload-status";
+    status.textContent = "上传中 / uploading…";
+  }
+  try {
+    const res = await fetch(
+      `/api/upload?stage=${encodeURIComponent(stage.id)}&name=${encodeURIComponent(file.name)}`,
+      { method: "POST", headers: headers(), body: file, cache: "no-store" },
+    );
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      if (status) status.textContent = data.error || `没有上传 / not uploaded (${res.status})`;
+      return;
+    }
+    await refresh();
+    await openOutput({ path: dir, directory: true, text: false, type: "dir" }, stage);
+  } catch {
+    if (status) status.textContent = "没有上传 / not uploaded";
+  }
 }
 
 async function refresh() {

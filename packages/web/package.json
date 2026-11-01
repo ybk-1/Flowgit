@@ -1,7 +1,7 @@
 {
   "name": "@flowgit/web",
   "version": "0.1.0",
-  "description": "Flowgit local read-only web board. 本机只读看板。",
+  "description": "本机看板，可查看和修改阶段产物。 / Local board: view and edit stage outputs.",
   "license": "Apache-2.0",
   "type": "module",
   "main": "./dist/index.js",

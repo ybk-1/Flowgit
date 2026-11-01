@@ -120,7 +120,7 @@ describe("flowgit CLI with the short-video template", () => {
         req.on("error", reject);
       });
       expect(status).toBe(401);
-      expect(buf).toContain("只读");
+      expect(buf).toContain("可以修改产物");
     } finally {
       if (!exited) {
         const closed = new Promise((resolve) => child.once("exit", resolve));

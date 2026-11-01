@@ -3,10 +3,12 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
+import { pipeline } from "node:stream/promises";
 import { fileURLToPath } from "node:url";
 import {
   isDirOutput,
   isSafeRelative,
+  isTextType,
   listFiles,
   loadFlow,
   outputRel,
@@ -65,6 +67,8 @@ export interface BoardOutput {
   path: string;
   type: string;
   directory: boolean;
+  /** File output that `isTextType` treats as text, so the board can edit it. */
+  text: boolean;
 }
 
 export interface BoardStage {
@@ -121,11 +125,15 @@ export function flowBoard(dir: string): FlowBoard {
       latest: status.latest
         ? { n: status.latest.n, time: status.latest.finishedAt, status: status.latest.status }
         : null,
-      outputs: status.stage.outputs.map((output) => ({
-        path: outputRel(output),
-        type: output.type,
-        directory: isDirOutput(output),
-      })),
+      outputs: status.stage.outputs.map((output) => {
+        const directory = isDirOutput(output);
+        return {
+          path: outputRel(output),
+          type: output.type,
+          directory,
+          text: !directory && isTextType(output.type, output.path),
+        };
+      }),
     })),
   };
 }
@@ -158,9 +166,7 @@ export function startBoard(options: StartBoardOptions): Promise<BoardServer> {
     try {
       handle(req, res, { dir, token, port: bound.port });
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      if (!res.headersSent) sendJson(res, 500, { error: message });
-      else res.end();
+      sendError(res, err);
     }
   });
 
@@ -202,15 +208,28 @@ interface HandlerCtx {
 
 function handle(req: http.IncomingMessage, res: http.ServerResponse, ctx: HandlerCtx): void {
   if (!hostAllowed(req.headers.host, ctx.port)) {
+    req.resume();
     sendJson(res, 403, { error: "Host 不被允许 / host not allowed" });
-    return;
-  }
-  if (req.method !== "GET" && req.method !== "HEAD") {
-    sendJson(res, 405, { error: "只支持 GET / only GET is supported" });
     return;
   }
   const url = new URL(req.url ?? "/", "http://127.0.0.1");
   const pathname = url.pathname.length > 1 ? url.pathname.replace(/\/+$/, "") : url.pathname;
+
+  if (req.method === "PUT" && pathname === "/api/file") {
+    if (!authorized(req, res, ctx)) return;
+    void putFlowFile(req, res, ctx, url.searchParams.get("path")).catch((err) => sendError(res, err));
+    return;
+  }
+  if (req.method === "POST" && pathname === "/api/upload") {
+    if (!authorized(req, res, ctx)) return;
+    void uploadFlowFile(req, res, ctx, url).catch((err) => sendError(res, err));
+    return;
+  }
+  if (req.method !== "GET" && req.method !== "HEAD") {
+    req.resume();
+    sendJson(res, 405, { error: "不支持这个方法 / method not allowed" });
+    return;
+  }
 
   if (pathname === "/favicon.ico") {
     send(res, 204, "", {});
@@ -249,6 +268,266 @@ function handle(req: http.IncomingMessage, res: http.ServerResponse, ctx: Handle
     return;
   }
   send(res, 200, body, { "Content-Type": asset.type });
+}
+
+class HttpError extends Error {
+  constructor(
+    readonly status: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = "HttpError";
+  }
+}
+
+function authorized(req: http.IncomingMessage, res: http.ServerResponse, ctx: HandlerCtx): boolean {
+  if (tokenMatches(headerString(req, "x-flowgit-token"), ctx.token)) return true;
+  req.resume();
+  sendJson(res, 401, { error: "未授权：缺少或错误的令牌 / unauthorized: missing or invalid token" });
+  return false;
+}
+
+/** `application/json` and `*+json`. Extension alone does not count. */
+function isJsonMime(type: string): boolean {
+  const value = type.toLowerCase();
+  return value === "application/json" || value.endsWith("+json");
+}
+
+function invalidUploadName(name: string): boolean {
+  if (name.length === 0 || name.length > 255 || name === "." || name === "..") return true;
+  if (name.includes("/") || name.includes("\\") || name.includes("..") || name.includes("\0")) return true;
+  if (/[\u0000-\u001f\u007f]/.test(name)) return true;
+  if (path.basename(name) !== name) return true;
+  if (/^[A-Za-z]:/.test(name)) return true;
+  return false;
+}
+
+function declaredFileOutput(flow: Flow, rel: string): Output | undefined {
+  const norm = normalizePosix(rel);
+  for (const stage of flow.stages) {
+    for (const output of stage.outputs) {
+      if (isDirOutput(output)) continue;
+      if (outputRel(output) === norm) return output;
+    }
+  }
+  return undefined;
+}
+
+function realRoot(dir: string): string | null {
+  try {
+    return fs.realpathSync(path.resolve(dir));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Absolute path for `abs` that stays inside `rootReal`.
+ * The leaf is not realpath'd, so replacing a symlink does not follow it.
+ */
+function placeInside(rootReal: string, abs: string): string | null {
+  if (outside(rootReal, abs)) return null;
+  const base = path.basename(abs);
+  let cursor = path.dirname(abs);
+  const missing: string[] = [];
+  while (!fs.existsSync(cursor)) {
+    missing.push(path.basename(cursor));
+    const parent = path.dirname(cursor);
+    if (parent === cursor) return null;
+    cursor = parent;
+  }
+  let realParent: string;
+  try {
+    realParent = fs.realpathSync(cursor);
+  } catch {
+    return null;
+  }
+  if (outside(rootReal, realParent)) return null;
+  const finalParent = missing.reduceRight((dir, name) => path.join(dir, name), realParent);
+  const final = path.join(finalParent, base);
+  if (outside(rootReal, final) || path.basename(final) !== base) return null;
+  return final;
+}
+
+function resolveDeclaredFile(
+  dir: string,
+  rawPath: string | null,
+): { ok: true; abs: string; rel: string; output: Output } | { ok: false; status: 400 | 403 } {
+  if (rawPath === null || pathProblem(rawPath)) return { ok: false, status: 400 };
+  const requested = normalizePosix(rawPath);
+  if (!requested || pathProblem(requested)) return { ok: false, status: 400 };
+  const root = realRoot(dir);
+  if (!root) return { ok: false, status: 400 };
+  const abs = placeInside(root, path.resolve(root, requested));
+  if (!abs) return { ok: false, status: 400 };
+  const output = declaredFileOutput(loadFlow(dir).flow, requested);
+  if (!output) return { ok: false, status: 403 };
+  return { ok: true, abs, rel: requested, output };
+}
+
+function humanDirOutput(dir: string, stageId: string): { ok: true; abs: string; rel: string } | { ok: false; status: 400 | 403 | 404 } {
+  const loaded = loadFlow(dir);
+  const stage = loaded.flow.stages.find((item) => item.id === stageId);
+  if (!stage) return { ok: false, status: 404 };
+  if (stage.executor.type !== "human") return { ok: false, status: 403 };
+  const dirs = stage.outputs.filter((output) => isDirOutput(output));
+  const dirOutput = dirs[0];
+  if (dirs.length !== 1 || !dirOutput) return dirs.length === 0 ? { ok: false, status: 403 } : { ok: false, status: 400 };
+  const rel = outputRel(dirOutput);
+  if (pathProblem(rel)) return { ok: false, status: 400 };
+  const root = realRoot(dir);
+  if (!root) return { ok: false, status: 400 };
+  const abs = placeInside(root, path.resolve(root, rel));
+  if (!abs) return { ok: false, status: 400 };
+  return { ok: true, abs, rel };
+}
+
+async function ensureDir(abs: string, rootReal: string): Promise<string> {
+  if (!fs.existsSync(abs)) await fs.promises.mkdir(abs, { recursive: true });
+  let real: string;
+  try {
+    real = fs.realpathSync(abs);
+  } catch {
+    throw new HttpError(400, "打不开文件夹 / could not open the directory");
+  }
+  if (outside(rootReal, real) || !fs.statSync(real).isDirectory()) {
+    throw new HttpError(403, "只能上传到人工阶段的文件夹产物 / uploads only go into a human stage's directory output");
+  }
+  return real;
+}
+
+function tempPath(dir: string): string {
+  return path.join(dir, `.flowgit-tmp-${crypto.randomBytes(16).toString("hex")}`);
+}
+
+/** Stream the request to a new file. The caller renames it into place. */
+async function streamToFile(req: http.IncomingMessage, tmp: string): Promise<void> {
+  await pipeline(req, fs.createWriteStream(tmp, { flags: "wx" }));
+  const fh = await fs.promises.open(tmp, "r+");
+  try {
+    await fh.sync();
+  } finally {
+    await fh.close();
+  }
+}
+
+/** Rename `tmp` over `dest`. A crash leaves the previous file or the temp file, never a half-written dest. */
+async function replaceFile(tmp: string, dest: string): Promise<void> {
+  try {
+    await fs.promises.rename(tmp, dest);
+    return;
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code !== "EEXIST" && code !== "EPERM" && code !== "EACCES") throw err;
+  }
+  const backup = `${tmp}.bak`;
+  await fs.promises.rename(dest, backup);
+  try {
+    await fs.promises.rename(tmp, dest);
+  } catch (err) {
+    await fs.promises.rename(backup, dest).catch(() => {});
+    throw err;
+  }
+  await fs.promises.rm(backup, { force: true });
+}
+
+async function putFlowFile(req: http.IncomingMessage, res: http.ServerResponse, ctx: HandlerCtx, rawPath: string | null): Promise<void> {
+  const target = resolveDeclaredFile(ctx.dir, rawPath);
+  if (!target.ok) {
+    req.resume();
+    const error =
+      target.status === 400
+        ? "路径不合法 / invalid path"
+        : "只能修改阶段声明的产物文件 / only a stage's declared output file can be changed";
+    sendJson(res, target.status, { error });
+    return;
+  }
+  if (fs.existsSync(target.abs) && fs.statSync(target.abs).isDirectory()) {
+    req.resume();
+    sendJson(res, 403, { error: "只能修改阶段声明的产物文件 / only a stage's declared output file can be changed" });
+    return;
+  }
+  await fs.promises.mkdir(path.dirname(target.abs), { recursive: true });
+  const tmp = tempPath(path.dirname(target.abs));
+  try {
+    await streamToFile(req, tmp);
+    if (isJsonMime(target.output.type)) {
+      const text = await fs.promises.readFile(tmp, "utf8");
+      try {
+        JSON.parse(text);
+      } catch {
+        await fs.promises.rm(tmp, { force: true });
+        sendJson(res, 400, { error: "JSON 不合法，没有保存 / invalid JSON, not saved" });
+        return;
+      }
+    }
+    await replaceFile(tmp, target.abs);
+    sendJson(res, 200, { ok: true, path: target.rel });
+  } catch (err) {
+    await fs.promises.rm(tmp, { force: true });
+    throw err;
+  }
+}
+
+async function uploadFlowFile(req: http.IncomingMessage, res: http.ServerResponse, ctx: HandlerCtx, url: URL): Promise<void> {
+  const rawName = url.searchParams.get("name");
+  if (rawName === null || invalidUploadName(rawName)) {
+    req.resume();
+    sendJson(res, 400, { error: "文件名不合法 / invalid file name" });
+    return;
+  }
+  const name = rawName;
+  const stageId = url.searchParams.get("stage");
+  if (!stageId) {
+    req.resume();
+    sendJson(res, 400, { error: "缺少阶段 / missing stage" });
+    return;
+  }
+  const located = humanDirOutput(ctx.dir, stageId);
+  if (!located.ok) {
+    req.resume();
+    const error =
+      located.status === 404
+        ? "找不到阶段 / stage not found"
+        : located.status === 400
+          ? "路径不合法 / invalid path"
+          : "只能上传到人工阶段的文件夹产物 / uploads only go into a human stage's directory output";
+    sendJson(res, located.status, { error });
+    return;
+  }
+  const root = realRoot(ctx.dir);
+  if (!root) {
+    req.resume();
+    sendJson(res, 400, { error: "路径不合法 / invalid path" });
+    return;
+  }
+  let dirAbs: string;
+  try {
+    dirAbs = await ensureDir(located.abs, root);
+  } catch (err) {
+    req.resume();
+    throw err;
+  }
+  const dest = path.join(dirAbs, name);
+  if (path.basename(dest) !== name || outside(root, dest)) {
+    req.resume();
+    sendJson(res, 400, { error: "文件名不合法 / invalid file name" });
+    return;
+  }
+  if (fs.existsSync(dest) && fs.statSync(dest).isDirectory()) {
+    req.resume();
+    sendJson(res, 400, { error: "已有同名文件夹 / a directory with that name already exists" });
+    return;
+  }
+  const tmp = tempPath(dirAbs);
+  try {
+    await streamToFile(req, tmp);
+    await replaceFile(tmp, dest);
+    sendJson(res, 200, { ok: true, path: `${located.rel}/${name}` });
+  } catch (err) {
+    await fs.promises.rm(tmp, { force: true });
+    throw err;
+  }
 }
 
 function serveFlowFile(req: http.IncomingMessage, res: http.ServerResponse, ctx: HandlerCtx, rawPath: string | null): void {
@@ -402,6 +681,19 @@ function send(res: http.ServerResponse, status: number, body: string | Buffer, h
 
 function sendJson(res: http.ServerResponse, status: number, value: unknown, extra: Record<string, string> = {}): void {
   send(res, status, JSON.stringify(value), { "Content-Type": "application/json; charset=utf-8", ...extra });
+}
+
+function sendError(res: http.ServerResponse, err: unknown): void {
+  if (res.headersSent || res.writableEnded) {
+    res.destroy();
+    return;
+  }
+  try {
+    if (err instanceof HttpError) sendJson(res, err.status, { error: err.message });
+    else sendJson(res, 500, { error: err instanceof Error ? err.message : String(err) });
+  } catch {
+    res.destroy();
+  }
 }
 
 function sendStream(req: http.IncomingMessage, res: http.ServerResponse, abs: string, size: number, type: string): void {

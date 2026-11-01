@@ -4,9 +4,9 @@
 
 **Turn anything into a flow.** Break any piece of work into visual stages: each stage has artifacts and versions, people and AI can both pick it up, and finished flows can be shared and forked.
 
-> 状态：早期开发（spec v0.1）。目前有格式规范、核心库、命令行工具，以及本机只读看板（`flowgit board`）。
+> 状态：早期开发（spec v0.1）。目前有格式规范、核心库、命令行工具，以及本机看板（`flowgit board`，可查看和修改产物）。
 >
-> Status: early (spec v0.1). The format, core library, CLI, and a local read-only board (`flowgit board`) are here.
+> Status: early (spec v0.1). The format, core library, CLI, and a local board (`flowgit board`, view and edit outputs) are here.
 
 ## 为什么 / Why
 
@@ -89,7 +89,7 @@ CLI messages and errors are bilingual. What a template produces (script, caption
 | `flowgit init [dir] [-t template]` | 从模板新建流程（默认 `short-video`） | Create a flow from a template (default `short-video`) |
 | `flowgit validate` | 按规范检查 `flow.json` | Check `flow.json` against the spec |
 | `flowgit status [--json]` | 看板：每个阶段的状态、版本、产物和下一步 | The board: each stage's state, version, outputs, and the next step |
-| `flowgit board [--port 4747] [--no-open]` | 在浏览器打开本地只读看板（只监听 127.0.0.1） | Open a local read-only board in the browser (listens on 127.0.0.1 only) |
+| `flowgit board [--port 4747] [--no-open]` | 在浏览器打开本地看板（只监听 127.0.0.1），可查看和修改产物 | Open a local board in the browser (listens on 127.0.0.1 only) to view and edit outputs |
 | `flowgit inputs` / `flowgit inputs set k=v` | 查看 / 填写流程输入 | Show / set flow inputs |
 | `flowgit run <stage\|all>` | 跑一个阶段，或按顺序跑完所有需要跑的阶段 | Run one stage, or every stage that needs it, in order |
 | `flowgit run <stage> --from <path>` | 人工阶段：把文件或文件夹放进产物位置 | Human stage: put a file or folder in place as the output |
@@ -198,7 +198,7 @@ The full spec is in [docs/spec.md](docs/spec.md); the JSON Schema is [packages/c
 packages/
   core/   @flowgit/core  格式、校验、版本记录、执行器 / format, validation, runs, executors
   cli/    flowgit        命令行工具和模板 / CLI and templates
-  web/    @flowgit/web   本机只读网页看板 / local read-only web board
+  web/    @flowgit/web   本机网页看板，可查看和修改产物 / local web board: view and edit outputs
     templates/short-video/  短视频示例流程 / the short-video example flow
 docs/
   spec.md                  格式规范 / format spec
