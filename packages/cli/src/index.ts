@@ -56,9 +56,9 @@ function collect(value: string, prev: string[] = []): string[] {
 const used = { input: 0, output: 0, calls: 0 };
 
 /** One line with the total when more than one model call was made (each call already logs its own). */
-function printUsageTotal(): void {
+function printUsageTotal(gap = false): void {
   if (used.calls < 2) return;
-  console.log(c.dim(`用量合计 / total usage: ${used.input} 输入 input + ${used.output} 输出 output tokens（${used.calls} 次模型调用 / model calls）`));
+  console.log(c.dim(`${gap ? "\n" : ""}用量合计 / total usage: ${used.input} 输入 input + ${used.output} 输出 output tokens（${used.calls} 次模型调用 / model calls）`));
 }
 
 function printEvent(e: RunEvent): void {
@@ -90,29 +90,34 @@ function printEvent(e: RunEvent): void {
 
 function fail(err: unknown): never {
   const e = err as Error;
+  // run all can stop (at a person, or on an error) after paying for model calls: end with what they used
+  const exit = (code: number): never => {
+    printUsageTotal(true);
+    process.exit(code);
+  };
   if (e instanceof HumanInputNeededError) {
     console.log(`\n${c.yellow("⏸")} 「${e.stage.name}」在等你 / waiting for you: ${e.missing.join(", ")}`);
     if (e.instructions) console.log(`  ${e.instructions}`);
     console.log(`  放好文件后运行 / when ready: flowgit run ${e.stage.id}   (或 / or: flowgit run ${e.stage.id} --from <path>)`);
-    process.exit(2);
+    exit(2);
   }
   if (e instanceof UpstreamNotReadyError) {
     console.error(`${c.red("✗")} ${e.message}\n  先运行 / run first: ${e.missing.map((m) => `flowgit run ${m}`).join(", ")}`);
-    process.exit(1);
+    exit(1);
   }
   if (e instanceof MissingInputsError) {
     console.error(`${c.red("✗")} 缺少流程输入 / missing flow inputs: ${e.missing.join(", ")}`);
     console.error(`  保存下来 / save it: flowgit inputs set ${e.missing[0]}=...`);
     console.error(`  只用这一次 / just this run: flowgit run <stage> --input ${e.missing[0]}=...`);
-    process.exit(1);
+    exit(1);
   }
   if (e instanceof FlowValidationError) {
     console.error(`${c.red("✗")} ${e.message}`);
-    process.exit(1);
+    exit(1);
   }
   console.error(`${c.red("✗")} ${e.message ?? String(err)}`);
   if (process.env.FLOWGIT_DEBUG && e.stack) console.error(e.stack);
-  process.exit(1);
+  return exit(1);
 }
 
 const program = new Command();
@@ -346,8 +351,6 @@ program
         if (hint) console.log(`\n${hint}`);
       }
     } catch (err) {
-      // run all can stop at a human stage after paying for model calls: still show what they used
-      printUsageTotal();
       fail(err);
     }
   });
@@ -490,7 +493,11 @@ program
         console.log(`\n${c.red("✗")} ${errors} 个问题要先解决 / ${errors} problem(s) to fix first`);
         process.exit(1);
       }
-      console.log(`\n${c.green("✓")} 可以运行 / ready to run${warnings ? `（${warnings} 个提醒 / ${warnings} warning(s)）` : ""}`);
+      console.log(
+        warnings
+          ? `\n${c.yellow("!")} 没有必须先解决的问题，但先看看上面的 ${warnings} 个提醒 / nothing blocking, but check the ${warnings} warning(s) above`
+          : `\n${c.green("✓")} 可以运行 / ready to run`,
+      );
     } catch (err) {
       fail(err);
     }

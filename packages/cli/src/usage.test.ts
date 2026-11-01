@@ -84,6 +84,8 @@ describe("token usage", () => {
     expect(r.out.match(/用量 \/ usage: 12 输入 input \+ 7 输出 output tokens/g)).toHaveLength(2);
     expect(r.out).toContain("用量合计 / total usage: 24 输入 input + 14 输出 output tokens（2 次模型调用 / model calls）");
     expect(r.out).toContain("waiting for you: review.md");
+    // the total comes last, after the human stage's instructions
+    expect(r.out.trimEnd().split("\n").at(-1)).toMatch(/^用量合计 \/ total usage: 24/);
 
     const log = await flowgit(["log", "draft"]);
     expect(log.out).toMatch(/v1\s+ok\s+.*local\/test · \d+s · 19 tokens/);
