@@ -23,3 +23,9 @@ pnpm test
    **Review**: Claude checks out the PR, runs build / typecheck / test (and the render when relevant), and reviews the code. Small issues get a fix commit; larger ones get a PR comment for Cursor to address.
 4. **合并**：CI 通过、审核没问题后由 Claude 合并。
    **Merge**: Claude merges once CI is green and the review is clean.
+
+## 发布 / Releasing
+
+发布到 npm 的步骤（第一次手动发布、Trusted Publishing 设置、日常打 tag 发布）见 [`docs/releasing.md`](docs/releasing.md)。安全问题请按 [`SECURITY.md`](SECURITY.md) 私下报告。
+
+How to publish to npm (the first manual release, Trusted Publishing setup, and routine tag releases) is in [`docs/releasing.md`](docs/releasing.md). Report security problems privately as described in [`SECURITY.md`](SECURITY.md).

@@ -19,10 +19,12 @@ Open-source tool for turning any process into a visual, staged, versioned flow (
 - `packages/core`（`@flowgit/core`）：flow.json 的 schema（`schema/flow.schema.json` 是唯一标准，`src/types.ts` 跟它保持一致）、校验、`runs/<stage>/<n>/` 下的运行历史、阶段执行器（`human`、`llm`、`script`、`agent` 可运行；`workflow`/`service`/`mcp` 是预留）。
 - `packages/cli`（`flowgit`）：commander 命令行在 `src/index.ts`，自带模板在 `templates/`。
 - `docs/spec.md`：给人看的规范，改 schema 时一起改。
+- `examples/`：示例流程，`packages/core/src/examples.test.ts` 会校验它们。发布流程见 `docs/releasing.md`。
 
 - `packages/core` (`@flowgit/core`): the flow.json schema (`schema/flow.schema.json` is the source of truth; `src/types.ts` mirrors it), validation, run history under `runs/<stage>/<n>/`, and stage executors (`human`, `llm`, `script`, `agent`; `workflow`/`service`/`mcp` are reserved).
 - `packages/cli` (`flowgit`): the commander CLI in `src/index.ts`, bundled templates in `templates/`.
 - `docs/spec.md`: the human-readable spec. Change it together with the schema.
+- `examples/`: example flows, validated by `packages/core/src/examples.test.ts`. Releasing is in `docs/releasing.md`.
 
 ## 命令 / Commands
 
@@ -31,6 +33,7 @@ pnpm install
 pnpm build       # 编译所有包；命令行端到端测试跑的是 dist/ / tsc for every package; the CLI e2e test runs dist/
 pnpm typecheck
 pnpm test        # vitest；没有 ffmpeg 时跳过渲染测试 / vitest; the render test is skipped when ffmpeg is missing
+node scripts/pack-smoke.mjs   # 像发布一样打包并安装后试跑（需要先 build）/ pack, install and run like a release (after build)
 ```
 
 ## 约定 / Conventions

@@ -3,21 +3,49 @@
   "version": "0.1.0",
   "description": "Flowgit CLI: validate, run, inspect and share staged flows.",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cgold9820-dotcom/Flowgit.git",
+    "directory": "packages/cli"
+  },
+  "homepage": "https://github.com/cgold9820-dotcom/Flowgit#readme",
+  "bugs": {
+    "url": "https://github.com/cgold9820-dotcom/Flowgit/issues"
+  },
+  "keywords": [
+    "flowgit",
+    "cli",
+    "workflow",
+    "flow",
+    "pipeline",
+    "llm",
+    "agent",
+    "ai"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
   "type": "module",
   "bin": {
     "flowgit": "./dist/index.js"
   },
   "files": [
     "dist",
-    "templates"
+    "templates",
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "prepack": "node ../../scripts/copy-license.mjs"
   },
   "dependencies": {
     "@flowgit/core": "workspace:*",
     "commander": "^15.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

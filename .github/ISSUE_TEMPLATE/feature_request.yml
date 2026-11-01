@@ -1,0 +1,23 @@
+name: 功能建议 / Feature request
+description: 想让 Flowgit 多做一件事 / Something you'd like Flowgit to do
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 遇到的问题 / The problem
+      description: 你想做什么，现在为什么做不到或者很麻烦 / What you're trying to do and why it's hard today
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 你希望的做法 / What you'd like
+      description: 命令、flow.json 字段或看板上的样子都可以 / A command, a flow.json field, or how it would look on the board
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 其他做法 / Alternatives
+      description: 你试过或想过的其他办法 / Other approaches you tried or considered

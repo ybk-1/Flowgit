@@ -34,3 +34,5 @@ jobs:
           # Force a font on Windows so the render test always draws captions with
           # drive-letter paths (C:) in the FFmpeg filter; Arial is always present.
           FLOWGIT_FONT: ${{ runner.os == 'Windows' && 'C:\Windows\Fonts\arial.ttf' || '' }}
+      - name: 打包后像用户一样安装 / Pack and install like a user
+        run: node scripts/pack-smoke.mjs

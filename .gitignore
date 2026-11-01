@@ -14,3 +14,8 @@ packages/cli/templates/*/timeline.json
 packages/cli/templates/*/final.mp4
 packages/cli/templates/*/assets/
 packages/cli/templates/*/SKILL.md
+
+# Copied in by scripts/copy-license.mjs when packing
+packages/*/LICENSE
+# Tarballs from pnpm pack
+*.tgz

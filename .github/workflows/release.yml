@@ -1,0 +1,68 @@
+# 发布到 npm / Publish to npm
+#
+# 打 tag（例如 v0.1.1）会测试、打包，再把 @flowgit/core 和 flowgit 发到 npm。
+# 手动运行（workflow_dispatch）只打包检查，不发布。
+# 用 npm 的 Trusted Publishing（OIDC），不需要也不存放任何 npm token。
+# 第一次发布和 npm 端的设置见 docs/releasing.md。
+#
+# Pushing a tag (e.g. v0.1.1) tests, packs and publishes @flowgit/core and
+# flowgit to npm. A manual run (workflow_dispatch) only packs and checks.
+# Uses npm Trusted Publishing (OIDC): no npm token is needed or stored.
+# First release and npm-side setup: docs/releasing.md.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # Trusted Publishing: https://docs.npmjs.com/trusted-publishers
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          # Trusted Publishing needs npm >= 11.5.1 and Node >= 22.14 (docs above).
+          node-version: 24
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+      - name: npm 11.5.1 以上 / npm 11.5.1 or newer
+        run: npm install -g npm@^11.5.1 && npm --version
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm typecheck
+      - run: pnpm test
+      - name: 打包后像用户一样安装 / Pack and install like a user
+        run: node scripts/pack-smoke.mjs
+      - name: 检查 tag 和版本号一致 / Check the tag matches the package versions
+        if: github.ref_type == 'tag'
+        run: node scripts/release-version.mjs check "$GITHUB_REF_NAME"
+      - name: 打包 / Pack
+        run: |
+          mkdir -p "$RUNNER_TEMP/pack"
+          # pnpm pack rewrites "workspace:*" to the real version; npm then publishes the tarballs.
+          (cd packages/core && pnpm pack --pack-destination "$RUNNER_TEMP/pack")
+          (cd packages/cli && pnpm pack --pack-destination "$RUNNER_TEMP/pack")
+          ls -l "$RUNNER_TEMP/pack"
+      - name: 发布到 npm / Publish to npm
+        if: github.ref_type == 'tag'
+        run: |
+          # core first: the CLI depends on it. Versions already on npm are skipped.
+          for pkg in core cli; do
+            name=$(node -p "require('./packages/$pkg/package.json').name")
+            version=$(node -p "require('./packages/$pkg/package.json').version")
+            if npm view "$name@$version" version >/dev/null 2>&1; then
+              echo "$name@$version 已在 npm 上，跳过 / already on npm, skipping"
+              continue
+            fi
+            tarball=$(ls "$RUNNER_TEMP"/pack/*.tgz | grep -E "/$(echo "$name" | sed 's#@##; s#/#-#')-$version\.tgz$")
+            npm publish "$tarball" --access public
+          done

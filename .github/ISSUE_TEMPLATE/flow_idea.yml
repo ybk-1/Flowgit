@@ -1,0 +1,38 @@
+name: 流程或模板想法 / Flow or template idea
+description: 有一件事适合做成流程？说说它的阶段 / A process that would make a good flow? Describe its stages
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        万物皆可流程化。说说你想流程化的事情，以及每一步由谁来做（模型、脚本、agent 还是人）。
+
+        Anything can be a flow. Tell us what you'd like to turn into one, and who does each step (a model, a script, an agent or a person).
+  - type: input
+    id: name
+    attributes:
+      label: 这个流程做什么 / What the flow makes
+      placeholder: 例如：小红书图文、播客剪辑、客服 SOP / e.g. social posts, podcast edits, a support SOP
+    validations:
+      required: true
+  - type: textarea
+    id: stages
+    attributes:
+      label: 阶段 / Stages
+      description: "每行一个阶段：名字、产物、谁来做 / One stage per line: name, outputs, who does it"
+      placeholder: |
+        脚本 / Script — script.md — llm
+        素材 / Assets — assets/ — human
+        剪辑 / Edit — timeline.json — script
+    validations:
+      required: true
+  - type: textarea
+    id: inputs
+    attributes:
+      label: 流程输入 / Flow inputs
+      description: 用户开始前要填什么，例如主题、语言、时长 / What the user fills in first, e.g. topic, language, length
+  - type: textarea
+    id: notes
+    attributes:
+      label: 其他 / Anything else
+      description: 参考链接、现在是怎么做的 / References, how you do it today

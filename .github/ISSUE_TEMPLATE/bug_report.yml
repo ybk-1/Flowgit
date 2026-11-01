@@ -1,0 +1,64 @@
+name: 问题报告 / Bug report
+description: 有东西坏了，或者跟文档说的不一样 / Something is broken or doesn't match the docs
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        谢谢报告！请先搜一下有没有相同的 issue。**不要贴 API 密钥**，日志里如果有密钥请先删掉。安全问题请看 [SECURITY.md](https://github.com/cgold9820-dotcom/Flowgit/blob/main/SECURITY.md)，不要公开报告。
+
+        Thanks for reporting! Please search existing issues first. **Never paste API keys**; remove them from logs. For security problems, see [SECURITY.md](https://github.com/cgold9820-dotcom/Flowgit/blob/main/SECURITY.md) instead of filing a public issue.
+  - type: textarea
+    id: what
+    attributes:
+      label: 发生了什么 / What happened
+      description: 你看到的结果，包括报错信息 / What you saw, including any error message
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 你预期的结果 / What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤 / Steps to reproduce
+      description: 用到的命令，最好附上一个最小的 flow.json / The commands you ran, ideally with a minimal flow.json
+      render: shell
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Flowgit 版本 / Flowgit version
+      description: "`flowgit --version`"
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: 系统 / OS
+      options:
+        - Windows
+        - macOS
+        - Linux
+    validations:
+      required: true
+  - type: input
+    id: node
+    attributes:
+      label: Node.js 版本 / Node.js version
+      description: "`node --version`"
+  - type: input
+    id: model
+    attributes:
+      label: 模型或 agent（如果相关）/ Model or agent (if relevant)
+      description: 例如 / e.g. `deepseek/deepseek-v4-pro`、`claude-code`
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志 / Logs
+      description: "`flowgit log <stage>` 的输出或终端输出（先删掉密钥）/ Output of `flowgit log <stage>` or the terminal (remove keys first)"
+      render: text
