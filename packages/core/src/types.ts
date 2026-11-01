@@ -50,6 +50,8 @@ export interface ExecutorScript {
   run: string;
   cwd?: string;
   env?: Record<string, string>;
+  /** Stop the process tree after this many seconds. Unset means no limit. */
+  timeoutSec?: number;
 }
 
 /** Built-in agent CLIs, plus "custom" for any other command. */
@@ -64,6 +66,8 @@ export interface ExecutorAgent {
   command?: string;
   /** Extra arguments added to the agent command (e.g. a model flag). */
   args?: string[];
+  /** Stop the process tree after this many seconds. Unset means no limit. */
+  timeoutSec?: number;
 }
 
 export interface ExecutorWorkflow {

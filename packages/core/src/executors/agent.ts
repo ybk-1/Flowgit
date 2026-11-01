@@ -1,8 +1,8 @@
-import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import type { AgentName, ExecutorAgent, Flow, Stage } from "../types.js";
 import { outputRel, truncate } from "../util.js";
+import { runCommand } from "./command.js";
 import { renderTemplate } from "./llm.js";
 import type { ExecContext, ExecResult, InputArtifact, StageExecutor } from "./types.js";
 
@@ -219,21 +219,14 @@ export const agentExecutor: StageExecutor = {
     const started = Date.now();
     let result: { code: number; output: string };
     try {
-      result = await new Promise((resolve, reject) => {
-        const child = spawn(commandLine, { cwd: loaded.dir, env, shell: true, stdio: ["pipe", "pipe", "pipe"] });
-        let buf = "";
-        const onData = (chunk: Buffer) => {
-          const s = chunk.toString("utf8");
-          if (buf.length < LOG_CAP * 5) buf += s;
-          for (const line of s.split(/\r?\n/)) if (line.trim()) ctx.log(line);
-        };
-        child.stdout.on("data", onData);
-        child.stderr.on("data", onData);
-        // An agent that does not read stdin may close it early; that is fine.
-        child.stdin.on("error", () => {});
-        child.stdin.end(prompt);
-        child.on("error", reject);
-        child.on("close", (c) => resolve({ code: c ?? 1, output: buf }));
+      result = await runCommand({
+        command: commandLine,
+        cwd: loaded.dir,
+        env,
+        stdin: prompt,
+        timeoutSec: ex.timeoutSec,
+        maxCapture: LOG_CAP * 5,
+        onLine: (line) => ctx.log(line),
       });
     } finally {
       fs.rmSync(promptFile, { force: true });

@@ -286,6 +286,11 @@
           "additionalProperties": {
             "type": "string"
           }
+        },
+        "timeoutSec": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Stop the whole process tree after this many seconds. Unset means no limit."
         }
       }
     },
@@ -326,6 +331,11 @@
             "type": "string"
           },
           "description": "Extra arguments for the agent command, e.g. a model flag. Built-in adapters never pass a bypass-all-permissions flag; adding one here (e.g. Cursor's --force) is your own choice. See docs/spec.md."
+        },
+        "timeoutSec": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Stop the whole process tree after this many seconds. Unset means no limit."
         }
       },
       "if": {

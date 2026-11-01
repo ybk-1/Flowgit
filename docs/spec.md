@@ -108,8 +108,8 @@ Stages must not form a cycle. Run order follows `inputs`; ties keep the order in
 | --- | --- | --- | --- | --- |
 | `human` | 能 / yes | `instructions?` | 由人完成。运行时检查产物是否到位；可用 `--from <path>` 把文件复制进来。缺产物时阶段停下，显示 `instructions` | Done by a person. A run checks the outputs are in place; `--from <path>` copies files in. If outputs are missing the stage stops and shows `instructions` |
 | `llm` | 能 / yes | `prompt`, `system?`, `model?`, `effort?`, `maxTokens?` | 读取 `prompt` 指向的 Markdown，替换 `{{inputs.*}}`，把上游产物附在后面，调用模型，把回复写进唯一的产物。产物是 JSON 时自动从回复里提取 JSON。`model` 可写 `<provider>/<model>`（见下面的"模型供应商"），不写前缀就是 Claude。默认模型 `claude-opus-5-5`，优先级：`--model` > `model` > `FLOWGIT_MODEL` > 默认 | Reads the Markdown file named by `prompt`, fills in `{{inputs.*}}`, appends the upstream artifacts, calls the model and writes the reply to the stage's single output. JSON outputs have the JSON extracted from the reply. `model` may be `<provider>/<model>` (see "Model providers" below); no prefix means Claude. Default model `claude-opus-5-5`; precedence: `--model` > `model` > `FLOWGIT_MODEL` > default |
-| `script` | 能 / yes | `run`, `cwd?`, `env?` | 在流程目录执行一条 shell 命令。命令自己负责写出产物 | Runs a shell command in the flow directory. The command writes the outputs itself |
-| `agent` | 能 / yes | `agent`, `prompt`, `command?`, `args?` | 在流程目录里以无界面模式启动一个 agent CLI（Claude Code、Codex、Cursor、Gemini，或自定义命令），把渲染好的提示词交给它，由它自己写出产物。见下面的"agent 执行器" | Starts an agent CLI headless in the flow directory (Claude Code, Codex, Cursor, Gemini, or a custom command), hands it the rendered prompt, and lets it write the outputs itself. See "The agent executor" below |
+| `script` | 能 / yes | `run`, `cwd?`, `env?`, `timeoutSec?` | 在流程目录执行一条 shell 命令。命令自己负责写出产物。`timeoutSec` 见下面 | Runs a shell command in the flow directory. The command writes the outputs itself. See below for `timeoutSec` |
+| `agent` | 能 / yes | `agent`, `prompt`, `command?`, `args?`, `timeoutSec?` | 在流程目录里以无界面模式启动一个 agent CLI（Claude Code、Codex、Cursor、Gemini，或自定义命令），把渲染好的提示词交给它，由它自己写出产物。见下面的"agent 执行器" | Starts an agent CLI headless in the flow directory (Claude Code, Codex, Cursor, Gemini, or a custom command), hands it the rendered prompt, and lets it write the outputs itself. See "The agent executor" below |
 | `workflow` | 预留 / reserved | `engine`, `file`, `params?` | 运行外部工作流文件（ComfyUI、n8n 等） | Runs an external workflow file (ComfyUI, n8n, ...) |
 | `service` | 预留 / reserved | `url`, `method?` | 调用 HTTP 服务 | Calls an HTTP service |
 | `mcp` | 预留 / reserved | `server`, `tool`, `args?` | 调用 MCP 服务器上的工具。以后整个流程也会通过这一层暴露给别人调用 | Calls a tool on an MCP server. Later, whole flows will be exposed to others through this layer |
@@ -179,6 +179,10 @@ Every preset's endpoint comes from the vendor's official docs, linked in `packag
 
 Note: Zhipu's GLM Coding Plan quota only applies inside the tools Zhipu lists ([official docs](https://docs.bigmodel.cn/cn/coding-plan/overview)); Flowgit's `glm` provider uses regular API balance and a regular API key.
 
+`timeoutSec`（可选，整数，至少为 1）只写在 `script` 和 `agent` 上。不写表示不限时。到了这个秒数，Flowgit 停掉整棵进程树，而不是只停掉外壳：macOS 和 Linux 上命令单独成一个进程组，先对进程组发 `SIGTERM`，5 秒后还在就发 `SIGKILL`；Windows 上用 `taskkill /pid <pid> /T /F`。这次运行记为失败，错误是 `超时（N 秒），已停止 / Timed out after Ns and was stopped`。父进程如果收到 `SIGINT`、`SIGTERM` 或 `SIGHUP`，也会把同一个信号转给这个进程组再退出。`timeoutSec` 属于执行器配置，改了它，这个阶段和下游都会变成 `stale`。
+
+`timeoutSec` (optional integer, minimum 1) belongs only on `script` and `agent`. Unset means no limit. When it elapses, Flowgit stops the whole process tree, not just the shell: on macOS and Linux the command runs in its own process group and gets `SIGTERM`, then `SIGKILL` if it is still alive after 5 seconds; on Windows, `taskkill /pid <pid> /T /F`. The run is recorded as failed with `超时（N 秒），已停止 / Timed out after Ns and was stopped`. If the parent receives `SIGINT`, `SIGTERM`, or `SIGHUP`, it forwards that signal to the process group and then exits. `timeoutSec` is part of the executor config, so changing it marks this stage and everything downstream `stale`.
+
 script 和 agent 阶段运行时可以读到这些环境变量 / Environment variables for script and agent stages:
 
 | 变量 / Variable | 内容 | Content |
@@ -237,9 +241,9 @@ The rendered prompt lives at `runs/.agent/<stage>.prompt.md` while the agent run
 
 `args` are appended to the command, e.g. to pick a model. **Safety**: built-in adapters give the agent the least permission that still lets it write files in the flow directory, and **never pass a bypass-all-permissions flag by default**. If you add one yourself in `args` (such as Claude Code's `--dangerously-skip-permissions`, Codex's `--dangerously-bypass-approvals-and-sandbox`, Gemini's `--approval-mode yolo` or Cursor's `--force`), the agent can run any command and change any file without asking. Only do that for a prompt you trust, in an isolated environment. When you fork someone else's flow, check its `args` first.
 
-执行器配置的哈希包含 `agent`、`command`、`args`、提示词文件，以及 `command` 里提到的、在流程目录中的脚本文件。
+执行器配置的哈希包含执行器定义本身（所以包含 `timeoutSec`）、`agent`、`command`、`args`、提示词文件，以及 `command` 里提到的、在流程目录中的脚本文件。
 
-The executor config hash covers `agent`, `command`, `args`, the prompt file, and any file in the flow directory named in `command`.
+The executor config hash covers the executor definition itself (so it includes `timeoutSec`), `agent`, `command`, `args`, the prompt file, and any file in the flow directory named in `command`.
 
 ## 运行与版本 / Runs and versions
 

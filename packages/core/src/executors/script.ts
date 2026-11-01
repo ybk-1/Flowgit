@@ -1,7 +1,7 @@
-import { spawn } from "node:child_process";
 import path from "node:path";
 import type { ExecutorScript } from "../types.js";
 import { outputRel, truncate } from "../util.js";
+import { runCommand } from "./command.js";
 import type { ExecContext, ExecResult, StageExecutor } from "./types.js";
 
 const LOG_CAP = 20_000;
@@ -30,18 +30,12 @@ export const scriptExecutor: StageExecutor = {
       FLOWGIT_FLOW_INPUTS: JSON.stringify(ctx.flowInputs),
     };
     ctx.log(`$ ${ex.run}`);
-    const { code, output } = await new Promise<{ code: number; output: string }>((resolve, reject) => {
-      const child = spawn(ex.run, { cwd, env, shell: true, stdio: ["ignore", "pipe", "pipe"] });
-      let buf = "";
-      const onData = (chunk: Buffer) => {
-        const s = chunk.toString("utf8");
-        buf += s;
-        for (const line of s.split(/\r?\n/)) if (line.trim()) ctx.log(line);
-      };
-      child.stdout.on("data", onData);
-      child.stderr.on("data", onData);
-      child.on("error", reject);
-      child.on("close", (c) => resolve({ code: c ?? 1, output: buf }));
+    const { code, output } = await runCommand({
+      command: ex.run,
+      cwd,
+      env,
+      timeoutSec: ex.timeoutSec,
+      onLine: (line) => ctx.log(line),
     });
     if (code !== 0) {
       throw new Error(`命令失败，退出码 ${code} / Command exited with code ${code}: ${ex.run}\n${truncate(output, 2000)}`);
