@@ -1,0 +1,23 @@
+{
+  "name": "flowgit",
+  "version": "0.1.0",
+  "description": "Flowgit CLI: validate, run, inspect and share staged flows.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "bin": {
+    "flowgit": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "templates"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@flowgit/core": "workspace:*",
+    "commander": "^15.0.0"
+  }
+}

@@ -1,0 +1,360 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flowgit.dev/schema/flow/0.1.json",
+  "title": "Flowgit flow.json (v0.1)",
+  "description": "A flow is an ordered set of stages. Each stage declares what it reads (inputs), what it produces (outputs) and who runs it (executor). Every run of a stage is recorded as a version under runs/<stage>/<n>/.",
+  "type": "object",
+  "required": [
+    "format",
+    "version",
+    "name",
+    "stages"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "format": {
+      "const": "flowgit",
+      "description": "Always \"flowgit\"."
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^0\\.1(\\.[0-9]+)?$",
+      "description": "Spec version this file follows."
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{0,63}$",
+      "description": "Optional stable slug (lowercase letters, digits, hyphens). Used as the exported skill name and, later, the gallery URL."
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Human-readable flow name."
+    },
+    "description": {
+      "type": "string"
+    },
+    "language": {
+      "type": "string",
+      "description": "Primary language of prompts and docs, e.g. \"zh\" or \"en\". Defaults to \"zh\"."
+    },
+    "author": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        }
+      }
+    },
+    "license": {
+      "type": "string",
+      "description": "SPDX identifier for the flow itself (prompts, scripts). Artifacts may carry their own licenses."
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "inputs": {
+      "type": "object",
+      "description": "Flow-level parameters the user fills in once (e.g. topic). Values live in flowgit.local.json or are passed with --input key=value.",
+      "additionalProperties": {
+        "$ref": "#/$defs/flowInput"
+      }
+    },
+    "stages": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/stage"
+      }
+    }
+  },
+  "$defs": {
+    "flowInput": {
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "enum": [
+            "string",
+            "text",
+            "number",
+            "boolean",
+            "file"
+          ]
+        },
+        "description": {
+          "type": "string"
+        },
+        "default": {},
+        "required": {
+          "type": "boolean",
+          "default": false
+        },
+        "enum": {
+          "type": "array",
+          "minItems": 1,
+          "description": "Allowed values / 允许的取值, e.g. [\"zh\", \"en\"]."
+        }
+      }
+    },
+    "stage": {
+      "type": "object",
+      "required": [
+        "id",
+        "name",
+        "executor",
+        "outputs"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_-]*$",
+          "description": "Stable identifier, used in inputs of other stages and in runs/<id>/."
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "description": {
+          "type": "string"
+        },
+        "inputs": {
+          "type": "array",
+          "description": "Ids of stages whose outputs this stage reads. They must be able to run first.",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        },
+        "executor": {
+          "$ref": "#/$defs/executor"
+        },
+        "outputs": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/output"
+          }
+        }
+      }
+    },
+    "output": {
+      "type": "object",
+      "required": [
+        "type",
+        "path"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string",
+          "description": "MIME-like type of the artifact: text/markdown, application/json, flowgit/storyboard+json, video/mp4, dir ..."
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Path relative to the flow directory. Ends with / for a directory."
+        },
+        "description": {
+          "type": "string"
+        }
+      }
+    },
+    "executor": {
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "discriminator": {
+        "propertyName": "type"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/executorHuman"
+        },
+        {
+          "$ref": "#/$defs/executorLlm"
+        },
+        {
+          "$ref": "#/$defs/executorScript"
+        },
+        {
+          "$ref": "#/$defs/executorWorkflow"
+        },
+        {
+          "$ref": "#/$defs/executorService"
+        },
+        {
+          "$ref": "#/$defs/executorMcp"
+        }
+      ]
+    },
+    "executorHuman": {
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "human"
+        },
+        "instructions": {
+          "type": "string",
+          "description": "What the person should do. Shown when the stage is waiting for them."
+        }
+      }
+    },
+    "executorLlm": {
+      "type": "object",
+      "required": [
+        "type",
+        "prompt"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "llm"
+        },
+        "prompt": {
+          "type": "string",
+          "description": "Path to a prompt file (Markdown). {{inputs.key}} is replaced by flow inputs; upstream artifacts are appended automatically."
+        },
+        "system": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string",
+          "description": "Model id. Defaults to the FLOWGIT_MODEL env var, then claude-opus-5-5."
+        },
+        "effort": {
+          "enum": [
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+            "max"
+          ]
+        },
+        "maxTokens": {
+          "type": "integer",
+          "minimum": 256
+        }
+      }
+    },
+    "executorScript": {
+      "type": "object",
+      "required": [
+        "type",
+        "run"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "script"
+        },
+        "run": {
+          "type": "string",
+          "description": "Shell command. Runs in the flow directory with FLOWGIT_* environment variables set."
+        },
+        "cwd": {
+          "type": "string"
+        },
+        "env": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "executorWorkflow": {
+      "type": "object",
+      "description": "Reserved for v0.2: run an external workflow file (ComfyUI, n8n ...).",
+      "required": [
+        "type",
+        "engine",
+        "file"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "workflow"
+        },
+        "engine": {
+          "type": "string"
+        },
+        "file": {
+          "type": "string"
+        },
+        "params": {
+          "type": "object"
+        }
+      }
+    },
+    "executorService": {
+      "type": "object",
+      "description": "Reserved for v0.2: call an HTTP service.",
+      "required": [
+        "type",
+        "url"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "service"
+        },
+        "url": {
+          "type": "string"
+        },
+        "method": {
+          "enum": [
+            "GET",
+            "POST"
+          ]
+        }
+      }
+    },
+    "executorMcp": {
+      "type": "object",
+      "description": "Reserved: call a tool on an MCP server. This is also how a whole flow will later be exposed to others.",
+      "required": [
+        "type",
+        "server",
+        "tool"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "mcp"
+        },
+        "server": {
+          "type": "string"
+        },
+        "tool": {
+          "type": "string"
+        },
+        "args": {
+          "type": "object"
+        }
+      }
+    }
+  }
+}

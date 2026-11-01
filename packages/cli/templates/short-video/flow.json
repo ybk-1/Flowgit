@@ -1,0 +1,83 @@
+{
+  "format": "flowgit",
+  "version": "0.1",
+  "id": "short-video",
+  "name": "短视频制作",
+  "description": "从一个主题做出一条竖屏短视频：脚本 → 分镜 → 素材 → 剪辑 → 导出。每一步都可以回看、修改、重跑。 / Make a vertical short video from a topic: script → storyboard → assets → edit → export. Every step can be reviewed, edited and re-run.",
+  "language": "zh",
+  "author": { "name": "Flowgit" },
+  "license": "Apache-2.0",
+  "tags": ["video", "short-video", "starter"],
+  "inputs": {
+    "topic": {
+      "type": "string",
+      "description": "视频主题，例如：为什么猫喜欢纸箱 / What the video is about, e.g. why cats love boxes",
+      "required": true
+    },
+    "duration": {
+      "type": "number",
+      "description": "目标时长（秒） / Target length in seconds",
+      "default": 30
+    },
+    "style": {
+      "type": "string",
+      "description": "风格和语气，例如：轻松科普、温暖治愈 / Tone and style, e.g. light explainer, warm and cozy",
+      "default": "轻松科普"
+    },
+    "audience": {
+      "type": "string",
+      "description": "目标观众 / Who the video is for",
+      "default": "短视频平台的普通观众"
+    },
+    "language": {
+      "type": "string",
+      "enum": ["zh", "en"],
+      "default": "zh",
+      "description": "输出语言：zh 中文，en English。决定脚本、分镜、字幕和剪辑/导出日志的语言 / Output language: zh or en. Sets the language of the script, storyboard, captions and the edit/export logs"
+    }
+  },
+  "stages": [
+    {
+      "id": "script",
+      "name": "脚本",
+      "description": "根据主题写口播脚本，分成几段，每段一句话的画面提示。 / Write a voiceover script from the topic, in parts, each with a one-line visual note.",
+      "executor": { "type": "llm", "prompt": "prompts/script.md", "effort": "medium" },
+      "outputs": [{ "type": "text/markdown", "path": "script.md" }]
+    },
+    {
+      "id": "storyboard",
+      "name": "分镜",
+      "description": "把脚本拆成镜头：每个镜头的时长、画面、字幕和需要的素材文件名。 / Split the script into shots: duration, visual, caption and asset file name for each.",
+      "inputs": ["script"],
+      "executor": { "type": "llm", "prompt": "prompts/storyboard.md", "effort": "medium" },
+      "outputs": [{ "type": "flowgit/storyboard+json", "path": "storyboard.json" }]
+    },
+    {
+      "id": "assets",
+      "name": "素材",
+      "description": "按分镜准备图片或视频。 / Prepare images or videos for the storyboard.",
+      "inputs": ["storyboard"],
+      "executor": {
+        "type": "human",
+        "instructions": "把图片或视频放进 assets/，文件名对应 storyboard.json 里每个镜头的 asset 字段。缺的镜头导出时会用文字卡代替，所以也可以先放一个空的 assets/ 文件夹（mkdir assets）。 / Put images or videos in assets/, named after each shot's asset field in storyboard.json. Missing shots become text cards on export, so an empty assets/ folder (mkdir assets) also works."
+      },
+      "outputs": [{ "type": "dir", "path": "assets/" }]
+    },
+    {
+      "id": "edit",
+      "name": "剪辑",
+      "description": "把分镜和素材排成时间线。生成后可以直接改 timeline.json 调整顺序、时长和字幕。 / Lay out the storyboard and assets as a timeline. You can edit timeline.json afterwards to change order, durations and captions.",
+      "inputs": ["storyboard", "assets"],
+      "executor": { "type": "script", "run": "node scripts/build-timeline.mjs" },
+      "outputs": [{ "type": "flowgit/timeline+json", "path": "timeline.json" }]
+    },
+    {
+      "id": "export",
+      "name": "导出",
+      "description": "用 FFmpeg 把时间线渲染成 MP4。 / Render the timeline to MP4 with FFmpeg.",
+      "inputs": ["edit"],
+      "executor": { "type": "script", "run": "node scripts/render.mjs" },
+      "outputs": [{ "type": "video/mp4", "path": "final.mp4" }]
+    }
+  ]
+}
