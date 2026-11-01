@@ -1,0 +1,18 @@
+---
+description: Flowgit 仓库规则 / Flowgit repository rules
+alwaysApply: true
+---
+
+开始任何任务前，先读仓库根目录的 `AGENTS.md` 和 `CLAUDE.md` 并遵守。
+Before any task, read and follow `AGENTS.md` and `CLAUDE.md` at the repo root.
+
+最重要的几条 / The essentials:
+
+- GitHub 上的内容（PR、commit、README、docs、面向用户的文字）一律中英双语，中文在前。
+  Everything on GitHub (PRs, commits, README, docs, user-facing strings) is bilingual, Chinese first.
+- 开 PR 前跑通 `pnpm build && pnpm typecheck && pnpm test`；不准跳过测试。
+  Run `pnpm build && pnpm typecheck && pnpm test` before opening a PR; never skip tests.
+- 永远不覆盖用户对阶段产物的手动修改。
+  Never overwrite a user's hand edit of stage outputs.
+- 一个任务一个 `cursor/<topic>` 分支一个 PR，按 PR 模板填写；不要自己合并，不要推 `main`。
+  One task = one `cursor/<topic>` branch = one PR using the template; never merge it yourself or push to `main`.
