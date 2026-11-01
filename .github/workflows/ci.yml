@@ -7,7 +7,11 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -16,8 +20,17 @@ jobs:
           node-version: 22
           cache: pnpm
       - name: Install FFmpeg and a CJK font (for the render test)
+        if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg fonts-wqy-zenhei
+      - name: Install FFmpeg (Windows)
+        if: runner.os == 'Windows'
+        run: choco install ffmpeg -y --no-progress
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: pnpm typecheck
-      - run: pnpm test
+      - name: Test
+        run: pnpm test
+        env:
+          # Force a font on Windows so the render test always draws captions with
+          # drive-letter paths (C:) in the FFmpeg filter; Arial is always present.
+          FLOWGIT_FONT: ${{ runner.os == 'Windows' && 'C:\Windows\Fonts\arial.ttf' || '' }}
