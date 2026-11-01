@@ -37,6 +37,8 @@ This file is for coding agents such as Cursor or Codex. [`CLAUDE.md`](CLAUDE.md)
    **Fill in the PR template**: what changed, how you verified it, and what is left.
 7. 不要提交密钥、`.env`、`node_modules`、`dist/`、`runs/` 这类生成文件。
    Never commit secrets, `.env`, `node_modules`, `dist/`, `runs/` or other generated files.
+8. **用户能感觉到的改动要记进 `CHANGELOG.md`**：在最上面那个“未发布 / Unreleased”版本的对应小节里加一行，中英双语。纯测试、CI、内部重构不用写。
+   **Record user-visible changes in `CHANGELOG.md`**: add a bilingual line under the matching section of the top "Unreleased" version. Tests, CI and internal refactors don't need one.
 
 ## 收到审核意见后 / After review
 

@@ -12,6 +12,7 @@
 - [ ] `pnpm typecheck`
 - [ ] `pnpm test`
 - [ ] 手动试过（写下命令和结果）/ Tried by hand (commands and result):
+- [ ] 用户能感觉到的改动已经记进 `CHANGELOG.md` / User-visible changes are in `CHANGELOG.md`
 
 ## 没做的 / 需要注意的 · Not done / Watch out for
 
