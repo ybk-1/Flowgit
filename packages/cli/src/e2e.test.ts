@@ -36,10 +36,18 @@ describe("flowgit CLI with the short-video template", () => {
   it("creates and validates a flow", () => {
     const init = spawnSync(process.execPath, [cli, "init", flowDir], { encoding: "utf8" });
     expect(init.status).toBe(0);
+    // The flow is outside the current folder, so the hint shows its full path, not ../../..
+    expect(init.stdout).toContain(`next: cd ${/\s/.test(flowDir) ? `"${flowDir}"` : flowDir} && flowgit status`);
     expect(fs.existsSync(path.join(flowDir, "flow.json"))).toBe(true);
     expect(flowgit(["validate"])).toMatchObject({ code: 0 });
     const status = flowgit(["status"]);
     expect(status.out).toContain("flow inputs not set: topic");
+  });
+
+  it("shows a short, quoted path when the new flow is below the current folder", () => {
+    const init = spawnSync(process.execPath, [cli, "init", "my video"], { cwd: work, encoding: "utf8" });
+    expect(init.status).toBe(0);
+    expect(init.stdout).toContain('next: cd "my video" && flowgit status');
   });
 
   it("runs until the human stage and waits", () => {

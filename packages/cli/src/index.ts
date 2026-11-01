@@ -128,7 +128,10 @@ program
       },
     });
     console.log(`${c.green("✓")} 已创建流程 / created flow in ${target}`);
-    console.log(`  下一步 / next: cd ${path.relative(process.cwd(), target) || "."} && flowgit status`);
+    // A short relative path when the flow is below the current folder, the full path otherwise.
+    const rel = path.relative(process.cwd(), target);
+    const shown = rel === "" ? "." : rel.startsWith("..") || path.isAbsolute(rel) ? target : rel;
+    console.log(`  下一步 / next: cd ${/\s/.test(shown) ? `"${shown}"` : shown} && flowgit status`);
   });
 
 program
