@@ -49,6 +49,7 @@ npm can only set up Trusted Publishing for a package that already exists, so the
 ```bash
 git checkout -b release/v0.1.1 origin/main
 node scripts/release-version.mjs set 0.1.1     # 两个包一起改版本 / bump both packages
+# 在 CHANGELOG.md 里把"未发布"改成版本号和日期 / in CHANGELOG.md, turn "Unreleased" into the version and date
 git commit -am "发布 0.1.1 / Release 0.1.1"
 # 开 PR、合并 / open a PR and merge it
 git checkout main && git pull

@@ -242,7 +242,9 @@ packages/
 docs/
   spec.md                  格式规范 / format spec
   guide.md                 教程：动手做一个流程 / tutorial: build your own flow
+  releasing.md             怎么发布到 npm / how to publish to npm
 examples/                  只在仓库里的示例，比如 agent-page / repo-only examples such as agent-page
+CHANGELOG.md               每个版本的更新记录 / what changed in each version
 ```
 
 ## 开发 / Development
