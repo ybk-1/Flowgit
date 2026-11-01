@@ -85,7 +85,7 @@ CLI messages and errors are bilingual. What a template produces (script, caption
 
 | 命令 / Command | 作用 | What it does |
 | --- | --- | --- |
-| `flowgit init [dir] [-t template]` | 从模板新建流程（默认 `short-video`） | Create a flow from a template (default `short-video`) |
+| `flowgit init [dir] [-t template]` | 从模板新建流程（默认 `short-video`，也可用 `article`） | Create a flow from a template (default `short-video`, also `article`) |
 | `flowgit validate` | 按规范检查 `flow.json` | Check `flow.json` against the spec |
 | `flowgit status [--json]` | 看板：每个阶段的状态、版本、产物和下一步 | The board: each stage's state, version, outputs, and the next step |
 | `flowgit inputs` / `flowgit inputs set k=v` | 查看 / 填写流程输入 | Show / set flow inputs |
@@ -99,6 +99,17 @@ CLI messages and errors are bilingual. What a template produces (script, caption
 所有命令都接受 `-C <dir>` 指定流程目录。`run` 还接受 `--input k=v`（只对这次运行生效）、`--model` 和 `--force`。
 
 Every command accepts `-C <dir>` for the flow directory. `run` also takes `--input k=v` (this run only), `--model`, and `--force`.
+
+## 自带模板 / Bundled templates
+
+| 模板 / Template | 新建 / Create | 流程 / Flow |
+| --- | --- | --- |
+| `short-video`（默认 / default） | `flowgit init` | 脚本 → 分镜 → 素材 → 剪辑 → 导出 / script → storyboard → assets → edit → export |
+| `article` | `flowgit init -t article` | 大纲 → 正文 → 配图方案 → 照片 → 导出 / outline → draft → image plan → photos → export |
+
+图文模板按平台（小红书、公众号、博客）决定篇幅和语气，导出 `post.md` 和 `post.html`。说明见 [`packages/cli/templates/article/README.md`](packages/cli/templates/article/README.md)。短视频见 [`packages/cli/templates/short-video/README.md`](packages/cli/templates/short-video/README.md)。
+
+The article template sets length and tone from the platform (Xiaohongshu, WeChat, blog) and exports `post.md` and `post.html`. See [`packages/cli/templates/article/README.md`](packages/cli/templates/article/README.md). The short video is [`packages/cli/templates/short-video/README.md`](packages/cli/templates/short-video/README.md).
 
 ## 接任何模型 / Any model
 
@@ -197,6 +208,7 @@ packages/
   core/   @flowgit/core  格式、校验、版本记录、执行器 / format, validation, runs, executors
   cli/    flowgit        命令行工具和模板 / CLI and templates
     templates/short-video/  短视频示例流程 / the short-video example flow
+    templates/article/      图文帖子示例流程 / the article-post example flow
 docs/
   spec.md                  格式规范 / format spec
 ```
