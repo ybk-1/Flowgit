@@ -143,6 +143,10 @@ flowgit doctor --model glm/glm-5.3                  # 跑之前检查密钥、�
 
 Built in: `anthropic`, `openai`, `openrouter`, `glm`, `deepseek`, `moonshot`, `qwen`, `ollama`. Any other service that speaks the Anthropic or OpenAI API is one entry in `~/.flowgit/providers.json`. Keys are read only from environment variables, never written to a file or to `flow.json`, so flows are safe to share.
 
+每次调用模型后会显示这次用了多少 token；`run all` 调用了好几次时，最后再显示一个合计。`flowgit log <阶段>` 里每个版本也写着用量，方便估算花费。
+
+After each model call Flowgit shows the tokens it used; when `run all` makes several calls it also prints a total. `flowgit log <stage>` lists the usage of every version too, so you can estimate the cost.
+
 用代理或 VPN 上网时：Node 默认不走 `HTTPS_PROXY`，需要再设置 `NODE_USE_ENV_PROXY=1`（PowerShell：`$env:NODE_USE_ENV_PROXY="1"`）。连不上模型时 Flowgit 会提醒你。
 
 Behind a proxy or VPN: Node ignores `HTTPS_PROXY` by default, so also set `NODE_USE_ENV_PROXY=1` (PowerShell: `$env:NODE_USE_ENV_PROXY="1"`). Flowgit reminds you when it can't reach a model.

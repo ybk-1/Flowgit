@@ -28,6 +28,7 @@ import {
   stageStatus,
   statusAll,
   validateFlow,
+  usageTokens,
   type RunEvent,
   type RunOptions,
 } from "@flowgit/core";
@@ -50,6 +51,15 @@ function collect(value: string, prev: string[] = []): string[] {
   return [...prev, value];
 }
 
+/** Tokens the llm stages of this command used, for the closing total. */
+const used = { input: 0, output: 0, calls: 0 };
+
+/** One line with the total when more than one model call was made (each call already logs its own). */
+function printUsageTotal(): void {
+  if (used.calls < 2) return;
+  console.log(c.dim(`用量合计 / total usage: ${used.input} 输入 input + ${used.output} 输出 output tokens（${used.calls} 次模型调用 / model calls）`));
+}
+
 function printEvent(e: RunEvent): void {
   switch (e.type) {
     case "stage:start":
@@ -61,9 +71,16 @@ function printEvent(e: RunEvent): void {
     case "stage:log":
       console.log(c.dim(`    ${e.line}`));
       break;
-    case "stage:done":
+    case "stage:done": {
       console.log(`${c.green("✓")} ${e.stage.name} ${c.dim(`→ runs/${e.stage.id}/${e.n}/`)}`);
+      const tokens = usageTokens(e.record.params?.usage as Record<string, unknown> | undefined);
+      if (tokens) {
+        used.input += tokens.input;
+        used.output += tokens.output;
+        used.calls += 1;
+      }
       break;
+    }
     case "stage:error":
       console.log(`${c.red("✗")} ${e.stage.name} ${c.dim(`(${e.stage.id})`)}`);
       break;
@@ -273,6 +290,7 @@ program
       };
       if (stageId === "all") {
         const records = await runAll(loaded, options);
+        printUsageTotal();
         console.log(`\n${c.green("✓")} ${records.length ? `处理了 ${records.length} 个阶段 / ran ${records.length} stage(s)` : "没有要跑的，全部已是最新 / nothing to do, all stages up to date"}`);
       } else {
         await runStage(loaded, stageId, options);
@@ -281,9 +299,17 @@ program
         if (hint) console.log(`\n${hint}`);
       }
     } catch (err) {
+      // run all can stop at a human stage after paying for model calls: still show what they used
+      printUsageTotal();
       fail(err);
     }
   });
+
+/** " · 19 tokens" for an llm run that reported usage. */
+function tokenNote(usage: unknown): string {
+  const t = usageTokens(usage as Record<string, unknown> | undefined);
+  return t ? ` · ${t.input + t.output} tokens` : "";
+}
 
 program
   .command("log")
@@ -309,7 +335,7 @@ program
           r.status === "error"
             ? c.red((r.error ?? "").split("\n")[0].slice(0, 80))
             : r.executor === "llm"
-              ? `${p.provider && p.provider !== "anthropic" ? `${p.provider}/` : ""}${p.model ?? ""}${p.durationMs ? ` · ${Math.round(Number(p.durationMs) / 1000)}s` : ""}`
+              ? `${p.provider && p.provider !== "anthropic" ? `${p.provider}/` : ""}${p.model ?? ""}${p.durationMs ? ` · ${Math.round(Number(p.durationMs) / 1000)}s` : ""}${tokenNote(p.usage)}`
               : r.executor === "script"
                 ? String(p.run ?? "")
                 : r.executor === "agent"

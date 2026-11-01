@@ -1,5 +1,5 @@
 import type { ResolvedProvider } from "../providers.js";
-import type { Effort, LoadedFlow, Output, Stage } from "../types.js";
+import type { Effort, LoadedFlow, Output, RunRecord, Stage } from "../types.js";
 
 /** One upstream artifact as it stands in the flow directory when a stage runs. */
 export interface InputArtifact {
@@ -57,7 +57,7 @@ export type RunEvent =
   | { type: "stage:start"; stage: Stage }
   | { type: "stage:skip"; stage: Stage; reason: string }
   | { type: "stage:log"; stage: Stage; line: string }
-  | { type: "stage:done"; stage: Stage; n: number }
+  | { type: "stage:done"; stage: Stage; n: number; record: RunRecord }
   | { type: "stage:error"; stage: Stage; error: Error };
 
 export interface ExecContext {

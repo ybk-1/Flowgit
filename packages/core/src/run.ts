@@ -143,7 +143,7 @@ export async function runStage(loaded: LoadedFlow, stageId: string, options: Run
       log: truncate(logLines.join("\n"), 20_000),
     };
     writeRunRecord(dir, record);
-    emit({ type: "stage:done", stage, n });
+    emit({ type: "stage:done", stage, n, record });
     return record;
   } catch (err) {
     const error = err as Error;
