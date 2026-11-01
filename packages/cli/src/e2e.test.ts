@@ -111,3 +111,72 @@ describe("flowgit CLI with the short-video template", () => {
     expect(bad.out).toContain('Unknown provider "nope"');
   });
 });
+
+describe("flowgit diff", () => {
+  let diffWork: string;
+  let diffDir: string;
+
+  function flowgitDiff(args: string[], env: Record<string, string> = {}) {
+    const r = spawnSync(process.execPath, [cli, "-C", diffDir, ...args], {
+      encoding: "utf8",
+      env: { ...process.env, NO_COLOR: "1", ...env },
+    });
+    return { code: r.status, out: `${r.stdout}${r.stderr}` };
+  }
+
+  beforeAll(() => {
+    if (!fs.existsSync(cli)) throw new Error("Build the CLI first: pnpm -r run build");
+    diffWork = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-diff-e2e-"));
+    diffDir = path.join(diffWork, "video");
+  });
+
+  afterAll(() => {
+    if (diffWork) fs.rmSync(diffWork, { recursive: true, force: true });
+  });
+
+  it("shows the hand-edited storyboard lines between two demo runs", () => {
+    const init = spawnSync(process.execPath, [cli, "init", diffDir], { encoding: "utf8" });
+    expect(init.status, init.stderr).toBe(0);
+    expect(flowgitDiff(["inputs", "set", "topic=为什么猫喜欢纸箱", "duration=25"]).code).toBe(0);
+
+    const mock = { FLOWGIT_LLM_MOCK_DIR: path.join(diffDir, "demo-replies") };
+    const first = flowgitDiff(["run", "all"], mock);
+    expect(first.code, first.out).toBe(2);
+
+    const sbFile = path.join(diffDir, "storyboard.json");
+    const sb = JSON.parse(fs.readFileSync(sbFile, "utf8")) as { title: string };
+    sb.title = "为什么猫喜欢纸箱（手改）";
+    fs.writeFileSync(sbFile, `${JSON.stringify(sb, null, 2)}\n`);
+
+    const second = flowgitDiff(["run", "storyboard"], mock);
+    expect(second.code, second.out).toBe(0);
+    expect(second.out).toContain("已存为 v2");
+
+    const diff = flowgitDiff(["diff", "storyboard", "1", "2"]);
+    expect(diff.code, diff.out).toBe(0);
+    expect(diff.out).toContain("v1 → v2");
+    expect(diff.out).toContain('-  "title": "为什么猫喜欢纸箱",');
+    expect(diff.out).toContain('+  "title": "为什么猫喜欢纸箱（手改）",');
+    expect(diff.out).not.toMatch(/\x1b\[/);
+
+    const json = JSON.parse(flowgitDiff(["diff", "storyboard", "1", "2", "--json"]).out) as {
+      stage: string;
+      a: number;
+      b: number;
+      outputs: { path: string; kind: string; same: boolean; diff: string }[];
+    };
+    expect(json).toMatchObject({ stage: "storyboard", a: 1, b: 2 });
+    expect(json.outputs[0]).toMatchObject({ path: "storyboard.json", kind: "text", same: false });
+    expect(json.outputs[0].diff).toContain("为什么猫喜欢纸箱（手改）");
+
+    const missing = flowgitDiff(["diff", "storyboard", "1", "99"]);
+    expect(missing.code).toBe(1);
+    expect(missing.out).toContain("没有 v99");
+    expect(missing.out).toContain("has no run #99");
+
+    const bad = flowgitDiff(["diff", "storyboard", "v1"]);
+    expect(bad.code).toBe(1);
+    expect(bad.out).toContain("正整数");
+    expect(bad.out).toContain("positive integer");
+  });
+});
