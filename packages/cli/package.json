@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@flowgit/core": "workspace:*",
+    "@flowgit/web": "workspace:*",
     "commander": "^15.0.0"
   }
 }

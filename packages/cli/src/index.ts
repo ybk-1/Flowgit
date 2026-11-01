@@ -30,6 +30,7 @@ import {
   type RunEvent,
   type RunOptions,
 } from "@flowgit/core";
+import { openBrowser, startBoard } from "@flowgit/web";
 import { c, nextHint, statusBoard, table } from "./format.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -400,6 +401,26 @@ program
       const file = path.resolve(loaded.dir, opts.out);
       fs.writeFileSync(file, md);
       console.log(`${c.green("✓")} 已写入 / wrote ${path.relative(process.cwd(), file) || file}`);
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+program
+  .command("board")
+  .description("在浏览器打开本地只读看板 / open a local read-only board in the browser")
+  .option("--port <port>", "端口，只绑定 127.0.0.1 / port, bound to 127.0.0.1 only", "4747")
+  .option("--no-open", "不打开浏览器 / do not open a browser")
+  .action(async (opts: { port: string; open: boolean }) => {
+    try {
+      const port = Number(opts.port);
+      if (!Number.isInteger(port) || port < 0 || port > 65535) {
+        throw new Error(`端口不合法 / invalid port: ${opts.port}`);
+      }
+      const board = await startBoard({ dir: dirOf(), port, open: false });
+      console.log(`${c.green("✓")} 看板 / board: ${board.url}`);
+      console.log(c.dim("只读，绑定 127.0.0.1。按 Ctrl+C 停止 / read-only, bound to 127.0.0.1. Press Ctrl+C to stop"));
+      if (opts.open) openBrowser(board.url);
     } catch (err) {
       fail(err);
     }
