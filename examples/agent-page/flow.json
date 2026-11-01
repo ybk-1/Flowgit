@@ -1,0 +1,54 @@
+{
+  "format": "flowgit",
+  "version": "0.1",
+  "id": "agent-page",
+  "name": "一页介绍网页（agent 示例）",
+  "description": "让 agent 先写大纲、再做一个单文件网页，最后用脚本检查网页。演示 agent 和 script 两种执行器，默认用 Claude Code。 / Have an agent outline a topic, build a single-file web page from it, then check the page with a script. Shows the agent and script executors; uses Claude Code by default.",
+  "language": "zh",
+  "author": { "name": "Flowgit" },
+  "license": "Apache-2.0",
+  "tags": ["agent", "example", "web"],
+  "inputs": {
+    "topic": {
+      "type": "string",
+      "description": "网页介绍的主题，例如：为什么猫喜欢纸箱 / What the page explains, e.g. why cats love boxes",
+      "required": true
+    },
+    "audience": {
+      "type": "string",
+      "description": "读者是谁 / Who the page is for",
+      "default": "对这个主题好奇的普通读者"
+    },
+    "language": {
+      "type": "string",
+      "enum": ["zh", "en"],
+      "default": "zh",
+      "description": "输出语言：zh 中文，en English。决定大纲、网页和检查结果的语言 / Output language: zh or en. Sets the language of the outline, the page and the check report"
+    }
+  },
+  "stages": [
+    {
+      "id": "outline",
+      "name": "大纲",
+      "description": "agent 根据主题写网页大纲：标题、副标题和几个小节。 / The agent writes the page outline: title, subtitle and a few sections.",
+      "executor": { "type": "agent", "agent": "claude-code", "prompt": "prompts/outline.md" },
+      "outputs": [{ "type": "text/markdown", "path": "outline.md" }]
+    },
+    {
+      "id": "page",
+      "name": "网页",
+      "description": "agent 照大纲做一个单文件网页，不引用任何外部资源。 / The agent builds a single-file web page from the outline, with no external resources.",
+      "inputs": ["outline"],
+      "executor": { "type": "agent", "agent": "claude-code", "prompt": "prompts/page.md" },
+      "outputs": [{ "type": "text/html", "path": "index.html" }]
+    },
+    {
+      "id": "check",
+      "name": "检查",
+      "description": "脚本检查网页：有标题、语言对、没有外部资源、大小合理。不通过就失败，回到上一步重跑。 / A script checks the page: it has a title, the right language, no external resources and a sane size. It fails otherwise, so you re-run the page stage.",
+      "inputs": ["page"],
+      "executor": { "type": "script", "run": "node scripts/check-page.mjs" },
+      "outputs": [{ "type": "application/json", "path": "check.json" }]
+    }
+  ]
+}

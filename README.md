@@ -146,6 +146,10 @@ An `agent` stage starts an agent CLI headless in the flow directory. Flowgit ren
 
 Built in: `claude-code`, `codex`, `cursor` and `gemini`, plus `custom` for any command. Built-in adapters give the agent the least permission that still lets it write files in the flow directory, and **never add a bypass-all-permissions flag**. Widening that is your call, in `args`; the risks are in ["The agent executor" in docs/spec.md](docs/spec.md#agent-执行器--the-agent-executor).
 
+想马上试一下：[`examples/agent-page`](examples/agent-page) 让 Claude Code 写大纲、做一个单文件网页，再用脚本检查。用 Claude 订阅登录 Claude Code 就能跑，不需要 API key。
+
+To try it now: [`examples/agent-page`](examples/agent-page) has Claude Code write an outline and a single-file web page, then checks the page with a script. A Claude subscription login for Claude Code is enough; no API key needed.
+
 ## 格式 / Format
 
 最小的 `flow.json`：
