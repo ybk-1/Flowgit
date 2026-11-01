@@ -78,6 +78,18 @@ Put images or videos in `assets/`, named after the shot ids in the storyboard, e
 
 Set `transition.type` to `"none"` to turn transitions off; a clip's `motion` can be `"zoom-in"`, `"zoom-out"` or `"none"` (images only).
 
+## 背景音乐 / Music
+
+把音乐文件命名为 `music.mp3`（或 `music.m4a`、`music.wav`、`bgm.mp3` 等）放进 `assets/`，剪辑阶段会把它写进 `timeline.json`，导出时自动循环或截到视频长度，开头淡入、结尾淡出。音量在 `timeline.json` 里改：
+
+Put a music file named `music.mp3` (or `music.m4a`, `music.wav`, `bgm.mp3`, …) in `assets/`. The edit stage adds it to `timeline.json`, and the export loops or trims it to the video's length with a fade in and out. Change the volume in `timeline.json`:
+
+```json
+{ "music": { "path": "assets/music.mp3", "volume": 0.6 } }
+```
+
+请只用你有权使用的音乐。/ Only use music you have the rights to.
+
 ## 改一步，重跑后面 / Change one step, re-run what follows
 
 - 不满意分镜：直接改 `storyboard.json`，或改 `prompts/storyboard.md` 后 `flowgit run storyboard`。

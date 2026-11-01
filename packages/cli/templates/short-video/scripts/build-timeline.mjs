@@ -15,6 +15,7 @@ const available = fs.existsSync(assetsDir) ? fs.readdirSync(assetsDir).filter((f
 
 const IMAGE = new Set([".jpg", ".jpeg", ".png", ".webp", ".bmp"]);
 const VIDEO = new Set([".mp4", ".mov", ".webm", ".mkv", ".m4v"]);
+const AUDIO = new Set([".mp3", ".m4a", ".aac", ".wav", ".ogg", ".flac"]);
 
 /** Find the asset for a shot: exact name first, then any file whose base name is the shot id. */
 function findAsset(shot) {
@@ -56,6 +57,11 @@ const clips = shots.map((shot, i) => {
 });
 
 const [w, h] = (storyboard.aspect ?? "9:16") === "16:9" ? [1920, 1080] : (storyboard.aspect === "1:1" ? [1080, 1080] : [1080, 1920]);
+// 背景音乐：assets/music.mp3（或 bgm.*）。 / Background music: assets/music.mp3 (or bgm.*).
+const musicFile = available.find(
+  (f) => AUDIO.has(path.extname(f).toLowerCase()) && ["music", "bgm"].includes(path.parse(f).name.toLowerCase()),
+);
+
 const timeline = {
   format: "flowgit/timeline",
   version: "0.1",
@@ -66,13 +72,14 @@ const timeline = {
   duration: Number(t.toFixed(3)),
   // 镜头之间的转场：type 可以是 "fade" 或 "none"。 / Transition between clips: type "fade" or "none".
   transition: { type: "fade", duration: 0.4 },
+  ...(musicFile ? { music: { path: `assets/${musicFile}`, volume: 0.6 } } : {}),
   clips,
 };
 
 fs.writeFileSync(path.join(dir, "timeline.json"), `${JSON.stringify(timeline, null, 2)}\n`);
 console.log(
   say(
-    `timeline.json：${clips.length} 个镜头，${timeline.duration} 秒，${clips.length - missing} 个有素材，${missing} 个用文字卡`,
-    `timeline.json: ${clips.length} clips, ${timeline.duration}s, ${clips.length - missing} with assets, ${missing} as text cards`,
+    `timeline.json：${clips.length} 个镜头，${timeline.duration} 秒，${clips.length - missing} 个有素材，${missing} 个用文字卡${musicFile ? `，背景音乐 ${musicFile}` : ""}`,
+    `timeline.json: ${clips.length} clips, ${timeline.duration}s, ${clips.length - missing} with assets, ${missing} as text cards${musicFile ? `, music ${musicFile}` : ""}`,
   ),
 );

@@ -188,8 +188,26 @@ if (T > 0) {
 }
 const edge = Math.min(0.4, total / 4);
 graph.push(`[${last}]fade=t=in:st=0:d=${edge},fade=t=out:st=${(total - edge).toFixed(3)}:d=${edge},format=yuv420p[out]`);
+
+// Background music: timeline.music = { "path": "assets/music.mp3", "volume": 0.6 }.
+// Looped or cut to the video's length, faded in and out.
+const inputs = segments.flatMap((s) => ["-i", s]);
+let audioArgs = ["-an"];
+const musicPath = timeline.music?.path ? path.join(dir, timeline.music.path) : undefined;
+if (musicPath && fs.existsSync(musicPath)) {
+  const volume = Math.min(Math.max(Number(timeline.music.volume ?? 0.6) || 0, 0), 2);
+  const fadeOut = Math.min(1.5, total / 3);
+  inputs.push("-stream_loop", "-1", "-i", musicPath);
+  graph.push(
+    `[${segments.length}:a]atrim=0:${total.toFixed(3)},asetpts=PTS-STARTPTS,volume=${volume},afade=t=in:st=0:d=${Math.min(0.5, total / 4)},afade=t=out:st=${(total - fadeOut).toFixed(3)}:d=${fadeOut}[aout]`,
+  );
+  audioArgs = ["-map", "[aout]", "-c:a", "aac", "-b:a", "160k"];
+  console.log(say(`背景音乐：${timeline.music.path}，音量 ${volume}`, `music: ${timeline.music.path}, volume ${volume}`));
+} else if (timeline.music?.path) {
+  console.warn(say(`找不到背景音乐 ${timeline.music.path}，导出没有声音`, `music ${timeline.music.path} not found; exporting without sound`));
+}
 run(
-  [...segments.flatMap((s) => ["-i", s]), "-filter_complex", graph.join(";"), "-map", "[out]", "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-r", String(FPS), "-pix_fmt", "yuv420p", "-movflags", "+faststart", finalPath],
+  [...inputs, "-filter_complex", graph.join(";"), "-map", "[out]", ...audioArgs, "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-r", String(FPS), "-pix_fmt", "yuv420p", "-movflags", "+faststart", finalPath],
   "join",
 );
 fs.rmSync(work, { recursive: true, force: true });
