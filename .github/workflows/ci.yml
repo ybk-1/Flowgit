@@ -36,3 +36,22 @@ jobs:
           FLOWGIT_FONT: ${{ runner.os == 'Windows' && 'C:\Windows\Fonts\arial.ttf' || '' }}
       - name: 打包后像用户一样安装 / Pack and install like a user
         run: node scripts/pack-smoke.mjs
+      - name: README 的 PowerShell 快速开始 / The README's PowerShell quick start
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          FLOWGIT_LLM_MOCK_DIR: demo-replies
+        run: |
+          # The README's Windows commands, with the demo replies instead of an API key.
+          $fg = "$PWD\packages\cli\dist\index.js"
+          function flowgit { node $fg @args }
+          flowgit init $env:RUNNER_TEMP\my-video
+          cd $env:RUNNER_TEMP\my-video
+          flowgit inputs set topic="为什么猫喜欢纸箱"
+          flowgit run all
+          if ($LASTEXITCODE -ne 2) { throw "run all should stop at the assets stage (exit 2), got $LASTEXITCODE" }
+          mkdir assets
+          flowgit run all
+          if ($LASTEXITCODE -ne 0) { throw "run all failed with exit code $LASTEXITCODE" }
+          if (-not (Test-Path final.mp4)) { throw "final.mp4 was not written" }
+          flowgit status

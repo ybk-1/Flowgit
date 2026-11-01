@@ -56,12 +56,33 @@ mkdir -p assets                                  # 放素材；空着也行，�
 flowgit run all                                  # 剪辑 + 导出 → final.mp4 / edit + export → final.mp4
 ```
 
+Windows PowerShell：
+
+```powershell
+git clone https://github.com/cgold9820-dotcom/Flowgit.git
+cd Flowgit
+pnpm install
+pnpm build
+
+$fg = "$PWD\packages\cli\dist\index.js"
+function flowgit { node $fg @args }               # 这个窗口里可以直接用 flowgit / makes flowgit work in this window
+flowgit init $HOME\my-video
+cd $HOME\my-video
+
+flowgit inputs set topic="为什么猫喜欢纸箱"
+$env:ANTHROPIC_API_KEY = "..."                    # 或者换别的模型，见"接任何模型" / or another model, see "Any model"
+flowgit run all
+mkdir assets
+flowgit run all
+```
+
 没有 API key，可以先用模板自带的示例回复试跑：
 
 No API key yet? Try it with the template's bundled demo replies:
 
 ```bash
 FLOWGIT_LLM_MOCK_DIR=demo-replies flowgit run all
+# PowerShell: $env:FLOWGIT_LLM_MOCK_DIR = "demo-replies"; flowgit run all; Remove-Item Env:FLOWGIT_LLM_MOCK_DIR
 ```
 
 `flowgit status` 的样子 / what the board looks like:
