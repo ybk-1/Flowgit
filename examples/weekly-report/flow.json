@@ -1,0 +1,57 @@
+{
+  "format": "flowgit",
+  "version": "0.1",
+  "id": "weekly-report",
+  "name": "周报（入门示例）",
+  "description": "把一周随手记下的事情整理成周报：随手记（人）→ 草稿（模型）→ 检查（脚本）。 / Turn a week of rough notes into a weekly report: notes (person) → draft (model) → check (script).",
+  "language": "zh",
+  "author": { "name": "Flowgit" },
+  "license": "Apache-2.0",
+  "tags": ["starter", "writing", "work"],
+  "inputs": {
+    "name": {
+      "type": "string",
+      "description": "你的名字，写在周报标题里 / Your name, used in the report title",
+      "required": true
+    },
+    "team": {
+      "type": "string",
+      "description": "周报写给谁看，例如：产品组、我的经理 / Who reads the report, e.g. the product team, my manager",
+      "default": "团队同事"
+    },
+    "language": {
+      "type": "string",
+      "enum": ["zh", "en"],
+      "default": "zh",
+      "description": "周报和检查结果的语言：zh 中文，en English / Language of the report and the check: zh or en"
+    }
+  },
+  "stages": [
+    {
+      "id": "notes",
+      "name": "随手记",
+      "description": "把这周做的事随手写下来，一行一件，不用整理。 / Jot down what you did this week, one thing per line, no polish needed.",
+      "executor": {
+        "type": "human",
+        "instructions": "把这周的事随手写进 notes.md，一行一件，不用整理。 / Jot this week's work into notes.md, one thing per line; no need to tidy it up."
+      },
+      "outputs": [{ "type": "text/markdown", "path": "notes.md" }]
+    },
+    {
+      "id": "draft",
+      "name": "周报草稿",
+      "description": "模型把随手记整理成三段：本周完成、下周计划、需要帮助。 / A model turns the notes into three sections: done this week, next week, need help.",
+      "inputs": ["notes"],
+      "executor": { "type": "llm", "prompt": "prompts/draft.md", "effort": "low" },
+      "outputs": [{ "type": "text/markdown", "path": "report.md" }]
+    },
+    {
+      "id": "check",
+      "name": "检查",
+      "description": "检查周报有三个小节、没有留下待填的占位符、长度合适，结果写进 check.json。 / Checks the report has the three sections, no leftover placeholders and a sane length; writes check.json.",
+      "inputs": ["draft"],
+      "executor": { "type": "script", "run": "node scripts/check-report.mjs" },
+      "outputs": [{ "type": "application/json", "path": "check.json" }]
+    }
+  ]
+}

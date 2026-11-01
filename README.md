@@ -198,6 +198,10 @@ A minimal `flow.json`:
 
 The full spec is in [docs/spec.md](docs/spec.md); the JSON Schema is [packages/core/schema/flow.schema.json](packages/core/schema/flow.schema.json).
 
+想从零做一个自己的流程，跟着 [docs/guide.md](docs/guide.md) 做一遍（约 15 分钟，不需要 API key），做完的样子在 [`examples/weekly-report`](examples/weekly-report)。
+
+To build your own flow from scratch, follow [docs/guide.md](docs/guide.md) (about 15 minutes, no API key needed); the finished flow is [`examples/weekly-report`](examples/weekly-report).
+
 ## 仓库结构 / Repository layout
 
 ```text
@@ -207,6 +211,8 @@ packages/
     templates/short-video/  短视频示例流程 / the short-video example flow
 docs/
   spec.md                  格式规范 / format spec
+  guide.md                 教程：动手做一个流程 / tutorial: build your own flow
+examples/                  示例流程 / example flows
 ```
 
 ## 开发 / Development

@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { loadFlow, runStage, validateFlow } from "./index.js";
+import { loadFlow, mockCompleteFromDir, runAll, runStage, validateFlow } from "./index.js";
 
 const examplesDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../examples");
 const examples = fs
@@ -90,5 +90,55 @@ describe("examples/agent-page end to end (fake Claude Code)", () => {
     await expect(runStage(loaded, "check", { env, inputs })).rejects.toThrow();
     const report = JSON.parse(fs.readFileSync(path.join(dir, "check.json"), "utf8")) as { ok: boolean };
     expect(report.ok).toBe(false);
+  });
+});
+
+describe("examples/weekly-report end to end (demo reply)", () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-weekly-"));
+    fs.cpSync(path.join(examplesDir, "weekly-report"), dir, { recursive: true });
+  });
+
+  afterEach(() => {
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  // The example's own canned reply stands in for the model.
+  const llm = () => mockCompleteFromDir(path.join(dir, "demo-replies"));
+  // node must be on PATH for the check script.
+  const env = { PATH: [path.dirname(process.execPath), process.env.PATH ?? process.env.Path ?? ""].join(path.delimiter) };
+
+  it("waits for the notes, then drafts and checks the report", async () => {
+    const loaded = loadFlow(dir);
+    const inputs = { name: "小林" };
+    await expect(runAll(loaded, { inputs, llm: llm(), env })).rejects.toThrow(/notes\.md/);
+    await runStage(loaded, "notes", { inputs, from: [path.join(dir, "sample-notes.md")] });
+    await runAll(loaded, { inputs, llm: llm(), env });
+    const report = JSON.parse(fs.readFileSync(path.join(dir, "check.json"), "utf8")) as { ok: boolean; checks: { ok: boolean }[] };
+    expect(report.ok).toBe(true);
+    expect(report.checks.every((c) => c.ok)).toBe(true);
+  });
+
+  it("fails the check when a section is missing", async () => {
+    const loaded = loadFlow(dir);
+    const inputs = { name: "小林" };
+    await runStage(loaded, "notes", { inputs, from: [path.join(dir, "sample-notes.md")] });
+    await runStage(loaded, "draft", { inputs, llm: llm() });
+    const reportPath = path.join(dir, "report.md");
+    fs.writeFileSync(reportPath, fs.readFileSync(reportPath, "utf8").replace(/## 需要帮助[\s\S]*$/, ""));
+    await expect(runStage(loaded, "check", { inputs, env })).rejects.toThrow();
+    const check = JSON.parse(fs.readFileSync(path.join(dir, "check.json"), "utf8")) as { ok: boolean };
+    expect(check.ok).toBe(false);
+  });
+
+  it("checks against the English headings when language is en", async () => {
+    const loaded = loadFlow(dir);
+    const inputs = { name: "Lin", language: "en" };
+    await runStage(loaded, "notes", { inputs, from: [path.join(dir, "sample-notes.md")] });
+    await runStage(loaded, "draft", { inputs, llm: llm() });
+    // The canned reply is in Chinese, so the English check must fail.
+    await expect(runStage(loaded, "check", { inputs, env })).rejects.toThrow();
   });
 });
