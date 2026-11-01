@@ -322,7 +322,8 @@ flowgit export-skill -o SKILL.md
 | 缺少流程输入 / missing flow inputs | `flowgit inputs set 名字=值` 存下来，或者只这一次用 `--input 名字=值` | Save it with `flowgit inputs set key=value`, or pass `--input key=value` for one run |
 | 「随手记」在等你 / waiting for you | 人工阶段的产物还没放好。写好文件后 `flowgit run <阶段>` | A human stage's output isn't there yet. Write it, then `flowgit run <stage>` |
 | 没有找到 API 凭据 / no credentials | 设置对应供应商的密钥变量（`flowgit providers` 能看到是哪个），或者先用 `FLOWGIT_LLM_MOCK_DIR` 试跑 | Set the provider's key variable (`flowgit providers` shows which), or try it first with `FLOWGIT_LLM_MOCK_DIR` |
-| Could not reach … / 连不上 | 需要代理的话，同时设置 `HTTPS_PROXY` 和 `NODE_USE_ENV_PROXY=1` | If you need a proxy, set both `HTTPS_PROXY` and `NODE_USE_ENV_PROXY=1` |
+| 余额不足 / Insufficient balance；请求太频繁 / Rate-limited | 到供应商的控制台充值或检查用量上限。Flowgit 已经自动重试过几次 | Top up or check your limits in the provider's console. Flowgit has already retried a few times |
+| 连不上这个地址 / Could not reach it | 需要代理的话，同时设置 `HTTPS_PROXY` 和 `NODE_USE_ENV_PROXY=1` | If you need a proxy, set both `HTTPS_PROXY` and `NODE_USE_ENV_PROXY=1` |
 | 脚本阶段失败 / a script stage failed | 看 `flowgit log <阶段>` 和 `runs/<阶段>/<版本>/run.json` 里的 `log`。改好产物或脚本后再跑 | Read `flowgit log <stage>` and the `log` in `runs/<stage>/<n>/run.json`. Fix the output or the script and run again |
 
 做出了好用的流程？欢迎用 [流程想法](https://github.com/cgold9820-dotcom/Flowgit/issues/new?template=flow_idea.yml) 告诉我们，或者直接开 PR 放进 `examples/`。

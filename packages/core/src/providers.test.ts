@@ -78,6 +78,13 @@ beforeAll(async () => {
         res.end(JSON.stringify({ type: "error", error: { type: "authentication_error", message: "invalid key" } }));
         return;
       }
+      const failWith = { "no-balance": 402, busy: 429, broken: 503 }[model];
+      if (failWith) {
+        // retry-after-ms keeps the SDKs' automatic retries fast in tests.
+        res.writeHead(failWith, { "content-type": "application/json", "retry-after-ms": "5" });
+        res.end(JSON.stringify({ error: { message: `status ${failWith}`, type: "test_error" } }));
+        return;
+      }
       if (req.url?.endsWith("/v1/messages")) return anthropicReply(res, model, "# Hello from anthropic protocol");
       if (req.url?.endsWith("/chat/completions")) {
         return openaiReply(res, model, model === "too-long" ? "cut off" : "# Hello from openai protocol", model === "too-long" ? "length" : "stop");
@@ -314,5 +321,16 @@ describe("calling a provider over HTTP", () => {
 
     process.env.TEST_OAI_KEY = "k";
     await expect(runStage(loadFlow(dir), "write", { model: "mine/too-long" })).rejects.toThrow(/hit maxTokens/);
+  });
+
+  it("explains an empty balance, rate limits and server errors, after the SDK's own retries", async () => {
+    process.env.TEST_OAI_KEY = "k";
+    process.env.TEST_GLM_KEY = "k";
+    writeFlow(flowWith(), { providers: { myglm: { protocol: "anthropic", baseUrl: base, apiKeyEnv: "TEST_GLM_KEY" }, mine: { protocol: "openai", baseUrl: `${base}/v1`, apiKeyEnv: "TEST_OAI_KEY" } } });
+    await expect(runStage(loadFlow(dir), "write", { model: "mine/no-balance" })).rejects.toThrow(/Insufficient balance: top up/);
+    seen = [];
+    await expect(runStage(loadFlow(dir), "write", { model: "mine/busy" })).rejects.toThrow(/Rate-limited or out of quota/);
+    expect(seen.length).toBeGreaterThan(1); // retried before giving up
+    await expect(runStage(loadFlow(dir), "write", { model: "myglm/broken" })).rejects.toThrow(/server error \(already retried\)/);
   });
 });

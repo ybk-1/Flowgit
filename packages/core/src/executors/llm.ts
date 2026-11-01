@@ -107,6 +107,15 @@ function requestError(err: unknown, p: ResolvedProvider): Error {
     }
   } else if (e?.status === 404) {
     lines.push("检查模型名和 baseUrl 是否正确 / Check the model name and the baseUrl");
+  } else if (e?.status === 402) {
+    // DeepSeek and others answer 402 when the account has no balance left.
+    lines.push("账户余额不足，到供应商的控制台充值后再试 / Insufficient balance: top up in the provider's console and try again");
+  } else if (e?.status === 429) {
+    lines.push(
+      "请求太频繁，或者额度、用量上限用完了。已经自动重试过，稍后再试，或到供应商的控制台检查额度 / Rate-limited or out of quota. The request was already retried; try again later, or check your limits in the provider's console",
+    );
+  } else if (e?.status !== undefined && e.status >= 500) {
+    lines.push("供应商那边暂时出错（已经自动重试过），稍后再试 / The provider returned a server error (already retried); try again later");
   } else if (e?.status === undefined && /connect|fetch failed|ECONNREFUSED|ENOTFOUND|timed out/i.test(`${e?.name} ${msg}`)) {
     lines.push("连不上这个地址，检查 baseUrl 和网络 / Could not reach it; check the baseUrl and your network");
     const hint = proxyHint();
