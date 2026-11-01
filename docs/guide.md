@@ -389,6 +389,14 @@ flowchart LR
 
 Add `--status` to color each stage by its current state (green when done, amber when it needs a re-run), which suits a progress note.
 
+要存成文件，用 `--out`（`-o`）。写成 `.md` 时会自动包上代码块，而且总是 UTF-8。Windows PowerShell 5 里用 `>` 重定向会写成 UTF-16，GitHub 显示不出来，所以在 Windows 上请用 `--out`：
+
+To save it to a file, use `--out` (`-o`). A `.md` file gets the code block automatically, and the file is always UTF-8. In Windows PowerShell 5, redirecting with `>` writes UTF-16, which GitHub can't show, so on Windows use `--out`:
+
+```bash
+flowgit graph --status --out flow.md
+```
+
 ## 常见问题 / Troubleshooting
 
 | 看到 / You see | 怎么办 | What to do |

@@ -629,12 +629,22 @@ program
   .description("把流程画成 Mermaid 流程图，GitHub 和 Obsidian 都能直接显示 / draw the flow as a Mermaid diagram that GitHub and Obsidian render")
   .option("--status", "按每个阶段现在的状态上色 / color each stage by its current state")
   .option("--md", "包进 ```mermaid 代码块，直接贴进 Markdown / wrap it in a ```mermaid block to paste into Markdown")
-  .action((opts: { status?: boolean; md?: boolean }) => {
+  .option("-o, --out <file>", "写进文件（UTF-8，相对流程目录）；.md 文件自动包进代码块 / write to a file (UTF-8, relative to the flow directory); .md files get the code block")
+  .action((opts: { status?: boolean; md?: boolean; out?: string }) => {
     try {
       const loaded = loadFlow(dirOf());
       const statuses = opts.status ? statusAll(loaded, resolveFlowInputs(loaded.dir, loaded.flow)) : undefined;
       const diagram = flowToMermaid(loaded.flow, statuses);
-      console.log(opts.md ? `\`\`\`mermaid\n${diagram}\n\`\`\`` : diagram);
+      const md = opts.md || (opts.out !== undefined && /\.(md|markdown)$/i.test(opts.out));
+      const text = md ? `\`\`\`mermaid\n${diagram}\n\`\`\`` : diagram;
+      if (!opts.out) {
+        console.log(text);
+        return;
+      }
+      // a file written by Node is UTF-8, unlike `>` in Windows PowerShell 5, which writes UTF-16
+      const file = path.resolve(loaded.dir, opts.out);
+      fs.writeFileSync(file, `${text}\n`);
+      console.log(`${c.green("✓")} 已写入 / wrote ${path.relative(process.cwd(), file) || file}`);
     } catch (err) {
       fail(err);
     }

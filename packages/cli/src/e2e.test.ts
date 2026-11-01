@@ -114,6 +114,14 @@ describe("flowgit CLI with the short-video template", () => {
     expect(md.out).toContain('s3["素材<br/>human · ○ never-run"]');
     expect(md.out).toContain("  class s1,s2 ok");
     expect(md.out).toContain("  class s4,s5 waitingUpstream");
+
+    // --out writes UTF-8 next to the flow; a .md file gets the code block
+    expect(flowgit(["graph", "--out", "flow.md"]).out).toContain("wrote");
+    const saved = fs.readFileSync(path.join(flowDir, "flow.md"));
+    expect(saved.subarray(0, 10).toString("utf8")).toBe("```mermaid");
+    expect(saved.toString("utf8")).toContain('s1["脚本<br/>llm"]');
+    flowgit(["graph", "--out", "flow.mmd"]);
+    expect(fs.readFileSync(path.join(flowDir, "flow.mmd"), "utf8").startsWith("flowchart LR\n")).toBe(true);
   });
 
   it("shows what run all would do with --dry-run, without running anything", () => {
