@@ -113,6 +113,22 @@ describe("flowgit CLI with the short-video template", () => {
     expect(md.out).toContain("  class s4,s5 waitingUpstream");
   });
 
+  it("shows what run all would do with --dry-run, without running anything", () => {
+    const noMock = { FLOWGIT_LLM_MOCK_DIR: "" };
+    const r = flowgit(["run", "all", "--dry-run"], noMock);
+    expect(r.code, r.out).toBe(0);
+    expect(r.out).toMatch(/脚本 script\s+· 跳过，已是最新 \/ skip, up to date/);
+    expect(r.out).toMatch(/素材 assets\s+⏸ 停下等你 \/ stops for you\s+需要你放好 \/ needs assets/);
+    expect(r.out).toMatch(/导出 export\s+· 走不到 \/ not reached/);
+    expect(r.out).toContain("不会调用模型 / no model calls");
+    const forced = flowgit(["run", "all", "--dry-run", "--force", "--model", "deepseek/deepseek-v4-flash", "--input", "style=very calm"], noMock);
+    expect(forced.out).toMatch(/分镜 storyboard\s+▶ 运行 \/ run\s+模型 \/ model deepseek\/deepseek-v4-flash/);
+    expect(forced.out).toContain("最多 2 次模型调用 / at most 2 model call(s)");
+    expect(forced.out).toContain('真的运行 / to run it: flowgit run all --force --model deepseek/deepseek-v4-flash --input "style=very calm"');
+    expect(fs.readdirSync(path.join(flowDir, "runs", "script"))).toEqual(["1"]);
+    expect(flowgit(["run", "script", "--dry-run"]).out).toContain("--dry-run only works with all");
+  });
+
   it.skipIf(!hasFfmpeg)("finishes the flow and renders final.mp4", () => {
     fs.mkdirSync(path.join(flowDir, "assets"));
     const r = flowgit(["run", "all"]);

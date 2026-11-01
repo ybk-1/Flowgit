@@ -138,6 +138,7 @@ CLI messages and errors are bilingual. What a template produces (script, caption
 | `flowgit status [--json]` | 看板：每个阶段的状态、版本、产物和下一步 | The board: each stage's state, version, outputs, and the next step |
 | `flowgit inputs` / `flowgit inputs set k=v` | 查看 / 填写流程输入 | Show / set flow inputs |
 | `flowgit run <stage\|all>` | 跑一个阶段，或按顺序跑完所有需要跑的阶段 | Run one stage, or every stage that needs it, in order |
+| `flowgit run all --dry-run` | 预演：列出每个阶段会跳过、运行还是停下等你，以及最多调用几次模型；什么都不运行 | Dry run: whether each stage would be skipped, run or stop for you, and at most how many model calls; nothing runs |
 | `flowgit run <stage> --from <path>` | 人工阶段：把文件或文件夹放进产物位置 | Human stage: put a file or folder in place as the output |
 | `flowgit log [stage]` | 这个阶段的历史版本；不写阶段就按时间列出整个流程的，并合计 token 用量 | The stage's version history; without a stage, the whole flow's by time, with a token total |
 | `flowgit restore <stage> <n>` | 回退到某个版本 | Roll back to a version |
@@ -146,9 +147,9 @@ CLI messages and errors are bilingual. What a template produces (script, caption
 | `flowgit graph [--status] [--md]` | 把流程画成 Mermaid 流程图（GitHub、Obsidian 能直接显示），`--status` 按状态上色 | Draw the flow as a Mermaid diagram (GitHub and Obsidian render it); `--status` colors it by state |
 | `flowgit export-skill [-o SKILL.md]` | 生成 `SKILL.md`，给 AI 工具用 | Generate a `SKILL.md` for AI tools |
 
-所有命令都接受 `-C <dir>` 指定流程目录。`run` 还接受 `--input k=v`（只对这次运行生效）、`--model` 和 `--force`。
+所有命令都接受 `-C <dir>` 指定流程目录。`run` 还接受 `--input k=v`（只对这次运行生效）、`--model`、`--force` 和 `--dry-run`。
 
-Every command accepts `-C <dir>` for the flow directory. `run` also takes `--input k=v` (this run only), `--model`, and `--force`.
+Every command accepts `-C <dir>` for the flow directory. `run` also takes `--input k=v` (this run only), `--model`, `--force` and `--dry-run`.
 
 ## 接任何模型 / Any model
 

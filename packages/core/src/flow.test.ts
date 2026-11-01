@@ -11,6 +11,7 @@ import {
   listRuns,
   loadFlow,
   loadFlowInputs,
+  planRunAll,
   renderSkillMd,
   renderTemplate,
   resolveFlowInputs,
@@ -23,6 +24,7 @@ import {
   type Flow,
   type LlmComplete,
   type LlmRequest,
+  type PlanStep,
 } from "./index.js";
 
 const baseFlow = (): Flow => ({
@@ -309,5 +311,53 @@ describe("running a flow", () => {
     };
     fs.writeFileSync(path.join(dir, "flow.json"), JSON.stringify(flow));
     await expect(runStage(loadFlow(dir), "lazy")).rejects.toThrow("did not produce: x.txt");
+  });
+});
+
+describe("planRunAll (run all --dry-run)", () => {
+  const actions = (steps: PlanStep[]) => steps.map((s) => `${s.stage.id}:${s.action}`);
+  const inputs = { topic: "cats" };
+  const env = { FLOWGIT_MODEL: "deepseek/deepseek-v4-flash" };
+
+  it("says what run all would do, without running anything", async () => {
+    writeProject();
+    const loaded = loadFlow(dir);
+    let plan = planRunAll(loaded, { inputs, env });
+    expect(actions(plan)).toEqual(["script:run", "storyboard:run", "assets:wait", "edit:not-reached"]);
+    expect(plan[0]).toMatchObject({ state: "never-run", detail: "模型 / model deepseek/deepseek-v4-flash", callsModel: true });
+    expect(plan[2].detail).toContain("assets");
+    expect(listRuns(dir, "script")).toEqual([]);
+
+    // after a run that stopped at the person, and the assets put in place
+    await expect(runAll(loaded, { inputs, llm: mockLlm })).rejects.toBeInstanceOf(HumanInputNeededError);
+    fs.mkdirSync(path.join(dir, "assets"));
+    fs.writeFileSync(path.join(dir, "assets/s1.jpg"), "fake");
+    plan = planRunAll(loaded, { inputs, env });
+    expect(actions(plan)).toEqual(["script:skip", "storyboard:skip", "assets:run", "edit:run"]);
+    expect(plan.some((s) => s.callsModel)).toBe(false);
+
+    // a hand edit is kept and what depends on it re-runs
+    fs.appendFileSync(path.join(dir, "script.md"), "\nmore");
+    expect(actions(planRunAll(loaded, { inputs, env })).slice(0, 2)).toEqual(["script:keep-edit", "storyboard:run"]);
+    // --force re-runs everything, with the --model given; canned replies call no model
+    const forced = planRunAll(loaded, { inputs, env, force: true, model: "glm/glm-5.3" });
+    expect(actions(forced)).toEqual(["script:run", "storyboard:run", "assets:run", "edit:run"]);
+    expect(forced.filter((s) => s.callsModel).map((s) => s.detail)).toEqual(["模型 / model glm/glm-5.3", "模型 / model glm/glm-5.3"]);
+    expect(planRunAll(loaded, { inputs, env: { FLOWGIT_LLM_MOCK_DIR: "replies" } }).some((s) => s.callsModel)).toBe(false);
+    // the plan needs the same flow inputs as a run
+    expect(() => planRunAll(loaded, { env })).toThrow(MissingInputsError);
+  });
+
+  it("stops where a reserved executor would fail the run", () => {
+    const flow = baseFlow();
+    flow.stages[3].executor = { type: "mcp", server: "x", tool: "y" };
+    writeProject(flow);
+    fs.mkdirSync(path.join(dir, "assets"));
+    fs.writeFileSync(path.join(dir, "assets/s1.jpg"), "fake");
+    flow.stages.push({ id: "after", name: "after", inputs: ["edit"], executor: { type: "script", run: "node x.mjs" }, outputs: [{ type: "text/plain", path: "x.txt" }] });
+    fs.writeFileSync(path.join(dir, "flow.json"), JSON.stringify(flow));
+    const plan = planRunAll(loadFlow(dir), { inputs, env });
+    expect(actions(plan)).toEqual(["script:run", "storyboard:run", "assets:run", "edit:cannot-run", "after:not-reached"]);
+    expect(plan[3].detail).toContain("mcp is reserved");
   });
 });

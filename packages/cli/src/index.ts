@@ -21,6 +21,7 @@ import {
   loadProviders,
   providerKeyState,
   loadFlowInputs,
+  planRunAll,
   resolveFlowInputs,
   renderSkillMd,
   resolveFlowDir,
@@ -34,6 +35,8 @@ import {
   usageTokens,
   type Flow,
   type LoadedFlow,
+  type PlanAction,
+  type PlanStep,
   type RunEvent,
   type RunRecord,
   type RunOptions,
@@ -347,9 +350,16 @@ program
   .option("--from <path>", "人工阶段：作为产物的文件或文件夹，可重复 / human stage: file/dir to use as an output (repeatable, in output order)", collect)
   .option("--model <model>", "llm 阶段用的模型，可写 provider/model，如 glm/glm-5.3 / model for llm stages, optionally provider/model, e.g. glm/glm-5.3")
   .option("--force", "配合 all：已是最新的阶段也重跑 / with all: re-run stages that are already up to date")
-  .action(async (stageId: string, opts: { input?: string[]; from?: string[]; model?: string; force?: boolean }) => {
+  .option("--dry-run", "配合 all：只说会做什么，不运行、不调用模型 / with all: show what would happen, without running anything or calling a model")
+  .action(async (stageId: string, opts: { input?: string[]; from?: string[]; model?: string; force?: boolean; dryRun?: boolean }) => {
     try {
       const loaded = loadFlow(dirOf());
+      if (opts.dryRun) {
+        if (stageId !== "all") throw new Error("--dry-run 只能配合 all 使用 / --dry-run only works with all: flowgit run all --dry-run");
+        const again = ["flowgit run all", opts.force && "--force", opts.model && `--model ${opts.model}`, ...(opts.input ?? []).map((kv) => `--input ${/\s/.test(kv) ? `"${kv}"` : kv}`)];
+        printPlan(planRunAll(loaded, { inputs: parseKv(opts.input), model: opts.model, force: opts.force }), again.filter(Boolean).join(" "));
+        return;
+      }
       const options: RunOptions = {
         inputs: parseKv(opts.input),
         from: opts.from,
@@ -371,6 +381,32 @@ program
       fail(err);
     }
   });
+
+const PLAN_LABEL: Record<PlanAction, string> = {
+  skip: c.dim("· 跳过，已是最新 / skip, up to date"),
+  "keep-edit": c.cyan("✎ 保留你的手动修改 / keep your edit"),
+  run: c.green("▶ 运行 / run"),
+  wait: c.yellow("⏸ 停下等你 / stops for you"),
+  "cannot-run": c.red("✗ 不能运行 / can't run"),
+  "not-reached": c.dim("· 走不到 / not reached"),
+};
+
+/** The table for `run all --dry-run`, then how many model calls it would make at most. */
+function printPlan(steps: PlanStep[], runCommand: string): void {
+  console.log(c.dim("预演：不会运行任何阶段 / dry run: nothing runs\n"));
+  const rows = [[c.dim("#"), c.dim("阶段 stage"), c.dim("会怎样 action"), c.dim("详情 details")]];
+  steps.forEach((s, i) => rows.push([String(i + 1), `${s.stage.name} ${c.dim(s.stage.id)}`, PLAN_LABEL[s.action], s.detail ?? ""]));
+  console.log(table(rows));
+  const calls = steps.filter((s) => s.callsModel).length;
+  console.log(
+    `\n${
+      calls
+        ? `最多 ${calls} 次模型调用 / at most ${calls} model call(s)${c.dim("（上游产物没变的阶段到时会跳过 / stages whose upstream output comes out the same are skipped）")}`
+        : "不会调用模型 / no model calls"
+    }`,
+  );
+  if (steps.some((s) => s.action === "run" || s.action === "keep-edit")) console.log(c.dim(`真的运行 / to run it: ${runCommand}`));
+}
 
 /** " · 19 tokens" for an llm run that reported usage. */
 function tokenNote(usage: unknown): string {

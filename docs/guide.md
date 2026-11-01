@@ -223,6 +223,26 @@ flowgit doctor --model deepseek/deepseek-v4-pro
 ✗ 1 个问题要先解决 / 1 problem(s) to fix first
 ```
 
+想知道 `run all` 会跑哪些阶段、调用几次模型，就加 `--dry-run` 预演一下。它什么都不运行，也不调用模型。比如在 `notes.md` 里补了一行之后：
+
+To see which stages `run all` would run and how many model calls it would make, add `--dry-run`. It runs nothing and calls no model. For example, after adding a line to `notes.md`:
+
+```bash
+flowgit run all --dry-run --model deepseek/deepseek-v4-pro
+```
+
+```text
+预演：不会运行任何阶段 / dry run: nothing runs
+
+#  阶段 stage      会怎样 action                        详情 details
+1  随手记 notes    ✎ 保留你的手动修改 / keep your edit
+2  周报草稿 draft  ▶ 运行 / run                         模型 / model deepseek/deepseek-v4-pro
+3  检查 check      ▶ 运行 / run                         node scripts/check.mjs
+
+最多 1 次模型调用 / at most 1 model call(s)（上游产物没变的阶段到时会跳过 / stages whose upstream output comes out the same are skipped）
+真的运行 / to run it: flowgit run all --model deepseek/deepseek-v4-pro
+```
+
 用真的模型：设好密钥，去掉 `FLOWGIT_LLM_MOCK_DIR`，再跑一次。默认是 Claude（`ANTHROPIC_API_KEY`）；想用别的模型，加 `--model`，或者在阶段里写 `"model"`：
 
 With a real model: set a key, drop `FLOWGIT_LLM_MOCK_DIR` and run again. The default is Claude (`ANTHROPIC_API_KEY`); for another model pass `--model` or set `"model"` on the stage:
@@ -288,7 +308,7 @@ Without a stage, `flowgit log` lists every version of the whole flow by time, ne
 2026-11-01 17:52:17  周报草稿 draft  v3      ok           llm            mock:draft.md
 2026-11-01 17:52:17  周报草稿 draft  v2      ok           manual
 2026-11-01 17:52:17  随手记 notes    v2      ok           manual
-2026-11-01 17:52:16  检查 check      v1      ok           script         node scripts/check-report.mjs
+2026-11-01 17:52:16  检查 check      v1      ok           script         node scripts/check.mjs
 2026-11-01 17:52:16  周报草稿 draft  v1      ok           llm            mock:draft.md
 2026-11-01 17:52:15  随手记 notes    v1      ok           human          from
 ```
