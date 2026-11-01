@@ -37,7 +37,7 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 - `log` 不写阶段时按时间列出整个流程的所有版本，并合计用掉的 token。
 - `run all --dry-run` 预演：每个阶段会跳过、运行还是停下等你，最多调用几次模型，什么都不运行。`doctor` 通过后和导出的 `SKILL.md` 里都会提到它。
 - `inputs set` 保存前就检查名字和值（数字、`true`/`false`、可选值），写错了不会存进去。
-- 提示和报错都是中英双语（包括输错命令、少写参数这类报错，会提示“是不是想输入 …”），并针对余额不足、限流、连不上（包括代理）给出具体建议。
+- 提示、报错和 `--help` 都是中英双语（包括输错命令、少写参数这类报错，会提示“是不是想输入 …”），并针对余额不足、限流、连不上（包括代理）给出具体建议。
 - `init`, `templates`, `validate`, `status` (the board), `inputs`, `run`, `log`, `restore`, `providers`, `doctor`, `graph`, `export-skill`.
 - `doctor` checks Node, flow inputs, keys, proxy settings, and the programs script and agent stages use, before a run.
 - `export-skill` exports a flow as a `SKILL.md`, so AI tools can run it step by step without the UI.
@@ -45,7 +45,7 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 - `log` without a stage lists every version of the whole flow by time and adds up the tokens used.
 - `run all --dry-run` shows whether each stage would be skipped, run or stop for you, and at most how many model calls it would make, without running anything. `doctor` points to it when nothing blocks, and so does the exported `SKILL.md`.
 - `inputs set` checks names and values (numbers, `true`/`false`, allowed values) before saving, so a typo is never stored.
-- Messages and errors are bilingual (including typos in commands and missing arguments, with a “did you mean …”), with specific advice for an empty balance, rate limits and connection problems (including proxies).
+- Messages, errors and `--help` are bilingual (including typos in commands and missing arguments, with a “did you mean …”), with specific advice for an empty balance, rate limits and connection problems (including proxies).
 
 ### 模板和示例 / Templates and examples
 

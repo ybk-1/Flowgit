@@ -2,7 +2,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { Command } from "commander";
+import { Command, Help } from "commander";
 import {
   FLOW_FILE,
   FlowNotFoundError,
@@ -42,7 +42,7 @@ import {
   type RunRecord,
   type RunOptions,
 } from "@flowgit/core";
-import { bilingualCliError, c, nextHint, statusBoard, table } from "./format.js";
+import { bilingualCliError, c, nextHint, statusBoard, table, width } from "./format.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const VERSION = (JSON.parse(fs.readFileSync(path.join(here, "..", "package.json"), "utf8")) as { version: string }).version;
@@ -140,13 +140,36 @@ function fail(err: unknown): never {
   return exit(1);
 }
 
+/** Commander's built-in help headings, bilingual like everything else. */
+const HELP_TITLES: Record<string, string> = {
+  "Usage:": "用法 / Usage:",
+  "Arguments:": "参数 / Arguments:",
+  "Options:": "选项 / Options:",
+  "Commands:": "命令 / Commands:",
+  "Global Options:": "全局选项 / Global Options:",
+};
+const bilingualDefault = (s: string) => s.replace(/\(default: /g, "(默认 / default: ");
+
 const program = new Command();
 program
-  // set before any subcommand is added, so every subcommand inherits it
+  // set before any subcommand is added, so every subcommand inherits them
   .configureOutput({ outputError: (str, write) => write(bilingualCliError(str)) })
+  .configureHelp({
+    styleTitle: (title) => HELP_TITLES[title] ?? title,
+    // CJK characters take two columns, so help text wraps where it should
+    displayWidth: width,
+    optionDescription(option) {
+      return bilingualDefault(Help.prototype.optionDescription.call(this, option));
+    },
+    argumentDescription(argument) {
+      return bilingualDefault(Help.prototype.argumentDescription.call(this, argument));
+    },
+  })
+  .helpOption("-h, --help", "显示帮助 / show help")
+  .helpCommand("help [command]", "显示某个命令的帮助 / show help for a command")
   .name("flowgit")
   .description("Flowgit: 万物皆可流程化。Turn anything into a visual, staged, forkable flow.")
-  .version(VERSION)
+  .version(VERSION, "-V, --version", "显示版本号 / show the version number")
   .option("-C, --dir <dir>", "流程目录（含 flow.json）/ flow directory (contains flow.json)", ".");
 
 const dirOf = () => resolveFlowDir(program.opts<{ dir: string }>().dir);

@@ -163,6 +163,18 @@ describe("flowgit CLI with the short-video template", () => {
     expect(flowgit(["run", "edit", "--input", "language=fr"]).out).toContain('Input "language" must be one of "zh", "en"');
   }, 120_000);
 
+  it("shows help in both languages", () => {
+    const help = spawnSync(process.execPath, [cli, "--help"], { encoding: "utf8" });
+    expect(help.status).toBe(0);
+    for (const text of ["用法 / Usage: flowgit", "选项 / Options:", "命令 / Commands:", "显示帮助 / show help", "显示版本号 / show the version number", "显示某个命令的帮助 / show help for a command", '(默认 / default: ".")']) {
+      expect(help.stdout).toContain(text);
+    }
+    expect(help.stdout).not.toMatch(/display help|output the version/);
+    const init = spawnSync(process.execPath, [cli, "init", "--help"], { encoding: "utf8" });
+    expect(init.stdout).toContain("参数 / Arguments:");
+    expect(init.stdout).toContain('(默认 / default: "short-video")');
+  });
+
   it("explains mistakes in both languages", () => {
     const typo = flowgit(["statsu"]);
     expect(typo.code).toBe(1);
