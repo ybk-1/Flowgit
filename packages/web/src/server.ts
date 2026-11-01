@@ -7,15 +7,19 @@ import { pipeline } from "node:stream/promises";
 import { fileURLToPath } from "node:url";
 import {
   HumanInputNeededError,
+  diffRuns,
   isDirOutput,
   isSafeRelative,
   isTextType,
   listFiles,
+  listRuns,
   loadFlow,
   loadFlowInputs,
   MissingInputsError,
   outputRel,
+  requireStage,
   resolveFlowInputs,
+  restoreRun,
   runAll,
   runStage,
   saveFlowInputs,
@@ -292,6 +296,11 @@ function handle(req: http.IncomingMessage, res: http.ServerResponse, ctx: Handle
     void postRun(req, res, ctx).catch((err) => sendError(res, err));
     return;
   }
+  if (req.method === "POST" && pathname === "/api/restore") {
+    if (!authorized(req, res, ctx)) return;
+    void postRestore(req, res, ctx).catch((err) => sendError(res, err));
+    return;
+  }
   if (req.method === "PUT" && pathname === "/api/inputs") {
     if (!authorized(req, res, ctx)) return;
     void putInputs(req, res, ctx).catch((err) => sendError(res, err));
@@ -323,6 +332,14 @@ function handle(req: http.IncomingMessage, res: http.ServerResponse, ctx: Handle
     }
     if (pathname === "/api/inputs") {
       sendJson(res, 200, boardInputs(ctx.dir));
+      return;
+    }
+    if (pathname === "/api/runs") {
+      serveRuns(res, ctx, url);
+      return;
+    }
+    if (pathname === "/api/diff") {
+      serveDiff(res, ctx, url);
       return;
     }
     sendJson(res, 404, { error: "找不到 / not found" });
@@ -444,6 +461,64 @@ function parseRunBody(body: Record<string, unknown>): { stage: string; model?: s
     if (trimmed) model = trimmed;
   }
   return { stage: body.stage.trim(), model };
+}
+
+/** Positive run number from a query string. `v1` and `0` are rejected. */
+function parseVersion(raw: string | null): number {
+  if (raw === null || raw === "") throw new HttpError(400, "缺少版本 / missing version");
+  if (!/^[1-9]\d*$/.test(raw)) {
+    throw new HttpError(400, `版本号必须是正整数，收到 "${raw}" / version must be a positive integer, got "${raw}"`);
+  }
+  return Number(raw);
+}
+
+function coreHttpError(err: unknown): HttpError {
+  if (err instanceof HttpError) return err;
+  const message = err instanceof Error ? err.message : String(err);
+  const missing = /没有这个阶段|Unknown stage|没有 v\d|has no run #/.test(message);
+  return new HttpError(missing ? 404 : 400, message);
+}
+
+function serveRuns(res: http.ServerResponse, ctx: HandlerCtx, url: URL): void {
+  const stage = url.searchParams.get("stage")?.trim() ?? "";
+  if (!stage) throw new HttpError(400, "缺少阶段 / missing stage");
+  const loaded = loadFlow(ctx.dir);
+  try {
+    requireStage(loaded.flow, stage);
+  } catch (err) {
+    throw coreHttpError(err);
+  }
+  sendJson(res, 200, { runs: listRuns(loaded.dir, stage) });
+}
+
+/** `b` omitted, or empty, compares version `a` with the current files. */
+function serveDiff(res: http.ServerResponse, ctx: HandlerCtx, url: URL): void {
+  const stage = url.searchParams.get("stage")?.trim() ?? "";
+  if (!stage) throw new HttpError(400, "缺少阶段 / missing stage");
+  const a = parseVersion(url.searchParams.get("a"));
+  const rawB = url.searchParams.get("b");
+  const b = rawB === null || rawB === "" ? undefined : parseVersion(rawB);
+  const loaded = loadFlow(ctx.dir);
+  try {
+    sendJson(res, 200, diffRuns(loaded.dir, loaded.flow, stage, a, b));
+  } catch (err) {
+    throw coreHttpError(err);
+  }
+}
+
+async function postRestore(req: http.IncomingMessage, res: http.ServerResponse, ctx: HandlerCtx): Promise<void> {
+  const body = await readJsonObject(req);
+  if (typeof body.stage !== "string" || !body.stage.trim()) throw new HttpError(400, "缺少阶段 / missing stage");
+  if (typeof body.n !== "number" || !Number.isInteger(body.n) || body.n < 1) {
+    throw new HttpError(400, "版本号必须是正整数 / version must be a positive integer");
+  }
+  const loaded = loadFlow(ctx.dir);
+  try {
+    const run = restoreRun(loaded.dir, loaded.flow, body.stage.trim(), body.n);
+    sendJson(res, 200, { ok: true, stage: run.stage, n: run.n });
+  } catch (err) {
+    throw coreHttpError(err);
+  }
 }
 
 async function postRun(req: http.IncomingMessage, res: http.ServerResponse, ctx: HandlerCtx): Promise<void> {

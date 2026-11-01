@@ -599,3 +599,128 @@ describe("run and inputs on the board", () => {
     }
   }, 30_000);
 });
+
+describe("history, diff, and restore on the board", () => {
+  it("diffs v1 against v2, restores v1, and rejects a missing token", async () => {
+    const work = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-web-history-"));
+    fs.writeFileSync(
+      path.join(work, "flow.json"),
+      JSON.stringify(
+        {
+          format: "flowgit",
+          version: "0.1",
+          name: "history",
+          stages: [
+            {
+              id: "write",
+              name: "写",
+              executor: { type: "script", run: "node write.cjs" },
+              outputs: [{ type: "text/plain", path: "note.txt" }],
+            },
+            {
+              id: "copy",
+              name: "抄",
+              inputs: ["write"],
+              executor: { type: "script", run: "node copy.cjs" },
+              outputs: [{ type: "text/plain", path: "copy.txt" }],
+            },
+          ],
+        },
+        null,
+        2,
+      ),
+    );
+    // run.json is written after the script, so the second run sees v1 and writes different text.
+    fs.writeFileSync(
+      path.join(work, "write.cjs"),
+      [
+        'const fs = require("node:fs");',
+        'const text = fs.existsSync("runs/write/1/run.json") ? "two\\n" : "one\\n";',
+        'fs.writeFileSync("note.txt", text);',
+        "",
+      ].join("\n"),
+    );
+    fs.writeFileSync(
+      path.join(work, "copy.cjs"),
+      [
+        'const fs = require("node:fs");',
+        'fs.writeFileSync("copy.txt", fs.readFileSync("note.txt"));',
+        "",
+      ].join("\n"),
+    );
+    const board = await startBoard({ dir: work, port: 0, open: false });
+    const authed = (extra: Record<string, string> = {}) => ({ "X-Flowgit-Token": board.token, ...extra });
+    const jsonHeaders = authed({ "Content-Type": "application/json" });
+    const run = (stage: string) => httpCall(board.port, "POST", "/api/run", JSON.stringify({ stage }), jsonHeaders);
+    try {
+      const noDiff = await httpGet(board.port, "/api/diff?stage=write&a=1&b=2");
+      expect(noDiff.status).toBe(401);
+      const noRuns = await httpGet(board.port, "/api/runs?stage=write");
+      expect(noRuns.status).toBe(401);
+      const noRestore = await httpCall(board.port, "POST", "/api/restore", JSON.stringify({ stage: "write", n: 1 }), {
+        "Content-Type": "application/json",
+      });
+      expect(noRestore.status).toBe(401);
+      const badHost = await httpGet(board.port, "/api/diff?stage=write&a=1&b=2", authed({ Host: "evil.example" }));
+      expect(badHost.status).toBe(403);
+
+      expect((await run("write")).status).toBe(200);
+      expect((await run("write")).status).toBe(200);
+      expect((await run("copy")).status).toBe(200);
+      expect(fs.readFileSync(path.join(work, "note.txt"), "utf8")).toBe("two\n");
+      expect(fs.readFileSync(path.join(work, "copy.txt"), "utf8")).toBe("two\n");
+
+      const listed = JSON.parse((await httpGet(board.port, "/api/runs?stage=write", authed())).body) as {
+        runs: Array<{ n: number; status: string; executor: string }>;
+      };
+      expect(listed.runs.map((item) => item.n)).toEqual([1, 2]);
+      expect(listed.runs.every((item) => item.status === "ok" && item.executor === "script")).toBe(true);
+
+      const diff = await httpGet(board.port, "/api/diff?stage=write&a=1&b=2", authed());
+      expect(diff.status).toBe(200);
+      const body = JSON.parse(diff.body) as {
+        stage: string;
+        a: number;
+        b: number | null;
+        outputs: Array<{ path: string; kind: string; same: boolean; diff?: string }>;
+      };
+      expect(body).toMatchObject({ stage: "write", a: 1, b: 2 });
+      const note = body.outputs.find((output) => output.path === "note.txt");
+      expect(note).toMatchObject({ kind: "text", same: false });
+      expect(note?.diff).toMatch(/^-one$/m);
+      expect(note?.diff).toMatch(/^\+two$/m);
+
+      const againstCurrent = JSON.parse((await httpGet(board.port, "/api/diff?stage=write&a=1", authed())).body) as {
+        b: number | null;
+        outputs: Array<{ diff?: string }>;
+      };
+      expect(againstCurrent.b).toBeNull();
+      expect(againstCurrent.outputs[0]?.diff).toMatch(/^\+two$/m);
+
+      const snap = fs.readFileSync(path.join(work, "runs", "write", "1", "outputs", "note.txt"), "utf8");
+      expect(snap).toBe("one\n");
+      const restored = await httpCall(board.port, "POST", "/api/restore", JSON.stringify({ stage: "write", n: 1 }), jsonHeaders);
+      expect(restored.status, restored.body).toBe(200);
+      expect(fs.readFileSync(path.join(work, "note.txt"), "utf8")).toBe(snap);
+      const flow = JSON.parse((await httpGet(board.port, "/api/flow", authed())).body) as {
+        stages: Array<{ id: string; state: string }>;
+      };
+      expect(flow.stages.find((stage) => stage.id === "copy")?.state).toBe("stale");
+
+      const appJs = await httpGet(board.port, "/app.js");
+      expect(appJs.status).toBe(200);
+      expect(appJs.body).toContain("历史 History");
+      expect(appJs.body).toContain("对比 Compare");
+      expect(appJs.body).toContain("回退到这个版本 Restore");
+      expect(appJs.body).toContain("手动修改 manual edit");
+      expect(appJs.body).toContain("/api/diff");
+      expect(appJs.body).toContain("/api/restore");
+      const css = await httpGet(board.port, "/style.css");
+      expect(css.body).toContain(".diff-add");
+      expect(css.body).toContain(".diff-del");
+    } finally {
+      await board.close();
+      fs.rmSync(work, { recursive: true, force: true });
+    }
+  }, 30_000);
+});
