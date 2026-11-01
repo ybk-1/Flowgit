@@ -13,6 +13,7 @@ import {
   openaiBody,
   parseModelSpec,
   providerKeyState,
+  proxyHint,
   resolveModel,
   runStage,
   type Flow,
@@ -272,6 +273,35 @@ describe("calling a provider over HTTP", () => {
     expect(r.headers.authorization).toBe("Bearer oai-key");
     expect(JSON.stringify(r.headers)).not.toMatch(/must-not-leak/);
     expect(run.params).toMatchObject({ provider: "mine", protocol: "openai", model: "deepseek-v4-pro", stopReason: "stop", usage: { completion_tokens: 7 } });
+    // effort was not sent, so it is not recorded either
+    expect(run.params).not.toHaveProperty("effort");
+    expect(listRuns(dir, "write")[0].params).not.toHaveProperty("effort");
+  });
+
+  it("suggests NODE_USE_ENV_PROXY when a proxy variable is set and a request can't connect", async () => {
+    expect(proxyHint({})).toBeUndefined();
+    expect(proxyHint({ HTTPS_PROXY: "http://127.0.0.1:7890", NODE_USE_ENV_PROXY: "1" })).toBeUndefined();
+    expect(proxyHint({ https_proxy: "http://127.0.0.1:7890" })?.join("\n")).toMatch(/https_proxy is set.*NODE_USE_ENV_PROXY=1/);
+
+    // a closed port: the connection fails, and the error carries the hint
+    const closed = http.createServer();
+    await new Promise<void>((resolve) => closed.listen(0, "127.0.0.1", resolve));
+    const port = (closed.address() as AddressInfo).port;
+    await new Promise<void>((resolve) => closed.close(() => resolve()));
+    process.env.TEST_OAI_KEY = "oai-key";
+    const saved = { HTTPS_PROXY: process.env.HTTPS_PROXY, NODE_USE_ENV_PROXY: process.env.NODE_USE_ENV_PROXY };
+    process.env.HTTPS_PROXY = "http://127.0.0.1:9";
+    delete process.env.NODE_USE_ENV_PROXY;
+    try {
+      fs.writeFileSync(path.join(home, "providers.json"), JSON.stringify({ providers: { gone: { protocol: "openai", baseUrl: `http://127.0.0.1:${port}/v1`, apiKeyEnv: "TEST_OAI_KEY" } } }));
+      writeFlow(flowWith("gone/some-model"));
+      await expect(runStage(loadFlow(dir), "write", {})).rejects.toThrow(/Could not reach it[\s\S]*HTTPS_PROXY is set[\s\S]*NODE_USE_ENV_PROXY=1/);
+    } finally {
+      for (const [k, v] of Object.entries(saved)) {
+        if (v === undefined) delete process.env[k];
+        else process.env[k] = v;
+      }
+    }
   });
 
   it("explains a missing key before sending anything, and a rejected key or a cut-off reply after", async () => {

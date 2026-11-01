@@ -83,7 +83,8 @@ function fail(err: unknown): never {
   }
   if (e instanceof MissingInputsError) {
     console.error(`${c.red("✗")} 缺少流程输入 / missing flow inputs: ${e.missing.join(", ")}`);
-    console.error(`  例如 / e.g.: flowgit run all --input ${e.missing[0]}=...`);
+    console.error(`  保存下来 / save it: flowgit inputs set ${e.missing[0]}=...`);
+    console.error(`  只用这一次 / just this run: flowgit run <stage> --input ${e.missing[0]}=...`);
     process.exit(1);
   }
   if (e instanceof FlowValidationError) {

@@ -78,6 +78,19 @@ function usesSdkCredentials(p: ResolvedProvider): boolean {
 }
 
 /** Turn an SDK error into a bilingual one that says which provider failed and what to check. */
+/**
+ * Node's fetch ignores HTTPS_PROXY unless NODE_USE_ENV_PROXY=1 is set, so behind a
+ * proxy (or a VPN that only exports proxy variables) requests fail to connect.
+ */
+export function proxyHint(env: NodeJS.ProcessEnv = process.env): string[] | undefined {
+  const proxy = ["HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy", "ALL_PROXY", "all_proxy"].find((k) => env[k]);
+  if (!proxy || env.NODE_USE_ENV_PROXY === "1") return undefined;
+  return [
+    `检测到 ${proxy}，但 Node 默认不走代理。设置 NODE_USE_ENV_PROXY=1 后重试（PowerShell：$env:NODE_USE_ENV_PROXY="1"；macOS/Linux：export NODE_USE_ENV_PROXY=1）。还是不行就升级到最新的 Node 22 或 24。`,
+    `${proxy} is set, but Node ignores proxies by default. Set NODE_USE_ENV_PROXY=1 and try again (PowerShell: $env:NODE_USE_ENV_PROXY="1"; macOS/Linux: export NODE_USE_ENV_PROXY=1). If it still fails, update to the latest Node 22 or 24.`,
+  ];
+}
+
 function requestError(err: unknown, p: ResolvedProvider): Error {
   const e = err as Error & { status?: number };
   const msg = e?.message ?? String(err);
@@ -96,6 +109,8 @@ function requestError(err: unknown, p: ResolvedProvider): Error {
     lines.push("检查模型名和 baseUrl 是否正确 / Check the model name and the baseUrl");
   } else if (e?.status === undefined && /connect|fetch failed|ECONNREFUSED|ENOTFOUND|timed out/i.test(`${e?.name} ${msg}`)) {
     lines.push("连不上这个地址，检查 baseUrl 和网络 / Could not reach it; check the baseUrl and your network");
+    const hint = proxyHint();
+    if (hint) lines.push(...hint);
   }
   return new Error(lines.join("\n"));
 }
@@ -298,7 +313,8 @@ export const llmExecutor: StageExecutor = {
         protocol: provider.protocol,
         model: res.model,
         requestedModel: req.model,
-        effort: req.effort,
+        // effort is only sent to Anthropic's own API, so only record it there
+        ...(provider.claudeApi && req.effort ? { effort: req.effort } : {}),
         maxTokens: req.maxTokens,
         promptChars: req.prompt.length,
         stopReason: res.stopReason,

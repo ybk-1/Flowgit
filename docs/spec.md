@@ -168,16 +168,20 @@ Every preset's endpoint comes from the vendor's official docs, linked in `packag
 - `anthropic` 协议：只有直连 Anthropic 官方接口（`api.anthropic.com`）时才发送 Claude 专用参数（服务端 fallback、`effort`）。第三方兼容接口只收到标准的 messages 请求，密钥同时放在 `Authorization: Bearer` 和 `x-api-key` 里。
 - `openai` 协议：流式调用 Chat Completions。OpenAI 官方接口用 `max_completion_tokens`，其他兼容接口用 `max_tokens`。`effort` 不发送。
 - 非 Anthropic 的 provider 永远不会读 `ANTHROPIC_API_KEY`，非 OpenAI 的也不会带上 `OPENAI_ORG_ID` 等变量，密钥不会发给别家。
-- `run.json` 的 `params` 记录 `provider`、`protocol`、`model` 和用量。
+- `run.json` 的 `params` 记录 `provider`、`protocol`、`model` 和用量；`effort` 只在真的发送了时才记录。
 
 - `anthropic` protocol: Claude-only parameters (server-side fallback, `effort`) are sent only to Anthropic's own API (`api.anthropic.com`). Compatible third-party endpoints get a plain messages request, with the key in both `Authorization: Bearer` and `x-api-key`.
 - `openai` protocol: streamed Chat Completions. OpenAI's own API gets `max_completion_tokens`; compatible servers get `max_tokens`. `effort` is not sent.
 - A non-Anthropic provider never reads `ANTHROPIC_API_KEY`, and a non-OpenAI provider never picks up `OPENAI_ORG_ID` and similar variables, so a key is never sent to another vendor.
-- `params` in `run.json` records `provider`, `protocol`, `model` and usage.
+- `params` in `run.json` records `provider`, `protocol`, `model` and usage; `effort` is recorded only when it was actually sent.
 
 注意：智谱的 GLM Coding Plan 额度只能在它列出的工具里用（见[官方说明](https://docs.bigmodel.cn/cn/coding-plan/overview)），Flowgit 调用 `glm` 用的是普通 API 余额和普通 API key。
 
 Note: Zhipu's GLM Coding Plan quota only applies inside the tools Zhipu lists ([official docs](https://docs.bigmodel.cn/cn/coding-plan/overview)); Flowgit's `glm` provider uses regular API balance and a regular API key.
+
+代理：Node 默认不走 `HTTPS_PROXY` 等代理变量。需要代理才能连上模型时，再设置 `NODE_USE_ENV_PROXY=1`（需要较新的 Node 22 或 24）。连不上而又设置了代理变量时，报错会提示这一点。
+
+Proxies: Node ignores `HTTPS_PROXY` and similar variables by default. If you need a proxy to reach the model, also set `NODE_USE_ENV_PROXY=1` (needs a recent Node 22 or 24). When a request can't connect and a proxy variable is set, the error says so.
 
 script 和 agent 阶段运行时可以读到这些环境变量 / Environment variables for script and agent stages:
 

@@ -118,6 +118,10 @@ flowgit providers                                   # 看有哪些 provider、�
 
 Built in: `anthropic`, `openai`, `openrouter`, `glm`, `deepseek`, `moonshot`, `qwen`, `ollama`. Any other service that speaks the Anthropic or OpenAI API is one entry in `~/.flowgit/providers.json`. Keys are read only from environment variables, never written to a file or to `flow.json`, so flows are safe to share.
 
+用代理或 VPN 上网时：Node 默认不走 `HTTPS_PROXY`，需要再设置 `NODE_USE_ENV_PROXY=1`（PowerShell：`$env:NODE_USE_ENV_PROXY="1"`）。连不上模型时 Flowgit 会提醒你。
+
+Behind a proxy or VPN: Node ignores `HTTPS_PROXY` by default, so also set `NODE_USE_ENV_PROXY=1` (PowerShell: `$env:NODE_USE_ENV_PROXY="1"`). Flowgit reminds you when it can't reach a model.
+
 ```json
 {
   "providers": {
