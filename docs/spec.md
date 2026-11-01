@@ -6,9 +6,9 @@ Status: draft. The machine-readable source of truth is [`packages/core/schema/fl
 
 ## 一句话 / In one sentence
 
-一个流程 = 一串阶段。每个阶段声明它读什么（上游阶段的产物）、产出什么（文件）、谁来做（执行器）。每次运行一个阶段，都会留下一个可回看、可回退的版本。
+一个流程 = 一串阶段。每个阶段声明它读什么（上游阶段的产物）、产出什么（文件）、谁来做（执行器）。每次运行一个阶段，都会留下一个可回看、可对比、可回退的版本。
 
-A flow is a list of stages. Each stage declares what it reads (upstream artifacts), what it writes (files) and who does the work (an executor). Every run of a stage is kept as a version you can inspect and restore.
+A flow is a list of stages. Each stage declares what it reads (upstream artifacts), what it writes (files) and who does the work (an executor). Every run of a stage is kept as a version you can inspect, diff and restore.
 
 ## 目录结构 / Layout
 
@@ -277,6 +277,28 @@ Main `run.json` fields: `stage`, `n`, `status`, `executor`, `startedAt`, `finish
 `inputHash` 是"上游产物的 sha256 + 流程输入 + 执行器配置"的指纹。执行器配置包括执行器定义本身、llm 的提示词文件，以及 script 命令里出现的、存在于流程目录中的文件（比如 `node scripts/render.mjs` 里的 `scripts/render.mjs`）。所以改一句提示词，这个阶段和它下游的阶段都会变成 `stale`。
 
 `inputHash` fingerprints the upstream artifacts' sha256, the flow inputs, and the executor config. The executor config covers the executor definition itself, an llm stage's prompt file, and any file in the flow directory named in a script command (e.g. `scripts/render.mjs` in `node scripts/render.mjs`). So changing one line of a prompt marks that stage and everything downstream as `stale`.
+
+### 对比版本 / Diffing versions
+
+`flowgit diff <stage> <a> [b] [--json]` 对比 `runs/<stage>/<a>/outputs/` 和 `runs/<stage>/<b>/outputs/`。省略 `b` 时，拿版本 `a` 和流程目录里的当前文件比。版本不存在时报错，中文在前。
+
+对这个阶段声明的每一个产物：
+
+- 文本（`isTextType` 为真，包括 JSON）：按行的 unified diff。终端里 `+` 行是绿色、`-` 行是红色；设置了 `NO_COLOR`，或者输出不是终端时，不加颜色。
+- 二进制：只报告相同或不同，用 sha256 比较，不输出逐行差异。
+- 文件夹：列出新增、删除和内容变了的文件（相对该文件夹的路径）。
+
+`@flowgit/core` 导出 `diffRuns(dir, flow, stageId, a, b?)`，和 `listRuns`、`restoreRun` 一样从包的入口导出。以后看板上的历史对比会调用它。`b` 省略时，返回值里的 `b` 是 `null`，表示当前文件。
+
+`flowgit diff <stage> <a> [b] [--json]` compares `runs/<stage>/<a>/outputs/` with `runs/<stage>/<b>/outputs/`. Omit `b` to compare version `a` with the files currently in the flow directory. A missing version is an error, Chinese first.
+
+For each output the stage declares:
+
+- Text (`isTextType`, which includes JSON): a line-based unified diff. In a terminal, `+` lines are green and `-` lines are red; color is off when `NO_COLOR` is set or stdout is not a terminal.
+- Binary: same or different only, compared by sha256, with no line diff.
+- Directory: lists of added, removed and changed files (paths relative to that directory).
+
+`@flowgit/core` exports `diffRuns(dir, flow, stageId, a, b?)` from the package entry, the same way it exports `listRuns` and `restoreRun`. The board's history view will call it later. When `b` is omitted, the result's `b` is `null`, meaning the current files.
 
 ## 导出为 Skill / Export as a Skill
 
