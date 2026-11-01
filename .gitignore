@@ -1,0 +1,16 @@
+node_modules/
+dist/
+*.tsbuildinfo
+.DS_Store
+coverage/
+*.log
+
+# Working files if someone runs a flow inside the bundled templates
+packages/cli/templates/*/runs/
+packages/cli/templates/*/flowgit.local.json
+packages/cli/templates/*/script.md
+packages/cli/templates/*/storyboard.json
+packages/cli/templates/*/timeline.json
+packages/cli/templates/*/final.mp4
+packages/cli/templates/*/assets/
+packages/cli/templates/*/SKILL.md
