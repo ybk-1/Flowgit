@@ -78,6 +78,31 @@ Put images or videos in `assets/`, named after the shot ids in the storyboard, e
 
 Set `transition.type` to `"none"` to turn transitions off; a clip's `motion` can be `"zoom-in"`, `"zoom-out"` or `"none"` (images only).
 
+## 配音 / Voiceover
+
+照着 `script.md` 把旁白录成一条音频（手机录音就行），命名为 `voice.mp3`（或 `voice.m4a`、`voice.wav`、`配音.mp3`、`narration.mp3` 等）放进 `assets/`，然后重跑剪辑和导出。剪辑阶段会：
+
+- 把配音写进 `timeline.json`，导出时从头播放；
+- 让镜头时长跟着配音走：按每个镜头旁白的字数，把配音的总长分给各个镜头，每段画面大致对上它的那句话；
+- 有背景音乐时自动把音乐压低到 0.2，免得盖过人声。
+
+Record the narration from `script.md` as one audio file (a phone recording is fine), name it `voice.mp3` (or `voice.m4a`, `voice.wav`, `配音.mp3`, `narration.mp3`, …), put it in `assets/` and re-run the edit and export stages. The edit stage:
+
+- adds the voiceover to `timeline.json`, played from the start on export;
+- fits the clips to the voice: the voiceover's length is shared between the clips by how much narration each one has, so each shot is roughly on screen while its line is spoken;
+- turns background music down to 0.2 so it doesn't drown out the voice.
+
+自动分配只是起点：哪个镜头切早了或切晚了，直接改 `timeline.json` 里那个镜头的 `duration`，再跑导出。配音比视频长时，导出会提示，结尾会被截掉。
+
+The automatic split is a starting point: if a cut comes too early or late, change that clip's `duration` in `timeline.json` and export again. If the voiceover is longer than the video, the export says so and its end is cut.
+
+```json
+{
+  "voice": { "path": "assets/voice.mp3", "volume": 1 },
+  "music": { "path": "assets/music.mp3", "volume": 0.2 }
+}
+```
+
 ## 背景音乐 / Music
 
 把音乐文件命名为 `music.mp3`（或 `music.m4a`、`music.wav`、`bgm.mp3` 等）放进 `assets/`，剪辑阶段会把它写进 `timeline.json`，导出时自动循环或截到视频长度，开头淡入、结尾淡出。音量在 `timeline.json` 里改：

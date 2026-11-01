@@ -77,6 +77,7 @@ const help = (filter) => spawnSync("ffmpeg", ["-hide_banner", "-h", `filter=${fi
 const CENTER = help("drawtext").includes("text_align") ? ":text_align=C" : "";
 const HAS_GRADIENTS = help("gradients").includes("gradients");
 const HAS_XFADE = help("xfade").includes("xfade");
+const AMIX_NORMALIZE = help("amix").includes("normalize"); // FFmpeg 4.4+
 
 function run(args, label) {
   const r = spawnSync("ffmpeg", ["-hide_banner", "-loglevel", "error", "-y", ...args], { encoding: "utf8" });
@@ -189,22 +190,63 @@ if (T > 0) {
 const edge = Math.min(0.4, total / 4);
 graph.push(`[${last}]fade=t=in:st=0:d=${edge},fade=t=out:st=${(total - edge).toFixed(3)}:d=${edge},format=yuv420p[out]`);
 
-// Background music: timeline.music = { "path": "assets/music.mp3", "volume": 0.6 }.
-// Looped or cut to the video's length, faded in and out.
+// Sound: timeline.voice = { "path": "assets/voice.mp3", "volume": 1 } plays once from the start;
+// timeline.music = { "path": "assets/music.mp3", "volume": 0.6 } is looped or cut to the video's
+// length with a fade in and out. With both, they are mixed without lowering the voice; the
+// edit stage already sets the music lower when there is a voiceover.
 const inputs = segments.flatMap((s) => ["-i", s]);
-let audioArgs = ["-an"];
-const musicPath = timeline.music?.path ? path.join(dir, timeline.music.path) : undefined;
-if (musicPath && fs.existsSync(musicPath)) {
-  const volume = Math.min(Math.max(Number(timeline.music.volume ?? 0.6) || 0, 0), 2);
-  const fadeOut = Math.min(1.5, total / 3);
+const vol = (v, fallback) => Math.min(Math.max(Number(v ?? fallback) || 0, 0), 2);
+const fadeIn = Math.min(0.5, total / 4);
+const fadeOut = Math.min(1.5, total / 3);
+const tracks = [];
+const audioFile = (track, label) => {
+  if (!track?.path) return undefined;
+  const file = path.join(dir, track.path);
+  if (fs.existsSync(file)) return file;
+  console.warn(say(`找不到${label.zh} ${track.path}，导出时不带它`, `${label.en} ${track.path} not found; exporting without it`));
+  return undefined;
+};
+
+const voicePath = audioFile(timeline.voice, { zh: "配音", en: "voiceover" });
+if (voicePath) {
+  const volume = vol(timeline.voice.volume, 1);
+  inputs.push("-i", voicePath);
+  graph.push(
+    `[${inputs.filter((a) => a === "-i").length - 1}:a]atrim=0:${total.toFixed(3)},asetpts=PTS-STARTPTS,volume=${volume},afade=t=out:st=${Math.max(0, total - 0.3).toFixed(3)}:d=0.3[voice]`,
+  );
+  tracks.push("[voice]");
+  const voiceLength = Number(spawnSync("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", voicePath], { encoding: "utf8" }).stdout?.trim());
+  console.log(say(`配音：${timeline.voice.path}，音量 ${volume}`, `voiceover: ${timeline.voice.path}, volume ${volume}`));
+  if (voiceLength > total + 0.05) {
+    console.warn(
+      say(
+        `配音有 ${voiceLength.toFixed(1)} 秒，比视频长 ${(voiceLength - total).toFixed(1)} 秒，结尾会被截掉。重跑剪辑阶段会按配音重新分配时长。`,
+        `the voiceover is ${voiceLength.toFixed(1)}s, ${(voiceLength - total).toFixed(1)}s longer than the video, so its end is cut. Re-run the edit stage to fit the clips to it.`,
+      ),
+    );
+  }
+}
+
+const musicPath = audioFile(timeline.music, { zh: "背景音乐", en: "music" });
+if (musicPath) {
+  const volume = vol(timeline.music.volume, 0.6);
   inputs.push("-stream_loop", "-1", "-i", musicPath);
   graph.push(
-    `[${segments.length}:a]atrim=0:${total.toFixed(3)},asetpts=PTS-STARTPTS,volume=${volume},afade=t=in:st=0:d=${Math.min(0.5, total / 4)},afade=t=out:st=${(total - fadeOut).toFixed(3)}:d=${fadeOut}[aout]`,
+    `[${inputs.filter((a) => a === "-i").length - 1}:a]atrim=0:${total.toFixed(3)},asetpts=PTS-STARTPTS,volume=${volume},afade=t=in:st=0:d=${fadeIn},afade=t=out:st=${(total - fadeOut).toFixed(3)}:d=${fadeOut}[music]`,
   );
-  audioArgs = ["-map", "[aout]", "-c:a", "aac", "-b:a", "160k"];
+  tracks.push("[music]");
   console.log(say(`背景音乐：${timeline.music.path}，音量 ${volume}`, `music: ${timeline.music.path}, volume ${volume}`));
-} else if (timeline.music?.path) {
-  console.warn(say(`找不到背景音乐 ${timeline.music.path}，导出没有声音`, `music ${timeline.music.path} not found; exporting without sound`));
+}
+
+let audioArgs = ["-an"];
+if (tracks.length) {
+  if (tracks.length === 1) {
+    graph.push(`${tracks[0]}anull[aout]`);
+  } else {
+    // amix halves each input unless normalize=0 (FFmpeg 4.4+); on older builds, scale back up.
+    graph.push(`${tracks.join("")}amix=inputs=${tracks.length}:duration=longest${AMIX_NORMALIZE ? ":normalize=0" : `,volume=${tracks.length}`}[aout]`);
+  }
+  audioArgs = ["-map", "[aout]", "-c:a", "aac", "-b:a", "160k"];
 }
 run(
   [...inputs, "-filter_complex", graph.join(";"), "-map", "[out]", ...audioArgs, "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-r", String(FPS), "-pix_fmt", "yuv420p", "-movflags", "+faststart", finalPath],

@@ -3,6 +3,7 @@
 //
 // 时间线可以直接手改（顺序、时长、字幕、素材），改完再运行导出阶段。
 // You can hand-edit timeline.json afterwards; the export stage renders whatever is there.
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -57,10 +58,51 @@ const clips = shots.map((shot, i) => {
 });
 
 const [w, h] = (storyboard.aspect ?? "9:16") === "16:9" ? [1920, 1080] : (storyboard.aspect === "1:1" ? [1080, 1080] : [1080, 1920]);
+const audioNamed = (names) =>
+  available.find((f) => AUDIO.has(path.extname(f).toLowerCase()) && names.includes(path.parse(f).name.toLowerCase()));
 // 背景音乐：assets/music.mp3（或 bgm.*）。 / Background music: assets/music.mp3 (or bgm.*).
-const musicFile = available.find(
-  (f) => AUDIO.has(path.extname(f).toLowerCase()) && ["music", "bgm"].includes(path.parse(f).name.toLowerCase()),
-);
+const musicFile = audioNamed(["music", "bgm"]);
+// 配音：assets/voice.mp3（或 narration.*、voiceover.*、配音.*）。 / Voiceover: assets/voice.mp3 (or narration.*, voiceover.*, 配音.*).
+const voiceFile = audioNamed(["voice", "narration", "voiceover", "配音"]);
+
+/** Length of an audio file in seconds, or undefined when ffprobe is missing or can't read it. */
+function audioLength(file) {
+  const r = spawnSync("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", file], { encoding: "utf8" });
+  const n = Number(r.stdout?.trim());
+  return r.status === 0 && n > 0 ? n : undefined;
+}
+
+// With a voiceover, the voice sets the pace: the clips share its length (plus a short tail)
+// in proportion to how much narration each one has, so each shot is on screen while its
+// lines are spoken. Without narration text, the storyboard's durations set the proportions.
+let voice;
+let retimed; // "narration" | "storyboard" once the clips are fitted to the voice
+if (voiceFile) {
+  const length = audioLength(path.join(assetsDir, voiceFile));
+  voice = { path: `assets/${voiceFile}`, volume: 1 };
+  if (length) {
+    const tail = 0.6;
+    const weights = clips.map((c) => [...c.narration.replace(/\s+/g, "")].length);
+    const useNarration = weights.every((n) => n > 0);
+    const shares = useNarration ? weights : clips.map((c) => c.duration);
+    const sum = shares.reduce((a, b) => a + b, 0);
+    let start = 0;
+    for (const [i, clip] of clips.entries()) {
+      clip.duration = Number(Math.max(1, ((length + tail) * shares[i]) / sum).toFixed(2));
+      clip.start = Number(start.toFixed(3));
+      start += clip.duration;
+    }
+    t = start;
+    retimed = useNarration ? "narration" : "storyboard";
+  } else {
+    console.warn(
+      say(
+        `读不出配音 ${voiceFile} 的长度（需要 ffprobe），镜头时长按分镜不变`,
+        `couldn't read the length of voiceover ${voiceFile} (needs ffprobe); keeping the storyboard's durations`,
+      ),
+    );
+  }
+}
 
 const timeline = {
   format: "flowgit/timeline",
@@ -72,14 +114,25 @@ const timeline = {
   duration: Number(t.toFixed(3)),
   // 镜头之间的转场：type 可以是 "fade" 或 "none"。 / Transition between clips: type "fade" or "none".
   transition: { type: "fade", duration: 0.4 },
-  ...(musicFile ? { music: { path: `assets/${musicFile}`, volume: 0.6 } } : {}),
+  // 有配音时背景音乐压低，免得盖过人声。 / With a voiceover the music sits lower so the voice stays clear.
+  ...(voice ? { voice } : {}),
+  ...(musicFile ? { music: { path: `assets/${musicFile}`, volume: voice ? 0.2 : 0.6 } } : {}),
   clips,
 };
 
 fs.writeFileSync(path.join(dir, "timeline.json"), `${JSON.stringify(timeline, null, 2)}\n`);
 console.log(
   say(
-    `timeline.json：${clips.length} 个镜头，${timeline.duration} 秒，${clips.length - missing} 个有素材，${missing} 个用文字卡${musicFile ? `，背景音乐 ${musicFile}` : ""}`,
-    `timeline.json: ${clips.length} clips, ${timeline.duration}s, ${clips.length - missing} with assets, ${missing} as text cards${musicFile ? `, music ${musicFile}` : ""}`,
+    `timeline.json：${clips.length} 个镜头，${timeline.duration} 秒，${clips.length - missing} 个有素材，${missing} 个用文字卡${voiceFile ? `，配音 ${voiceFile}` : ""}${musicFile ? `，背景音乐 ${musicFile}` : ""}`,
+    `timeline.json: ${clips.length} clips, ${timeline.duration}s, ${clips.length - missing} with assets, ${missing} as text cards${voiceFile ? `, voiceover ${voiceFile}` : ""}${musicFile ? `, music ${musicFile}` : ""}`,
   ),
 );
+if (retimed) {
+  const by = retimed === "narration" ? say("按每个镜头旁白的字数分", "shared by each clip's narration length") : say("按分镜里的时长比例分", "in the storyboard's proportions");
+  console.log(
+    say(
+      `镜头时长已按配音重新分配（${by}）。哪里不合适，直接改 timeline.json 里的 duration。`,
+      `Clip durations were fitted to the voiceover (${by}). If a cut feels off, change duration in timeline.json.`,
+    ),
+  );
+}

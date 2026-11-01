@@ -36,6 +36,61 @@ describe.skipIf(!hasFfmpeg)("short-video export script", () => {
     return { code: r.status, out: `${r.stdout}${r.stderr}` };
   }
 
+  function tone(name: string, seconds: number, hz = 440) {
+    const r = spawnSync("ffmpeg", ["-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", `sine=frequency=${hz}:duration=${seconds}`, path.join(dir, "assets", name)]);
+    expect(r.status).toBe(0);
+  }
+
+  function buildTimeline(storyboard: object) {
+    fs.writeFileSync(path.join(dir, "storyboard.json"), JSON.stringify(storyboard));
+    const r = spawnSync(process.execPath, [path.join(dir, "scripts", "build-timeline.mjs")], {
+      cwd: dir,
+      encoding: "utf8",
+      env: { ...process.env, FLOWGIT_PROJECT_DIR: dir, FLOWGIT_FLOW_INPUTS: JSON.stringify({ language: "en" }) },
+    });
+    expect(r.status, `${r.stdout}${r.stderr}`).toBe(0);
+    return { out: `${r.stdout}${r.stderr}`, timeline: JSON.parse(fs.readFileSync(path.join(dir, "timeline.json"), "utf8")) };
+  }
+
+  it("fits the clips to a voiceover and mixes it over quieter music", () => {
+    tone("voice.wav", 5, 300);
+    tone("music.wav", 1.5);
+    const { out, timeline } = buildTimeline({
+      title: "Voice",
+      shots: [
+        { id: "s1", duration: 3, caption: "a", narration: "one two" },
+        { id: "s2", duration: 3, caption: "b", narration: "three four five six seven eight" },
+      ],
+    });
+    expect(out).toContain("voiceover voice.wav, music music.wav");
+    expect(out).toContain("fitted to the voiceover (shared by each clip's narration length)");
+    expect(timeline.voice).toEqual({ path: "assets/voice.wav", volume: 1 });
+    expect(timeline.music).toEqual({ path: "assets/music.wav", volume: 0.2 });
+    // 5 s of voice + 0.6 s tail, shared 6 : 26 by narration length (spaces don't count).
+    expect(timeline.duration).toBeCloseTo(5.6, 1);
+    expect(timeline.clips[0].duration).toBeCloseTo(1.05, 2);
+    expect(timeline.clips[1].duration).toBeCloseTo(4.55, 2);
+    expect(timeline.clips[1].start).toBeCloseTo(1.05, 2);
+
+    const r = render({ ...timeline, width: 360, height: 640, fps: 15 });
+    expect(r.code, r.out).toBe(0);
+    expect(r.out).toContain("voiceover: assets/voice.wav, volume 1");
+    expect(r.out).toContain("music: assets/music.wav, volume 0.2");
+    const final = path.join(dir, "final.mp4");
+    expect(Number(probe(final, "format=duration"))).toBeCloseTo(5.6, 0);
+    expect(Number(probe(final, "stream=duration", "a"))).toBeCloseTo(5.6, 0);
+  });
+
+  it("warns when the voiceover runs longer than the video", () => {
+    tone("voice.wav", 6, 300);
+    const r = render({ voice: { path: "assets/voice.wav" }, transition: { type: "none" }, clips: cards });
+    expect(r.code, r.out).toBe(0);
+    expect(r.out).toContain("2.0s longer than the video");
+    const final = path.join(dir, "final.mp4");
+    expect(probe(final, "stream=codec_type", "a")).toBe("audio");
+    expect(Number(probe(final, "stream=duration", "a"))).toBeCloseTo(4, 0);
+  });
+
   const cards = [
     { id: "s1", duration: 2, source: { kind: "card" }, caption: "one", narration: "first card" },
     { id: "s2", duration: 2, source: { kind: "card" }, caption: "two", narration: "second card" },
