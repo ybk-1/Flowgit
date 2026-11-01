@@ -291,17 +291,17 @@ Everything on GitHub (commit messages, PRs, docs) is bilingual, Chinese first.
 
 ## 路线图 / Roadmap
 
-1. **格式 + 命令行**（本仓库现状）：Flow 规范 v0.1，跑通短视频流程。
+1. **格式 + 命令行**（本仓库现状，0.1.0 准备发布）：Flow 规范 v0.1；短视频和周报两个自带模板；llm 阶段接任何模型，agent 阶段接 Claude Code、Codex、Cursor、Gemini；`doctor`、`templates` 等命令。更新记录见 [CHANGELOG.md](CHANGELOG.md)。
 2. **阶段看板网站**：打开一个流程就是一块看板，每张卡能看产物、改、重跑、看历史。
 3. **发布与复用**：画廊、发布（自动去隐私）、fork、版本对比。
-4. **更多领域**：做网站等流程；之后让作者把流程变成 MCP 服务供别人调用。
+4. **更多领域**：图文内容、客服 SOP 等模板（做网站已经有 `examples/agent-page` 示例）；之后让作者把流程变成 MCP 服务供别人调用。
 
 English:
 
-1. **Format + CLI** (this repo today): Flow spec v0.1, with the short-video flow working end to end.
+1. **Format + CLI** (this repo today, 0.1.0 getting ready to ship): Flow spec v0.1; bundled short-video and weekly-report templates; llm stages on any model and agent stages on Claude Code, Codex, Cursor or Gemini; commands such as `doctor` and `templates`. See [CHANGELOG.md](CHANGELOG.md) for details.
 2. **Stage board web app**: opening a flow shows a board; each card lets you see its outputs, edit them, re-run, and browse history.
 3. **Publish and reuse**: a gallery, publishing (with private data stripped), forks, and version diffs.
-4. **More domains**: flows such as building a website; later, authors can expose a flow as an MCP service for others to call.
+4. **More domains**: templates such as article posts and a support SOP (building a website already has the `examples/agent-page` example); later, authors can expose a flow as an MCP service for others to call.
 
 ## 许可证 / License
 
