@@ -33,6 +33,10 @@ mkdir -p assets                    # 放素材，或者先空着，导出时用�
 flowgit run all                    # 剪辑 + 导出 → final.mp4 / edit + export → final.mp4
 ```
 
+想用别的模型写脚本和分镜，加上 `--model`，比如 `flowgit run all --model glm/glm-5.3`（需要 `GLM_API_KEY`）。`flowgit providers` 列出所有能接的模型供应商。
+
+To use another model for the script and storyboard, add `--model`, e.g. `flowgit run all --model glm/glm-5.3` (needs `GLM_API_KEY`). `flowgit providers` lists every provider you can use.
+
 没有 API key 想先看效果，用自带的示例回复（示例内容是中文）：
 
 No API key yet? Use the bundled demo replies (the demo content is in Chinese):

@@ -10,6 +10,11 @@ export { scriptExecutor } from "./script.js";
 export {
   llmExecutor,
   anthropicComplete,
+  openaiComplete,
+  providerComplete,
+  providerKey,
+  anthropicBody,
+  openaiBody,
   mockCompleteFromDir,
   resolveLlm,
   renderTemplate,

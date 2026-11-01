@@ -7,10 +7,15 @@ import {
   FLOW_FILE,
   FlowValidationError,
   HumanInputNeededError,
+  LOCAL_FILE,
   MissingInputsError,
   UpstreamNotReadyError,
+  effectiveProvider,
+  globalProvidersFile,
   listRuns,
   loadFlow,
+  loadProviders,
+  providerKeyState,
   loadFlowInputs,
   resolveFlowInputs,
   renderSkillMd,
@@ -249,7 +254,7 @@ program
   .argument("<stage>", '阶段 id 或 "all" / stage id, or "all"')
   .option("--input <key=value>", "临时覆盖流程输入，可重复 / flow input override (repeatable)", collect)
   .option("--from <path>", "人工阶段：作为产物的文件或文件夹，可重复 / human stage: file/dir to use as an output (repeatable, in output order)", collect)
-  .option("--model <model>", "llm 阶段用的模型 / model for llm stages")
+  .option("--model <model>", "llm 阶段用的模型，可写 provider/model，如 glm/glm-5.3 / model for llm stages, optionally provider/model, e.g. glm/glm-5.3")
   .option("--force", "配合 all：已是最新的阶段也重跑 / with all: re-run stages that are already up to date")
   .action(async (stageId: string, opts: { input?: string[]; from?: string[]; model?: string; force?: boolean }) => {
     try {
@@ -299,7 +304,7 @@ program
           r.status === "error"
             ? c.red((r.error ?? "").split("\n")[0].slice(0, 80))
             : r.executor === "llm"
-              ? `${p.model ?? ""}${p.durationMs ? ` · ${Math.round(Number(p.durationMs) / 1000)}s` : ""}`
+              ? `${p.provider && p.provider !== "anthropic" ? `${p.provider}/` : ""}${p.model ?? ""}${p.durationMs ? ` · ${Math.round(Number(p.durationMs) / 1000)}s` : ""}`
               : r.executor === "script"
                 ? String(p.run ?? "")
                 : String(p.provided ?? "");
@@ -323,6 +328,56 @@ program
       const run = restoreRun(loaded.dir, loaded.flow, stageId, Number(n));
       console.log(`${c.green("✓")} 已回退到 / restored ${stageId} v${run.n}: ${run.outputs.map((o) => o.path).join(", ")}`);
       console.log(c.dim("  下游阶段会显示为需重跑 / downstream stages will show as stale"));
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+program
+  .command("providers")
+  .description("列出可用的模型供应商，以及密钥有没有设置 / list model providers and whether their keys are set")
+  .option("--json", "输出 JSON / machine-readable output")
+  .action((opts: { json?: boolean }) => {
+    try {
+      const dir = dirOf();
+      const inFlow = fs.existsSync(path.join(dir, FLOW_FILE));
+      const providers = Object.values(loadProviders(inFlow ? dir : undefined));
+      const globalFile = globalProvidersFile();
+      if (opts.json) {
+        console.log(
+          JSON.stringify(
+            {
+              files: { global: globalFile, flow: inFlow ? path.join(dir, LOCAL_FILE) : null },
+              providers: providers.map((p) => ({
+                id: p.id,
+                protocol: p.protocol,
+                baseUrl: effectiveProvider(p).baseUrl,
+                apiKeyEnv: p.apiKeyEnv ?? null,
+                key: providerKeyState(p),
+                source: p.source,
+                docs: p.docs ?? null,
+              })),
+            },
+            null,
+            2,
+          ),
+        );
+        return;
+      }
+      const sourceLabel = { preset: "预设 preset", global: "全局 global", flow: "本流程 flow" } as const;
+      const rows = [[c.dim("provider"), c.dim("协议 protocol"), c.dim("地址 baseUrl"), c.dim("密钥 key"), c.dim("来源 source")]];
+      for (const p of providers) {
+        const state = providerKeyState(p);
+        const key =
+          state === "none"
+            ? c.dim("不需要 not needed")
+            : `${p.apiKeyEnv} ${state === "set" ? c.green("✓ 已设置 set") : c.yellow("✗ 未设置 not set")}`;
+        rows.push([p.id, p.protocol, effectiveProvider(p).baseUrl, key, sourceLabel[p.source]]);
+      }
+      console.log(table(rows));
+      console.log(c.dim(`\n全局配置 / global config: ${globalFile}${fs.existsSync(globalFile) ? "" : " （还没有 / not created yet）"}`));
+      if (inFlow) console.log(c.dim(`本流程配置 / this flow: ${LOCAL_FILE} → providers`));
+      console.log(c.dim("用法 / usage: 在 flow.json 的 model 或 --model 里写 provider/model / write provider/model in flow.json \"model\" or --model, e.g. glm/glm-5.3"));
     } catch (err) {
       fail(err);
     }

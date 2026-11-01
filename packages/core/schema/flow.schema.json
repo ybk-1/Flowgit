@@ -242,7 +242,8 @@
         },
         "model": {
           "type": "string",
-          "description": "Model id. Defaults to the FLOWGIT_MODEL env var, then claude-opus-5-5."
+          "description": "Model as \"<model>\" or \"<provider>/<model>\", e.g. \"glm/glm-5.3\". No prefix means the anthropic provider. Endpoints and keys are local config, never part of the flow. Defaults to the FLOWGIT_MODEL env var, then claude-opus-5-5.",
+          "minLength": 1
         },
         "effort": {
           "enum": [

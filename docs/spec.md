@@ -107,11 +107,76 @@ Stages must not form a cycle. Run order follows `inputs`; ties keep the order in
 | `type` | v0.1 能否运行 / Runs in v0.1 | 字段 / Fields | 说明 | Description |
 | --- | --- | --- | --- | --- |
 | `human` | 能 / yes | `instructions?` | 由人完成。运行时检查产物是否到位；可用 `--from <path>` 把文件复制进来。缺产物时阶段停下，显示 `instructions` | Done by a person. A run checks the outputs are in place; `--from <path>` copies files in. If outputs are missing the stage stops and shows `instructions` |
-| `llm` | 能 / yes | `prompt`, `system?`, `model?`, `effort?`, `maxTokens?` | 读取 `prompt` 指向的 Markdown，替换 `{{inputs.*}}`，把上游产物附在后面，调用模型，把回复写进唯一的产物。产物是 JSON 时自动从回复里提取 JSON。默认模型 `claude-opus-5-5`，可用 `FLOWGIT_MODEL` 或 `--model` 覆盖 | Reads the Markdown file named by `prompt`, fills in `{{inputs.*}}`, appends the upstream artifacts, calls the model and writes the reply to the stage's single output. JSON outputs have the JSON extracted from the reply. Default model `claude-opus-5-5`; override with `FLOWGIT_MODEL` or `--model` |
+| `llm` | 能 / yes | `prompt`, `system?`, `model?`, `effort?`, `maxTokens?` | 读取 `prompt` 指向的 Markdown，替换 `{{inputs.*}}`，把上游产物附在后面，调用模型，把回复写进唯一的产物。产物是 JSON 时自动从回复里提取 JSON。`model` 可写 `<provider>/<model>`（见下面的"模型供应商"），不写前缀就是 Claude。默认模型 `claude-opus-5-5`，优先级：`--model` > `model` > `FLOWGIT_MODEL` > 默认 | Reads the Markdown file named by `prompt`, fills in `{{inputs.*}}`, appends the upstream artifacts, calls the model and writes the reply to the stage's single output. JSON outputs have the JSON extracted from the reply. `model` may be `<provider>/<model>` (see "Model providers" below); no prefix means Claude. Default model `claude-opus-5-5`; precedence: `--model` > `model` > `FLOWGIT_MODEL` > default |
 | `script` | 能 / yes | `run`, `cwd?`, `env?` | 在流程目录执行一条 shell 命令。命令自己负责写出产物 | Runs a shell command in the flow directory. The command writes the outputs itself |
 | `workflow` | 预留 / reserved | `engine`, `file`, `params?` | 运行外部工作流文件（ComfyUI、n8n 等） | Runs an external workflow file (ComfyUI, n8n, ...) |
 | `service` | 预留 / reserved | `url`, `method?` | 调用 HTTP 服务 | Calls an HTTP service |
 | `mcp` | 预留 / reserved | `server`, `tool`, `args?` | 调用 MCP 服务器上的工具。以后整个流程也会通过这一层暴露给别人调用 | Calls a tool on an MCP server. Later, whole flows will be exposed to others through this layer |
+
+### 模型供应商 / Model providers
+
+llm 阶段可以接任何模型。几乎所有模型都支持两种接口之一：**Anthropic Messages** 或 **OpenAI Chat Completions**，Flowgit 只实现这两种协议，不为每家各写一套。
+
+An llm stage can use any model. Nearly every model speaks one of two wire protocols, **Anthropic Messages** or **OpenAI Chat Completions**, so Flowgit implements those two instead of one client per vendor.
+
+`model` 写成 `<provider>/<model>`，例如 `glm/glm-5.3`、`deepseek/deepseek-v4-pro`、`ollama/qwen3:8b`。只按第一个 `/` 拆分，所以 `openrouter/openai/gpt-5` 的模型名是 `openai/gpt-5`。没有前缀就是 `anthropic`，旧的流程不用改。
+
+Write `model` as `<provider>/<model>`, e.g. `glm/glm-5.3`, `deepseek/deepseek-v4-pro`, `ollama/qwen3:8b`. Only the first `/` splits, so in `openrouter/openai/gpt-5` the model is `openai/gpt-5`. No prefix means `anthropic`, so existing flows keep working.
+
+`flow.json` 是要分享的，所以**只写模型名，不写地址和密钥**。地址在本机配置里，密钥只从环境变量读，**永远不写进文件**（配置里出现 `apiKey` 之类的字段会直接报错）。
+
+`flow.json` gets shared, so it **names the model only, never an endpoint or a key**. Endpoints live in local config; keys are read only from environment variables and **never stored in a file** (a field such as `apiKey` in the config is an error).
+
+内置预设 / Built-in presets（`flowgit providers` 查看 / list them with `flowgit providers`）：
+
+| provider | 协议 / Protocol | 地址 / baseUrl | 密钥变量 / Key variable |
+| --- | --- | --- | --- |
+| `anthropic`（默认 / default） | anthropic | `https://api.anthropic.com`（或 / or `ANTHROPIC_BASE_URL`） | `ANTHROPIC_API_KEY`（或 / or `ANTHROPIC_AUTH_TOKEN`） |
+| `openai` | openai | `https://api.openai.com/v1`（或 / or `OPENAI_BASE_URL`） | `OPENAI_API_KEY` |
+| `openrouter` | openai | `https://openrouter.ai/api/v1` | `OPENROUTER_API_KEY` |
+| `glm`（智谱 / Zhipu） | anthropic | `https://open.bigmodel.cn/api/anthropic` | `GLM_API_KEY` |
+| `deepseek` | openai | `https://api.deepseek.com` | `DEEPSEEK_API_KEY` |
+| `moonshot`（Kimi） | openai | `https://api.moonshot.cn/v1` | `MOONSHOT_API_KEY` |
+| `qwen`（通义千问 / Qwen） | openai | `https://dashscope.aliyuncs.com/compatible-mode/v1` | `DASHSCOPE_API_KEY` |
+| `ollama`（本机 / local） | openai | `http://localhost:11434/v1` | 不需要 / none |
+
+每个预设的地址都来自厂商官方文档，链接写在 `packages/core/src/providers.ts` 里。
+
+Every preset's endpoint comes from the vendor's official docs, linked in `packages/core/src/providers.ts`.
+
+本机配置 / Local config：全局文件 `~/.flowgit/providers.json`（设置了 `FLOWGIT_HOME` 时是 `$FLOWGIT_HOME/providers.json`），再由流程目录下 `flowgit.local.json` 的 `providers` 覆盖，逐个字段合并在预设上。/ The global file `~/.flowgit/providers.json` (`$FLOWGIT_HOME/providers.json` when `FLOWGIT_HOME` is set), then the `providers` key of the flow's `flowgit.local.json`, merged field by field over the presets.
+
+```json
+{
+  "providers": {
+    "glm":     { "apiKeyEnv": "ZHIPU_KEY" },
+    "zai":     { "protocol": "anthropic", "baseUrl": "https://api.z.ai/api/anthropic", "apiKeyEnv": "ZAI_API_KEY" },
+    "company": { "protocol": "openai", "baseUrl": "https://llm.example.com/v1", "apiKeyEnv": "COMPANY_LLM_KEY" }
+  }
+}
+```
+
+| 字段 / Field | 说明 | Description |
+| --- | --- | --- |
+| `protocol` | `anthropic` 或 `openai`。新的 provider 必填 | `anthropic` or `openai`. Required for a new provider |
+| `baseUrl` | 接口地址（http/https）。新的 provider 必填 | Endpoint (http/https). Required for a new provider |
+| `apiKeyEnv` | 存密钥的环境变量名。不写表示不需要密钥 | Name of the env var holding the key. Leave it out when no key is needed |
+
+请求的差别 / How requests differ：
+
+- `anthropic` 协议：只有直连 Anthropic 官方接口（`api.anthropic.com`）时才发送 Claude 专用参数（服务端 fallback、`effort`）。第三方兼容接口只收到标准的 messages 请求，密钥同时放在 `Authorization: Bearer` 和 `x-api-key` 里。
+- `openai` 协议：流式调用 Chat Completions。OpenAI 官方接口用 `max_completion_tokens`，其他兼容接口用 `max_tokens`。`effort` 不发送。
+- 非 Anthropic 的 provider 永远不会读 `ANTHROPIC_API_KEY`，非 OpenAI 的也不会带上 `OPENAI_ORG_ID` 等变量，密钥不会发给别家。
+- `run.json` 的 `params` 记录 `provider`、`protocol`、`model` 和用量。
+
+- `anthropic` protocol: Claude-only parameters (server-side fallback, `effort`) are sent only to Anthropic's own API (`api.anthropic.com`). Compatible third-party endpoints get a plain messages request, with the key in both `Authorization: Bearer` and `x-api-key`.
+- `openai` protocol: streamed Chat Completions. OpenAI's own API gets `max_completion_tokens`; compatible servers get `max_tokens`. `effort` is not sent.
+- A non-Anthropic provider never reads `ANTHROPIC_API_KEY`, and a non-OpenAI provider never picks up `OPENAI_ORG_ID` and similar variables, so a key is never sent to another vendor.
+- `params` in `run.json` records `provider`, `protocol`, `model` and usage.
+
+注意：智谱的 GLM Coding Plan 额度只能在它列出的工具里用（见[官方说明](https://docs.bigmodel.cn/cn/coding-plan/overview)），Flowgit 调用 `glm` 用的是普通 API 余额和普通 API key。
+
+Note: Zhipu's GLM Coding Plan quota only applies inside the tools Zhipu lists ([official docs](https://docs.bigmodel.cn/cn/coding-plan/overview)); Flowgit's `glm` provider uses regular API balance and a regular API key.
 
 script 阶段运行时可以读到这些环境变量 / Environment variables for script stages:
 
@@ -141,9 +206,9 @@ Each run of a stage:
 4. Checks every declared output was written and copies them to `runs/<stage>/<n>/outputs/`.
 5. Writes `runs/<stage>/<n>/run.json`. Failed runs are recorded too (`status: "error"`).
 
-`run.json` 的主要字段：`stage`、`n`、`status`、`executor`、`startedAt`、`finishedAt`、`inputHash`、`inputs`（上游产物和它们的 sha256）、`flowInputs`、`outputs`（路径、类型、sha256、大小）、`params`（模型、用量、命令等）、`log`、`error`。
+`run.json` 的主要字段：`stage`、`n`、`status`、`executor`、`startedAt`、`finishedAt`、`inputHash`、`inputs`（上游产物和它们的 sha256）、`flowInputs`、`outputs`（路径、类型、sha256、大小）、`params`（provider、模型、用量、命令等）、`log`、`error`。
 
-Main `run.json` fields: `stage`, `n`, `status`, `executor`, `startedAt`, `finishedAt`, `inputHash`, `inputs` (upstream artifacts and their sha256), `flowInputs`, `outputs` (path, type, sha256, size), `params` (model, usage, command, ...), `log`, `error`.
+Main `run.json` fields: `stage`, `n`, `status`, `executor`, `startedAt`, `finishedAt`, `inputHash`, `inputs` (upstream artifacts and their sha256), `flowInputs`, `outputs` (path, type, sha256, size), `params` (provider, model, usage, command, ...), `log`, `error`.
 
 ### 阶段状态 / Stage states
 

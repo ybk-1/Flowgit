@@ -36,11 +36,13 @@ pnpm test        # vitest；没有 ffmpeg 时跳过渲染测试 / vitest; the re
 ## 约定 / Conventions
 
 - llm 阶段默认模型是 `claude-opus-5-5`，通过 `@anthropic-ai/sdk` 流式调用，带 `fallbacks: "default"`。设置 `FLOWGIT_LLM_MOCK_DIR=<dir>` 时改用目录里的固定回复 `<stageId>.md|json`（测试和模板的 `demo-replies/` 用它）。
+- 模型写成 `<provider>/<model>`（`src/providers.ts`），只支持 Anthropic 和 OpenAI 两种协议。Claude 专用参数只发给 `api.anthropic.com`。密钥只从 `apiKeyEnv` 指定的环境变量读，不写进任何文件；新增预设时 `baseUrl` 必须来自官方文档，并在注释里附链接。
 - 手动改过的阶段产物永远不会被覆盖：重跑前先存成一个 `manual` 版本。
 - 是否需要重跑 = 上游产物 + 流程输入 + 执行器配置（包括提示词文件和命令里提到的脚本文件）的哈希，并向下游传递。
 - 流程输入可以带 `enum` 限定取值，运行前会检查。
 
 - The default model for llm stages is `claude-opus-5-5`, called through `@anthropic-ai/sdk` with streaming and `fallbacks: "default"`. `FLOWGIT_LLM_MOCK_DIR=<dir>` replaces the model with canned replies `<stageId>.md|json` (used by tests and the template's `demo-replies/`).
+- Models are `<provider>/<model>` (`src/providers.ts`), over two protocols only: Anthropic and OpenAI. Claude-only parameters go to `api.anthropic.com` only. Keys are read only from the env var named by `apiKeyEnv` and never written to a file; a new preset's `baseUrl` must come from the vendor's official docs, linked in a comment.
 - A hand edit of a stage's outputs is never overwritten: it is saved as a `manual` run before any re-run.
 - Staleness = hash of upstream artifacts + flow inputs + executor config (incl. the prompt file and script files named in the command), and it propagates downstream.
 - Flow inputs can carry an `enum` of allowed values, checked before a run.

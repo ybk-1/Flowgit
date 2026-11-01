@@ -15,6 +15,7 @@
 - **阶段看板**：脚本 → 分镜 → 素材 → 剪辑 → 导出，每一步一张卡，不是 200 个节点。
 - **每一步都有版本**：改了分镜，后面需要重跑的阶段自动标出来；不满意随时回退。
 - **人和 AI 混合**：一个阶段可以由模型做、由脚本做，也可以由人来做。
+- **接任何模型**：Claude、GPT、GLM、DeepSeek、Kimi、通义千问、OpenRouter、本机 Ollama 都能接，流程里只写模型名。
 - **开放格式**：流程就是一个文件夹加一个 `flow.json`，可以放进 Git、分享、fork。
 - **能导出成 Skill**：同一个流程可以生成 `SKILL.md`，让 Claude Code 这类工具直接按阶段跑。
 
@@ -23,6 +24,7 @@ Today's AI tools are either one-click black boxes or node graphs built for engin
 - **Stage board**: script → storyboard → assets → edit → export. One card per step, not 200 nodes.
 - **Every step is versioned**: change the storyboard and the stages that need a re-run are marked for you; roll back any time.
 - **People and AI together**: a stage can be done by a model, by a script, or by a person.
+- **Any model**: Claude, GPT, GLM, DeepSeek, Kimi, Qwen, OpenRouter or a local Ollama. The flow only names the model.
 - **Open format**: a flow is a folder with a `flow.json`. Put it in Git, share it, fork it.
 - **Exports to a Skill**: the same flow can generate a `SKILL.md` so tools like Claude Code can run it stage by stage.
 
@@ -89,11 +91,42 @@ CLI messages and errors are bilingual. What a template produces (script, caption
 | `flowgit run <stage> --from <path>` | 人工阶段：把文件或文件夹放进产物位置 | Human stage: put a file or folder in place as the output |
 | `flowgit log <stage>` | 这个阶段的历史版本 | The stage's version history |
 | `flowgit restore <stage> <n>` | 回退到某个版本 | Roll back to a version |
+| `flowgit providers [--json]` | 列出模型供应商，以及密钥有没有设置（不显示密钥） | List model providers and whether each key is set (never the key) |
 | `flowgit export-skill [-o SKILL.md]` | 生成 `SKILL.md`，给 AI 工具用 | Generate a `SKILL.md` for AI tools |
 
 所有命令都接受 `-C <dir>` 指定流程目录。`run` 还接受 `--input k=v`（只对这次运行生效）、`--model` 和 `--force`。
 
 Every command accepts `-C <dir>` for the flow directory. `run` also takes `--input k=v` (this run only), `--model`, and `--force`.
+
+## 接任何模型 / Any model
+
+llm 阶段的模型写成 `<provider>/<model>`，不写前缀就是 Claude。可以写在 `flow.json` 的 `model` 里，也可以只在这次运行用 `--model`，或者设环境变量 `FLOWGIT_MODEL`。
+
+An llm stage's model is `<provider>/<model>`; no prefix means Claude. Put it in `model` in `flow.json`, pass `--model` for one run, or set `FLOWGIT_MODEL`.
+
+```bash
+export GLM_API_KEY=...                              # PowerShell: $env:GLM_API_KEY="..."
+flowgit run all --model glm/glm-5.3                 # 智谱 GLM / Zhipu GLM
+flowgit run all --model deepseek/deepseek-v4-pro    # 需要 DEEPSEEK_API_KEY / needs DEEPSEEK_API_KEY
+flowgit run all --model ollama/qwen3:8b             # 本机 Ollama，不需要密钥 / local Ollama, no key
+flowgit providers                                   # 看有哪些 provider、密钥设了没有 / see providers and key status
+```
+
+内置 `anthropic`、`openai`、`openrouter`、`glm`、`deepseek`、`moonshot`、`qwen`、`ollama`。其他兼容 Anthropic 或 OpenAI 接口的服务，在 `~/.flowgit/providers.json` 里加一条就行。密钥只从环境变量读，不会写进任何文件，也不会进 `flow.json`，所以流程可以放心分享。
+
+Built in: `anthropic`, `openai`, `openrouter`, `glm`, `deepseek`, `moonshot`, `qwen`, `ollama`. Any other service that speaks the Anthropic or OpenAI API is one entry in `~/.flowgit/providers.json`. Keys are read only from environment variables, never written to a file or to `flow.json`, so flows are safe to share.
+
+```json
+{
+  "providers": {
+    "company": { "protocol": "openai", "baseUrl": "https://llm.example.com/v1", "apiKeyEnv": "COMPANY_LLM_KEY" }
+  }
+}
+```
+
+细节见 [docs/spec.md 的"模型供应商"](docs/spec.md#模型供应商--model-providers)。
+
+Details: ["Model providers" in docs/spec.md](docs/spec.md#模型供应商--model-providers).
 
 ## 格式 / Format
 

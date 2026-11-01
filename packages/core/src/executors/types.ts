@@ -1,3 +1,4 @@
+import type { ResolvedProvider } from "../providers.js";
 import type { Effort, LoadedFlow, Output, Stage } from "../types.js";
 
 /** One upstream artifact as it stands in the flow directory when a stage runs. */
@@ -16,6 +17,9 @@ export interface InputArtifact {
 
 export interface LlmRequest {
   stageId: string;
+  /** Where the request goes (endpoint, protocol, key variable). */
+  provider: ResolvedProvider;
+  /** Model name as the provider knows it, without the "<provider>/" prefix. */
   model: string;
   system: string;
   prompt: string;
@@ -37,7 +41,7 @@ export interface RunOptions {
   inputs?: Record<string, unknown>;
   /** For human stages: files to copy into the declared output paths, in order. */
   from?: string[];
-  /** Model override for llm stages. */
+  /** Model override for llm stages: "<model>" or "<provider>/<model>". */
   model?: string;
   /** Replace the real model call (tests, FLOWGIT_LLM_MOCK_DIR). */
   llm?: LlmComplete;

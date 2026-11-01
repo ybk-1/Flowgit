@@ -192,7 +192,6 @@ export class MissingInputsError extends Error {
   }
 }
 
-/** Defaults < flowgit.local.json < overrides. Throws when a required input is missing. */
 /** Defaults, then flowgit.local.json, then overrides, with number/boolean coercion. No checks. */
 export function resolveFlowInputs(
   dir: string,

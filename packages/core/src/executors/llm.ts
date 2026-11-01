@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { DEFAULT_PROVIDER, missingKeyMessage, providerKeyState, resolveModel, type ResolvedProvider } from "../providers.js";
 import type { ExecutorLlm, Flow, Stage } from "../types.js";
 import { outputRel, truncate, wantsJson } from "../util.js";
 import type { ExecContext, ExecResult, InputArtifact, LlmComplete, LlmRequest, LlmResponse, StageExecutor } from "./types.js";
@@ -63,39 +64,123 @@ export function extractJson(text: string): string {
   return JSON.stringify(JSON.parse(candidate.slice(start, end + 1)), null, 2);
 }
 
-/** Real call through the Anthropic SDK. Reads credentials from the environment. */
-export const anthropicComplete: LlmComplete = async (req: LlmRequest): Promise<LlmResponse> => {
-  const { default: Anthropic } = await import("@anthropic-ai/sdk");
-  let client: InstanceType<typeof Anthropic>;
-  try {
-    client = new Anthropic();
-  } catch (err) {
-    throw new Error(
-      `${(err as Error).message}\n` +
-        "没有找到 Claude API 凭据。请设置 ANTHROPIC_API_KEY，或用 FLOWGIT_LLM_MOCK_DIR=demo-replies 先试跑示例回复。\n" +
+/** Key for a provider, from the env var named by apiKeyEnv. Providers that need no key get a placeholder. */
+export function providerKey(p: ResolvedProvider, env: NodeJS.ProcessEnv = process.env): string {
+  if (!p.apiKeyEnv) return "flowgit-no-key";
+  const key = env[p.apiKeyEnv];
+  if (!key) throw new Error(missingKeyMessage(p));
+  return key;
+}
+
+/** True for the default provider when it should keep reading ANTHROPIC_API_KEY / ANTHROPIC_AUTH_TOKEN through the SDK, as before. */
+function usesSdkCredentials(p: ResolvedProvider): boolean {
+  return p.id === DEFAULT_PROVIDER && p.apiKeyEnv === "ANTHROPIC_API_KEY";
+}
+
+/** Turn an SDK error into a bilingual one that says which provider failed and what to check. */
+function requestError(err: unknown, p: ResolvedProvider): Error {
+  const e = err as Error & { status?: number };
+  const msg = e?.message ?? String(err);
+  const lines = [`请求 ${p.id}（${p.baseUrl}）失败 / Request to ${p.id} (${p.baseUrl}) failed: ${msg}`];
+  const authProblem = e?.status === 401 || e?.status === 403 || /authentication method|missing credentials/i.test(msg);
+  if (authProblem) {
+    if (usesSdkCredentials(p) && providerKeyState(p) === "unset") {
+      lines.push(
+        "没有找到 Claude API 凭据。请设置 ANTHROPIC_API_KEY，或用 FLOWGIT_LLM_MOCK_DIR=demo-replies 先试跑示例回复。",
         "No Claude credentials: set ANTHROPIC_API_KEY, or try the canned replies with FLOWGIT_LLM_MOCK_DIR=demo-replies.",
-    );
+      );
+    } else if (p.apiKeyEnv) {
+      lines.push(`密钥被拒绝了，检查 ${p.apiKeyEnv} 是否正确 / The key was rejected; check ${p.apiKeyEnv}`);
+    }
+  } else if (e?.status === 404) {
+    lines.push("检查模型名和 baseUrl 是否正确 / Check the model name and the baseUrl");
+  } else if (e?.status === undefined && /connect|fetch failed|ECONNREFUSED|ENOTFOUND|timed out/i.test(`${e?.name} ${msg}`)) {
+    lines.push("连不上这个地址，检查 baseUrl 和网络 / Could not reach it; check the baseUrl and your network");
   }
-  const stream = client.beta.messages.stream({
+  return new Error(lines.join("\n"));
+}
+
+/**
+ * Anthropic Messages request body. Claude-only parameters (server-side fallback,
+ * effort) are sent only to Anthropic's own API; compatible third-party
+ * endpoints get a plain messages request.
+ */
+export function anthropicBody(req: LlmRequest): Record<string, unknown> {
+  const body: Record<string, unknown> = {
     model: req.model,
     max_tokens: req.maxTokens,
     system: req.system,
     messages: [{ role: "user", content: req.prompt }],
-    betas: ["server-side-fallback-2026-07-01"],
-    fallbacks: "default",
-    ...(req.effort ? { output_config: { effort: req.effort } } : {}),
-  });
-  const msg = await stream.finalMessage();
+  };
+  if (req.provider.claudeApi) {
+    body.betas = ["server-side-fallback-2026-07-01"];
+    body.fallbacks = "default";
+    if (req.effort) body.output_config = { effort: req.effort };
+  }
+  return body;
+}
+
+/** OpenAI Chat Completions request body (streaming). */
+export function openaiBody(req: LlmRequest): Record<string, unknown> {
+  return {
+    model: req.model,
+    messages: [
+      { role: "system", content: req.system },
+      { role: "user", content: req.prompt },
+    ],
+    // OpenAI's own API replaced max_tokens with max_completion_tokens; compatible servers still use max_tokens.
+    [req.provider.openaiApi ? "max_completion_tokens" : "max_tokens"]: req.maxTokens,
+    stream: true,
+    stream_options: { include_usage: true },
+  };
+}
+
+function declined(detail?: string): Error {
+  return new Error(`模型拒绝了这个请求 / Model declined the request${detail ? ` (${detail})` : ""}`);
+}
+
+function hitMaxTokens(req: LlmRequest): Error {
+  return new Error(`模型输出超过了 maxTokens (${req.maxTokens})，请调大 executor.maxTokens / Model output hit maxTokens (${req.maxTokens}); raise executor.maxTokens`);
+}
+
+/** The parts of a Messages API reply Flowgit reads. */
+interface AnthropicReply {
+  content: { type: string; text?: string }[];
+  model: string;
+  stop_reason: string | null;
+  stop_details?: { category?: string | null; explanation?: string | null } | null;
+  usage: unknown;
+}
+
+/** Anthropic Messages protocol: Anthropic's own API, or any compatible endpoint (GLM, ...). */
+export const anthropicComplete: LlmComplete = async (req: LlmRequest): Promise<LlmResponse> => {
+  const p = req.provider;
+  const { default: Anthropic } = await import("@anthropic-ai/sdk");
+  let client: InstanceType<typeof Anthropic>;
+  if (usesSdkCredentials(p)) {
+    client = new Anthropic({ baseURL: p.baseUrl });
+  } else {
+    // An explicit key keeps the SDK from reading ANTHROPIC_API_KEY, so a Claude key never reaches another vendor.
+    const key = providerKey(p);
+    client = new Anthropic({ baseURL: p.baseUrl, apiKey: key, ...(p.claudeApi ? {} : { defaultHeaders: { "x-api-key": key } }) });
+  }
+  type Params = Parameters<typeof client.beta.messages.stream>[0];
+  let msg: AnthropicReply;
+  try {
+    const body = anthropicBody(req) as unknown as Params;
+    const stream = p.claudeApi ? client.beta.messages.stream(body) : client.messages.stream(body as never);
+    msg = (await stream.finalMessage()) as unknown as AnthropicReply;
+  } catch (err) {
+    throw requestError(err, p);
+  }
   if (msg.stop_reason === "refusal") {
     const details = msg.stop_details;
-    throw new Error(`模型拒绝了这个请求 / Model declined the request${details ? ` (${details.category ?? "refusal"}: ${details.explanation ?? ""})` : ""}`);
+    throw declined(details ? `${details.category ?? "refusal"}: ${details.explanation ?? ""}` : undefined);
   }
-  if (msg.stop_reason === "max_tokens") {
-    throw new Error(`模型输出超过了 maxTokens (${req.maxTokens})，请调大 executor.maxTokens / Model output hit maxTokens (${req.maxTokens}); raise executor.maxTokens`);
-  }
+  if (msg.stop_reason === "max_tokens") throw hitMaxTokens(req);
   const text = msg.content
-    .filter((b): b is Extract<typeof b, { type: "text" }> => b.type === "text")
-    .map((b) => b.text)
+    .filter((b) => b.type === "text")
+    .map((b) => b.text ?? "")
     .join("");
   return {
     text,
@@ -104,6 +189,45 @@ export const anthropicComplete: LlmComplete = async (req: LlmRequest): Promise<L
     usage: msg.usage as unknown as Record<string, unknown>,
   };
 };
+
+/** OpenAI Chat Completions protocol: OpenAI, OpenRouter, DeepSeek, Kimi, Qwen, Ollama, ... */
+export const openaiComplete: LlmComplete = async (req: LlmRequest): Promise<LlmResponse> => {
+  const p = req.provider;
+  const key = providerKey(p);
+  const { default: OpenAI } = await import("openai");
+  // Explicit values keep the SDK from reading OPENAI_* variables meant for OpenAI itself.
+  const client = new OpenAI({ apiKey: key, baseURL: p.baseUrl, ...(p.openaiApi ? {} : { organization: null, project: null }) });
+  let text = "";
+  let refusal = "";
+  let model = req.model;
+  let finish: string | undefined;
+  let usage: Record<string, unknown> | undefined;
+  try {
+    const body = openaiBody(req) as unknown as Parameters<typeof client.chat.completions.create>[0] & { stream: true };
+    const stream = await client.chat.completions.create(body);
+    for await (const chunk of stream) {
+      if (chunk.model) model = chunk.model;
+      if (chunk.usage) usage = chunk.usage as unknown as Record<string, unknown>;
+      const choice = chunk.choices?.[0];
+      if (!choice) continue;
+      if (choice.delta?.content) text += choice.delta.content;
+      if (choice.delta?.refusal) refusal += choice.delta.refusal;
+      if (choice.finish_reason) finish = choice.finish_reason;
+      // Some compatible servers report usage on the last choice instead of the chunk.
+      const choiceUsage = (choice as { usage?: Record<string, unknown> }).usage;
+      if (choiceUsage && !usage) usage = choiceUsage;
+    }
+  } catch (err) {
+    throw requestError(err, p);
+  }
+  if (finish === "content_filter" || (refusal && !text)) throw declined(refusal || finish);
+  if (finish === "length") throw hitMaxTokens(req);
+  return { text, model, stopReason: finish, usage };
+};
+
+/** Real call: pick the protocol of the request's provider. */
+export const providerComplete: LlmComplete = (req) =>
+  req.provider.protocol === "openai" ? openaiComplete(req) : anthropicComplete(req);
 
 /**
  * Canned replies for tests and offline demos: FLOWGIT_LLM_MOCK_DIR/<stageId>.(md|txt|json)
@@ -125,7 +249,7 @@ export function resolveLlm(options: { llm?: LlmComplete }): LlmComplete {
   if (options.llm) return options.llm;
   const mockDir = process.env.FLOWGIT_LLM_MOCK_DIR;
   if (mockDir) return mockCompleteFromDir(path.resolve(mockDir));
-  return anthropicComplete;
+  return providerComplete;
 }
 
 export const llmExecutor: StageExecutor = {
@@ -136,15 +260,22 @@ export const llmExecutor: StageExecutor = {
     const promptFile = path.join(loaded.dir, ex.prompt);
     const template = fs.readFileSync(promptFile, "utf8");
     const json = wantsJson(output.type, output.path);
+    const spec = ctx.options.model ?? ex.model ?? process.env.FLOWGIT_MODEL ?? DEFAULT_MODEL;
+    const { provider, model } = resolveModel(spec, loaded.dir);
     const req: LlmRequest = {
       stageId: stage.id,
-      model: ctx.options.model ?? ex.model ?? process.env.FLOWGIT_MODEL ?? DEFAULT_MODEL,
+      provider,
+      model,
       system: ex.system ?? defaultSystem(loaded.flow, stage, json),
       prompt: buildPrompt(template, ctx),
       maxTokens: ex.maxTokens ?? DEFAULT_MAX_TOKENS,
       effort: ex.effort,
     };
-    ctx.log(`调用 / calling ${req.model} (prompt ${req.prompt.length} chars)`);
+    const label = provider.id === DEFAULT_PROVIDER ? model : `${provider.id}/${model}`;
+    ctx.log(`调用 / calling ${label} (${provider.protocol}, prompt ${req.prompt.length} chars)`);
+    if (req.effort && !provider.claudeApi) {
+      ctx.log(`effort 只对 Anthropic 官方接口有效，这次不发送 / effort only applies to Anthropic's own API; not sent to ${provider.id}`);
+    }
     const started = Date.now();
     const res = await resolveLlm(ctx.options)(req);
     const ms = Date.now() - started;
@@ -163,6 +294,8 @@ export const llmExecutor: StageExecutor = {
     ctx.log(`已写入 / wrote ${outputRel(output)} (${content.length} chars, ${ms} ms)`);
     return {
       params: {
+        provider: provider.id,
+        protocol: provider.protocol,
         model: res.model,
         requestedModel: req.model,
         effort: req.effort,

@@ -90,4 +90,24 @@ describe("flowgit CLI with the short-video template", () => {
     expect(r.out).toContain("# 短视频制作");
     expect(r.out).toContain("flowgit run storyboard");
   });
+
+  it("lists providers and whether their keys are set, never the keys", () => {
+    const home = path.join(work, "flowgit-home");
+    fs.mkdirSync(home, { recursive: true });
+    fs.writeFileSync(path.join(home, "providers.json"), JSON.stringify({ providers: { mine: { protocol: "openai", baseUrl: "http://127.0.0.1:1/v1", apiKeyEnv: "MINE_KEY" } } }));
+    const env = { FLOWGIT_HOME: home, GLM_API_KEY: "secret-glm-key", MINE_KEY: "", ANTHROPIC_BASE_URL: "" };
+    const r = flowgit(["providers"], env);
+    expect(r.code, r.out).toBe(0);
+    expect(r.out).toMatch(/glm\s+anthropic\s+https:\/\/open\.bigmodel\.cn\/api\/anthropic\s+GLM_API_KEY ✓ 已设置 set/);
+    expect(r.out).toMatch(/mine\s+openai\s+http:\/\/127\.0\.0\.1:1\/v1\s+MINE_KEY ✗ 未设置 not set\s+全局 global/);
+    expect(r.out).not.toContain("secret-glm-key");
+    const json = JSON.parse(flowgit(["providers", "--json"], env).out);
+    expect(json.providers.find((p: { id: string }) => p.id === "ollama")).toMatchObject({ key: "none", baseUrl: "http://localhost:11434/v1" });
+    expect(JSON.stringify(json)).not.toContain("secret-glm-key");
+
+    // an unknown provider fails with a hint
+    const bad = flowgit(["run", "script", "--model", "nope/x"], env);
+    expect(bad.code).toBe(1);
+    expect(bad.out).toContain('Unknown provider "nope"');
+  });
 });

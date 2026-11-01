@@ -39,6 +39,7 @@ export interface ExecutorLlm {
   type: "llm";
   prompt: string;
   system?: string;
+  /** "<model>" or "<provider>/<model>", e.g. "glm/glm-5.3". No prefix = anthropic. */
   model?: string;
   effort?: Effort;
   maxTokens?: number;
