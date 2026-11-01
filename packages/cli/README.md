@@ -24,6 +24,7 @@ flowgit doctor                    # 跑之前检查密钥、FFmpeg、agent / che
 | `weekly-report` | 周报入门示例：随手记（人）→ 草稿（模型）→ 检查（脚本） | Starter: a weekly report from rough notes (person → model → script) |
 
 ```bash
+flowgit templates                 # 列出模板和它们的阶段 / list templates and their stages
 flowgit init my-report -t weekly-report
 ```
 

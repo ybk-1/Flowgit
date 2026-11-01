@@ -109,6 +109,7 @@ CLI messages and errors are bilingual. What a template produces (script, caption
 | 命令 / Command | 作用 | What it does |
 | --- | --- | --- |
 | `flowgit init [dir] [-t template]` | 从模板新建流程（默认 `short-video`） | Create a flow from a template (default `short-video`) |
+| `flowgit templates [--json]` | 列出自带的模板和它们的阶段 | List the bundled templates and their stages |
 | `flowgit validate` | 按规范检查 `flow.json` | Check `flow.json` against the spec |
 | `flowgit status [--json]` | 看板：每个阶段的状态、版本、产物和下一步 | The board: each stage's state, version, outputs, and the next step |
 | `flowgit inputs` / `flowgit inputs set k=v` | 查看 / 填写流程输入 | Show / set flow inputs |

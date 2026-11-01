@@ -29,6 +29,7 @@ import {
   statusAll,
   validateFlow,
   usageTokens,
+  type Flow,
   type RunEvent,
   type RunOptions,
 } from "@flowgit/core";
@@ -123,17 +124,33 @@ program
 
 const dirOf = () => resolveFlowDir(program.opts<{ dir: string }>().dir);
 
+const templatesDir = path.join(here, "..", "templates");
+const DEFAULT_TEMPLATE = "short-video";
+
+/** The templates installed with the CLI, from their flow.json files. */
+function bundledTemplates(): { id: string; flow: Flow }[] {
+  if (!fs.existsSync(templatesDir)) return [];
+  return fs
+    .readdirSync(templatesDir)
+    .filter((id) => fs.existsSync(path.join(templatesDir, id, FLOW_FILE)))
+    .sort((a, b) => (a === DEFAULT_TEMPLATE ? -1 : b === DEFAULT_TEMPLATE ? 1 : a.localeCompare(b)))
+    .map((id) => ({ id, flow: JSON.parse(fs.readFileSync(path.join(templatesDir, id, FLOW_FILE), "utf8")) as Flow }));
+}
+
 program
   .command("init")
   .description("从模板新建流程（默认 short-video）/ create a new flow from a template (default: short-video)")
   .argument("[dir]", "目标目录 / target directory", ".")
-  .option("-t, --template <name>", "模板名或流程目录路径 / template name or path to a flow directory", "short-video")
+  .option("-t, --template <name>", "模板名（flowgit templates 查看）或流程目录路径 / template name (see flowgit templates) or path to a flow directory", DEFAULT_TEMPLATE)
   .option("--force", "覆盖已有的 flow.json / overwrite an existing flow.json")
   .action((dir: string, opts: { template: string; force?: boolean }) => {
     const target = path.resolve(dir);
-    const builtin = path.join(here, "..", "templates", opts.template);
+    const builtin = path.join(templatesDir, opts.template);
     const src = fs.existsSync(builtin) ? builtin : path.resolve(opts.template);
-    if (!fs.existsSync(path.join(src, FLOW_FILE))) fail(new Error(`找不到模板 / Template not found: ${opts.template}`));
+    if (!fs.existsSync(path.join(src, FLOW_FILE))) {
+      const names = bundledTemplates().map((t) => t.id).join(", ");
+      fail(new Error(`找不到模板 / Template not found: ${opts.template}\n  自带的模板 / bundled templates: ${names}（flowgit templates 查看说明 / see flowgit templates）`));
+    }
     if (fs.existsSync(path.join(target, FLOW_FILE)) && !opts.force) {
       fail(new Error(`${path.join(target, FLOW_FILE)} 已存在，加 --force 覆盖 / already exists (use --force to overwrite)`));
     }
@@ -150,6 +167,36 @@ program
     const rel = path.relative(process.cwd(), target);
     const shown = rel === "" ? "." : rel.startsWith("..") || path.isAbsolute(rel) ? target : rel;
     console.log(`  下一步 / next: cd ${/\s/.test(shown) ? `"${shown}"` : shown} && flowgit status`);
+  });
+
+program
+  .command("templates")
+  .description("列出自带的模板 / list the bundled templates")
+  .option("--json", "输出 JSON / machine-readable output")
+  .action((opts: { json?: boolean }) => {
+    const list = bundledTemplates();
+    if (opts.json) {
+      console.log(
+        JSON.stringify(
+          list.map(({ id, flow }) => ({
+            id,
+            name: flow.name,
+            description: flow.description ?? "",
+            default: id === DEFAULT_TEMPLATE,
+            stages: flow.stages.map((s) => ({ id: s.id, name: s.name, executor: s.executor.type })),
+          })),
+          null,
+          2,
+        ),
+      );
+      return;
+    }
+    const rows = [[c.dim("模板 template"), c.dim("名称 name"), c.dim("阶段 stages")]];
+    for (const { id, flow } of list) {
+      rows.push([`${id}${id === DEFAULT_TEMPLATE ? c.dim(" (默认 default)") : ""}`, flow.name, flow.stages.map((s) => `${s.name} ${c.dim(s.executor.type)}`).join(" → ")]);
+    }
+    console.log(table(rows));
+    console.log(c.dim("\n用法 / usage: flowgit init <目录 dir> -t <模板 template>"));
   });
 
 program
