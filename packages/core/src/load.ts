@@ -143,13 +143,19 @@ export function resolveFlowDir(target: string = "."): string {
   return abs;
 }
 
+/** There is no flow.json where a flow was expected. */
+export class FlowNotFoundError extends Error {
+  constructor(public dir: string) {
+    super(`${dir} 里没有 ${FLOW_FILE} / No ${FLOW_FILE} in ${dir}`);
+    this.name = "FlowNotFoundError";
+  }
+}
+
 /** Read, parse and validate <dir>/flow.json. Throws FlowValidationError on errors. */
 export function loadFlow(target: string = "."): LoadedFlow {
   const dir = resolveFlowDir(target);
   const file = path.join(dir, FLOW_FILE);
-  if (!fs.existsSync(file)) {
-    throw new Error(`${dir} 里没有 ${FLOW_FILE} / No ${FLOW_FILE} in ${dir}`);
-  }
+  if (!fs.existsSync(file)) throw new FlowNotFoundError(dir);
   let data: unknown;
   try {
     data = JSON.parse(fs.readFileSync(file, "utf8"));

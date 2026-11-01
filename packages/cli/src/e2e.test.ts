@@ -160,6 +160,23 @@ describe("flowgit CLI with the short-video template", () => {
     expect(flowgit(["run", "edit", "--input", "language=fr"]).out).toContain('Input "language" must be one of "zh", "en"');
   }, 120_000);
 
+  it("explains mistakes in both languages", () => {
+    const typo = flowgit(["statsu"]);
+    expect(typo.code).toBe(1);
+    expect(typo.out).toContain("✗ 没有这个命令 statsu / unknown command 'statsu'");
+    expect(typo.out).toContain("是不是想输入 status？/ did you mean status?");
+    expect(flowgit(["run"]).out).toContain("✗ 缺少参数 stage / missing required argument 'stage'");
+    expect(flowgit(["log", "a", "b"]).out).toContain("log 只要 1 个参数，给了 2 个 / log takes 1 argument(s), got 2");
+    expect(flowgit(["restore", "storyboard", "abc"]).out).toContain("版本号要写数字，例如 flowgit restore storyboard 2 / the version is a number");
+    expect(flowgit(["restore", "storyboard", "99"]).out).toMatch(/没有 v99（现有 v1.*）\/ Stage "storyboard" has no run #99 \(it has v1/);
+    expect(flowgit(["inputs", "set", "topic"]).out).toContain('expected key=value, e.g. topic=cats, got "topic"');
+
+    const noFlow = spawnSync(process.execPath, [cli, "-C", work, "status"], { encoding: "utf8", env: { ...process.env, NO_COLOR: "1" } });
+    expect(noFlow.status).toBe(1);
+    expect(noFlow.stderr).toContain(`No flow.json in ${work}`);
+    expect(noFlow.stderr).toContain("新建一个 / create one: flowgit init <目录 dir>");
+  });
+
   it("exports a SKILL.md", () => {
     const r = flowgit(["export-skill", "--out", "-"]);
     expect(r.code).toBe(0);

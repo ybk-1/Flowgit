@@ -73,3 +73,31 @@ export function nextHint(statuses: StageStatus[]): string | undefined {
   }
   return `下一步 / next: flowgit run ${next.stage.id}   (或 / or: flowgit run all)`;
 }
+
+/**
+ * Commander's own errors (unknown command, missing argument …), made bilingual
+ * like the rest of the CLI. Anything not recognised is passed through as is.
+ */
+export function bilingualCliError(raw: string): string {
+  const [first, ...rest] = raw.trimEnd().split("\n");
+  const rules: [RegExp, (...m: string[]) => string][] = [
+    [/^error: unknown command '(.+)'$/, (a) => `没有这个命令 ${a} / unknown command '${a}'`],
+    [/^error: unknown option '(.+)'$/, (a) => `没有这个选项 ${a} / unknown option '${a}'`],
+    [/^error: missing required argument '(.+)'$/, (a) => `缺少参数 ${a} / missing required argument '${a}'`],
+    [/^error: option '(.+)' argument missing$/, (a) => `选项 ${a} 后面要写一个值 / option '${a}' needs a value`],
+    [
+      /^error: too many arguments for '(.+)'\. Expected (\d+) arguments? but got (\d+)(?::.*)?\.$/,
+      (cmd, want, got) => `${cmd} 只要 ${want} 个参数，给了 ${got} 个 / ${cmd} takes ${want} argument(s), got ${got}`,
+    ],
+  ];
+  const rule = rules.find(([re]) => re.test(first));
+  if (!rule) return raw;
+  const m = first.match(rule[0])!;
+  const lines = [`${c.red("✗")} ${rule[1](...m.slice(1))}`];
+  for (const line of rest) {
+    const guess = line.match(/^\(Did you mean (.+)\?\)$/);
+    lines.push(guess ? `  是不是想输入 ${guess[1]}？/ did you mean ${guess[1]}?` : line);
+  }
+  lines.push(c.dim("  加 --help 看用法 / add --help for usage"));
+  return `${lines.join("\n")}\n`;
+}

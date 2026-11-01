@@ -393,6 +393,7 @@ Add `--status` to color each stage by its current state (green when done, amber 
 
 | 看到 / You see | 怎么办 | What to do |
 | --- | --- | --- |
+| `里没有 flow.json` / `No flow.json in …` | 命令要在流程目录里运行：先 `cd` 进去，或者加 `-C <流程目录>`；还没有流程就先 `flowgit init` | Run commands inside the flow directory: `cd` into it or add `-C <flow dir>`; with no flow yet, start with `flowgit init` |
 | `flowgit validate` 报错 | 按提示改 `flow.json`。常见的是阶段 id 写错、`inputs` 里引用了不存在的阶段、两个阶段产出同一个路径、阶段之间成环 | Fix `flow.json` as the message says. Common causes: a typo in a stage id, `inputs` naming a stage that doesn't exist, two stages writing the same path, or a cycle |
 | 缺少流程输入 / missing flow inputs | `flowgit inputs set 名字=值` 存下来，或者只这一次用 `--input 名字=值` | Save it with `flowgit inputs set key=value`, or pass `--input key=value` for one run |
 | 「随手记」在等你 / waiting for you | 人工阶段的产物还没放好。写好文件后 `flowgit run <阶段>` | A human stage's output isn't there yet. Write it, then `flowgit run <stage>` |

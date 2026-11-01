@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { Command } from "commander";
 import {
   FLOW_FILE,
+  FlowNotFoundError,
   FlowValidationError,
   HumanInputNeededError,
   LOCAL_FILE,
@@ -41,7 +42,7 @@ import {
   type RunRecord,
   type RunOptions,
 } from "@flowgit/core";
-import { c, nextHint, statusBoard, table } from "./format.js";
+import { bilingualCliError, c, nextHint, statusBoard, table } from "./format.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const VERSION = (JSON.parse(fs.readFileSync(path.join(here, "..", "package.json"), "utf8")) as { version: string }).version;
@@ -50,7 +51,7 @@ function parseKv(pairs: string[] | undefined): Record<string, string> {
   const out: Record<string, string> = {};
   for (const p of pairs ?? []) {
     const i = p.indexOf("=");
-    if (i <= 0) throw new Error(`--input 要写成 key=value / --input expects key=value, got "${p}"`);
+    if (i <= 0) throw new Error(`要写成 key=value，例如 topic=猫 / expected key=value, e.g. topic=cats, got "${p}"`);
     out[p.slice(0, i)] = p.slice(i + 1);
   }
   return out;
@@ -114,6 +115,12 @@ function fail(err: unknown): never {
     console.log(`  放好文件后运行 / when ready: flowgit run ${e.stage.id}   (或 / or: flowgit run ${e.stage.id} --from <path>)`);
     exit(2);
   }
+  if (e instanceof FlowNotFoundError) {
+    console.error(`${c.red("✗")} ${e.message}`);
+    console.error(`  新建一个 / create one: flowgit init <目录 dir>`);
+    console.error(`  已经有了 / have one: 先 cd 进流程目录，或者加 / cd into it, or add: -C <流程目录 flow dir>`);
+    return exit(1);
+  }
   if (e instanceof UpstreamNotReadyError) {
     console.error(`${c.red("✗")} ${e.message}\n  先运行 / run first: ${e.missing.map((m) => `flowgit run ${m}`).join(", ")}`);
     exit(1);
@@ -135,6 +142,8 @@ function fail(err: unknown): never {
 
 const program = new Command();
 program
+  // set before any subcommand is added, so every subcommand inherits it
+  .configureOutput({ outputError: (str, write) => write(bilingualCliError(str)) })
   .name("flowgit")
   .description("Flowgit: 万物皆可流程化。Turn anything into a visual, staged, forkable flow.")
   .version(VERSION)
@@ -495,6 +504,7 @@ program
   .action((stageId: string, n: string) => {
     try {
       const loaded = loadFlow(dirOf());
+      if (!/^\d+$/.test(n)) throw new Error(`版本号要写数字，例如 flowgit restore ${stageId} 2 / the version is a number, e.g. flowgit restore ${stageId} 2`);
       const run = restoreRun(loaded.dir, loaded.flow, stageId, Number(n));
       console.log(`${c.green("✓")} 已回退到 / restored ${stageId} v${run.n}: ${run.outputs.map((o) => o.path).join(", ")}`);
       console.log(c.dim("  下游阶段会显示为需重跑 / downstream stages will show as stale"));

@@ -175,8 +175,14 @@ export function writeRunRecord(dir: string, record: RunRecord): string {
 /** Copy the outputs of a past run back into the flow directory (回退). */
 export function restoreRun(dir: string, flow: Flow, stageId: string, n: number): RunRecord {
   const stage = requireStage(flow, stageId);
-  const run = listRuns(dir, stageId).find((r) => r.n === n);
-  if (!run) throw new Error(`阶段 "${stageId}" 没有 v${n} / Stage "${stageId}" has no run #${n}`);
+  const runs = listRuns(dir, stageId);
+  const run = runs.find((r) => r.n === n);
+  if (!run) {
+    const list = runs.map((r) => `v${r.n}`).join(", ");
+    const zh = list ? `现有 ${list}` : "还没有版本";
+    const en = list ? `it has ${list}` : "it has none yet";
+    throw new Error(`阶段 "${stageId}" 没有 v${n}（${zh}）/ Stage "${stageId}" has no run #${n} (${en})`);
+  }
   if (run.status !== "ok") throw new Error(`"${stageId}" 的 v${n} 是失败的运行，没有可回退的产物 / Run #${n} of "${stageId}" failed; nothing to restore`);
   const src = path.join(runDir(dir, stageId, n), "outputs");
   for (const out of stage.outputs) {
