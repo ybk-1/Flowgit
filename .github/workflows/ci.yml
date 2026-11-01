@@ -48,6 +48,8 @@ jobs:
           flowgit init $env:RUNNER_TEMP\my-video
           cd $env:RUNNER_TEMP\my-video
           flowgit inputs set topic="为什么猫喜欢纸箱"
+          flowgit doctor
+          if ($LASTEXITCODE -ne 0) { throw "doctor should find node, ffmpeg and the demo replies, got exit code $LASTEXITCODE" }
           flowgit run all
           if ($LASTEXITCODE -ne 2) { throw "run all should stop at the assets stage (exit 2), got $LASTEXITCODE" }
           mkdir assets

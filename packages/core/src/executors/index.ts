@@ -25,6 +25,7 @@ export {
   providerComplete,
   providerKey,
   proxyHint,
+  ignoredProxyVar,
   usageTokens,
   anthropicBody,
   openaiBody,

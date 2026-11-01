@@ -51,6 +51,7 @@ flowgit status                                   # 看板 / the board
 flowgit inputs set topic="为什么猫喜欢纸箱"         # 主题 / topic
 flowgit inputs set language=en                   # 可选：zh（默认）或 en / optional: zh (default) or en
 export ANTHROPIC_API_KEY=...                     # 脚本和分镜由 Claude 写 / Claude writes the script and storyboard
+flowgit doctor                                   # 检查密钥和 FFmpeg 准备好了没有 / check the key and FFmpeg are ready
 flowgit run all                                  # 跑到"素材"会停下等你 / stops at "assets" and waits for you
 mkdir -p assets                                  # 放素材；空着也行，导出时用文字卡 / add assets, or leave empty for text cards
 flowgit run all                                  # 剪辑 + 导出 → final.mp4 / edit + export → final.mp4
@@ -71,6 +72,7 @@ cd $HOME\my-video
 
 flowgit inputs set topic="为什么猫喜欢纸箱"
 $env:ANTHROPIC_API_KEY = "..."                    # 或者换别的模型，见"接任何模型" / or another model, see "Any model"
+flowgit doctor                                    # 检查密钥和 FFmpeg 准备好了没有 / check the key and FFmpeg are ready
 flowgit run all
 mkdir assets
 flowgit run all
@@ -115,6 +117,7 @@ CLI messages and errors are bilingual. What a template produces (script, caption
 | `flowgit log <stage>` | 这个阶段的历史版本 | The stage's version history |
 | `flowgit restore <stage> <n>` | 回退到某个版本 | Roll back to a version |
 | `flowgit providers [--json]` | 列出模型供应商，以及密钥有没有设置（不显示密钥） | List model providers and whether each key is set (never the key) |
+| `flowgit doctor [--model m] [--json]` | 跑之前检查这台电脑：Node、流程输入、密钥、脚本和 agent 要用的命令。不调用模型，不运行阶段 | Check this machine before a run: Node, flow inputs, keys, and the programs script and agent stages use. Calls no model and runs no stage |
 | `flowgit export-skill [-o SKILL.md]` | 生成 `SKILL.md`，给 AI 工具用 | Generate a `SKILL.md` for AI tools |
 
 所有命令都接受 `-C <dir>` 指定流程目录。`run` 还接受 `--input k=v`（只对这次运行生效）、`--model` 和 `--force`。
@@ -133,6 +136,7 @@ flowgit run all --model glm/glm-5.3                 # 智谱 GLM / Zhipu GLM
 flowgit run all --model deepseek/deepseek-v4-pro    # 需要 DEEPSEEK_API_KEY / needs DEEPSEEK_API_KEY
 flowgit run all --model ollama/qwen3:8b             # 本机 Ollama，不需要密钥 / local Ollama, no key
 flowgit providers                                   # 看有哪些 provider、密钥设了没有 / see providers and key status
+flowgit doctor --model glm/glm-5.3                  # 跑之前检查密钥、命令、代理 / check keys, programs and proxy before a run
 ```
 
 内置 `anthropic`、`openai`、`openrouter`、`glm`、`deepseek`、`moonshot`、`qwen`、`ollama`。其他兼容 Anthropic 或 OpenAI 接口的服务，在 `~/.flowgit/providers.json` 里加一条就行。密钥只从环境变量读，不会写进任何文件，也不会进 `flow.json`，所以流程可以放心分享。

@@ -202,6 +202,27 @@ FLOWGIT_LLM_MOCK_DIR=demo-replies flowgit run all
 ✓ 处理了 2 个阶段 / ran 2 stage(s)
 ```
 
+换成真的模型之前，可以先用 `flowgit doctor` 看看还缺什么。它检查 Node、流程输入、密钥，以及脚本和 agent 要用的命令有没有装好；不调用模型，也不运行任何阶段：
+
+Before switching to a real model, `flowgit doctor` shows what is still missing. It checks Node, the flow inputs, keys, and whether the programs script and agent stages use are installed; it calls no model and runs no stage:
+
+```bash
+flowgit doctor --model deepseek/deepseek-v4-pro
+```
+
+```text
+周报 · 检查运行环境 / checking what this flow needs
+
+  ✓ Node.js 22.23.4
+  ✓ 流程输入都填好了 / flow inputs are set
+  ✗ draft: 模型 deepseek/deepseek-v4-pro 的密钥 DEEPSEEK_API_KEY 没有设置 / key DEEPSEEK_API_KEY for model deepseek/deepseek-v4-pro is not set
+      PowerShell：$env:DEEPSEEK_API_KEY="..."；macOS/Linux：export DEEPSEEK_API_KEY=...
+      或者先用示例回复试跑 / or try the canned replies first: FLOWGIT_LLM_MOCK_DIR=demo-replies
+  ✓ check: 找到 / found node
+
+✗ 1 个问题要先解决 / 1 problem(s) to fix first
+```
+
 用真的模型：设好密钥，去掉 `FLOWGIT_LLM_MOCK_DIR`，再跑一次。默认是 Claude（`ANTHROPIC_API_KEY`）；想用别的模型，加 `--model`，或者在阶段里写 `"model"`：
 
 With a real model: set a key, drop `FLOWGIT_LLM_MOCK_DIR` and run again. The default is Claude (`ANTHROPIC_API_KEY`); for another model pass `--model` or set `"model"` on the stage:
@@ -321,6 +342,7 @@ flowgit export-skill -o SKILL.md
 | `flowgit validate` 报错 | 按提示改 `flow.json`。常见的是阶段 id 写错、`inputs` 里引用了不存在的阶段、两个阶段产出同一个路径、阶段之间成环 | Fix `flow.json` as the message says. Common causes: a typo in a stage id, `inputs` naming a stage that doesn't exist, two stages writing the same path, or a cycle |
 | 缺少流程输入 / missing flow inputs | `flowgit inputs set 名字=值` 存下来，或者只这一次用 `--input 名字=值` | Save it with `flowgit inputs set key=value`, or pass `--input key=value` for one run |
 | 「随手记」在等你 / waiting for you | 人工阶段的产物还没放好。写好文件后 `flowgit run <阶段>` | A human stage's output isn't there yet. Write it, then `flowgit run <stage>` |
+| 不知道还缺什么 / not sure what's missing | 运行 `flowgit doctor`，它会列出缺的密钥、命令和 agent，以及怎么补上 | Run `flowgit doctor`: it lists missing keys, programs and agents, and how to fix each |
 | 没有找到 API 凭据 / no credentials | 设置对应供应商的密钥变量（`flowgit providers` 能看到是哪个），或者先用 `FLOWGIT_LLM_MOCK_DIR` 试跑 | Set the provider's key variable (`flowgit providers` shows which), or try it first with `FLOWGIT_LLM_MOCK_DIR` |
 | 余额不足 / Insufficient balance；请求太频繁 / Rate-limited | 到供应商的控制台充值或检查用量上限。Flowgit 已经自动重试过几次 | Top up or check your limits in the provider's console. Flowgit has already retried a few times |
 | 连不上这个地址 / Could not reach it | 需要代理的话，同时设置 `HTTPS_PROXY` 和 `NODE_USE_ENV_PROXY=1` | If you need a proxy, set both `HTTPS_PROXY` and `NODE_USE_ENV_PROXY=1` |

@@ -278,6 +278,15 @@
           "type": "string",
           "description": "Shell command. Runs in the flow directory with FLOWGIT_* environment variables set."
         },
+        "requires": {
+          "type": "array",
+          "description": "Programs the command needs on PATH besides its own, e.g. [\"ffmpeg\"]. Checked before the command runs and by flowgit doctor.",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.+-]+$"
+          },
+          "uniqueItems": true
+        },
         "cwd": {
           "type": "string"
         },

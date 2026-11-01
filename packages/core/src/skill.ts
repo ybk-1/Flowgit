@@ -20,7 +20,7 @@ function executorLine(ex: Executor): string {
     case "human":
       return `由人完成 (human)。${ex.instructions ?? "把产物放到下面列出的路径。"}`;
     case "script":
-      return `运行命令 (script)：\`${ex.run}\``;
+      return `运行命令 (script)：\`${ex.run}\`${ex.requires?.length ? `。需要先装好 / requires: ${ex.requires.map((r) => `\`${r}\``).join(", ")}` : ""}`;
     case "agent":
       return `由 agent 执行 (${ex.agent})。提示词在 \`${ex.prompt}\`${ex.agent === "custom" && ex.command ? `，命令 \`${ex.command}\`` : ""}。`;
     case "workflow":
@@ -100,6 +100,7 @@ export function renderSkillMd(flow: Flow): string {
     "有 Flowgit CLI 时 / with the CLI:",
     "",
     "```bash",
+    "flowgit doctor          # 跑之前检查密钥和要用的命令",
     "flowgit status          # 看每个阶段的状态",
     "flowgit run all         # 按顺序跑完，遇到需要人的阶段会停下并说明",
     "flowgit run <stage>     # 只跑一个阶段",

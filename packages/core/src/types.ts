@@ -48,6 +48,8 @@ export interface ExecutorLlm {
 export interface ExecutorScript {
   type: "script";
   run: string;
+  /** Programs the command needs on PATH besides its own, e.g. ["ffmpeg"]. Checked before it runs and by `flowgit doctor`. */
+  requires?: string[];
   cwd?: string;
   env?: Record<string, string>;
 }

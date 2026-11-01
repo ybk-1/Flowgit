@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import path from "node:path";
 import type { ExecutorScript } from "../types.js";
-import { outputRel, truncate } from "../util.js";
+import { findOnPath, outputRel, truncate } from "../util.js";
 import type { ExecContext, ExecResult, StageExecutor } from "./types.js";
 
 const LOG_CAP = 20_000;
@@ -29,6 +29,12 @@ export const scriptExecutor: StageExecutor = {
       FLOWGIT_OUTPUTS: JSON.stringify(stage.outputs.map((o) => ({ path: outputRel(o), type: o.type }))),
       FLOWGIT_FLOW_INPUTS: JSON.stringify(ctx.flowInputs),
     };
+    const missing = (ex.requires ?? []).filter((program) => !findOnPath(program, env));
+    if (missing.length) {
+      throw new Error(
+        `找不到 ${missing.join(", ")}：这个阶段需要它，请先安装再重跑 / ${missing.join(", ")} not found on PATH: this stage needs it; install it and run the stage again`,
+      );
+    }
     ctx.log(`$ ${ex.run}`);
     const { code, output } = await new Promise<{ code: number; output: string }>((resolve, reject) => {
       const child = spawn(ex.run, { cwd, env, shell: true, stdio: ["ignore", "pipe", "pipe"] });

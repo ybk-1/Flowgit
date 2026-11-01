@@ -76,7 +76,7 @@
       "name": "导出",
       "description": "用 FFmpeg 把时间线渲染成 MP4。 / Render the timeline to MP4 with FFmpeg.",
       "inputs": ["edit"],
-      "executor": { "type": "script", "run": "node scripts/render.mjs" },
+      "executor": { "type": "script", "run": "node scripts/render.mjs", "requires": ["ffmpeg"] },
       "outputs": [{ "type": "video/mp4", "path": "final.mp4" }]
     }
   ]

@@ -10,6 +10,7 @@ import {
   LOCAL_FILE,
   MissingInputsError,
   UpstreamNotReadyError,
+  doctor,
   effectiveProvider,
   globalProvidersFile,
   listRuns,
@@ -384,6 +385,39 @@ program
       console.log(c.dim(`\n全局配置 / global config: ${globalFile}${fs.existsSync(globalFile) ? "" : " （还没有 / not created yet）"}`));
       if (inFlow) console.log(c.dim(`本流程配置 / this flow: ${LOCAL_FILE} → providers`));
       console.log(c.dim("用法 / usage: 在 flow.json 的 model 或 --model 里写 provider/model / write provider/model in flow.json \"model\" or --model, e.g. glm/glm-5.3"));
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+program
+  .command("doctor")
+  .description("检查这台电脑能不能跑这个流程：Node、流程输入、密钥、要用的命令和 agent / check this machine can run the flow: Node, inputs, keys, programs and agents")
+  .option("--input <key=value>", "临时覆盖流程输入，可重复 / flow input override (repeatable)", collect)
+  .option("--model <model>", "按这个模型检查 llm 阶段，同 run --model / check llm stages against this model, as with run --model")
+  .option("--json", "输出 JSON / machine-readable output")
+  .action((opts: { input?: string[]; model?: string; json?: boolean }) => {
+    try {
+      const loaded = loadFlow(dirOf());
+      const checks = doctor(loaded, { inputs: parseKv(opts.input), model: opts.model });
+      const errors = checks.filter((ch) => ch.level === "error").length;
+      const warnings = checks.filter((ch) => ch.level === "warn").length;
+      if (opts.json) {
+        console.log(JSON.stringify({ ok: errors === 0, checks }, null, 2));
+        if (errors) process.exitCode = 1;
+        return;
+      }
+      console.log(`${c.bold(loaded.flow.name)} ${c.dim("· 检查运行环境 / checking what this flow needs")}\n`);
+      for (const ch of checks) {
+        const mark = ch.level === "ok" ? c.green("✓") : ch.level === "warn" ? c.yellow("!") : c.red("✗");
+        console.log(`  ${mark} ${ch.stage ? `${ch.stage}: ` : ""}${ch.message}`);
+        for (const line of ch.hint?.split("\n") ?? []) console.log(c.dim(`      ${line}`));
+      }
+      if (errors) {
+        console.log(`\n${c.red("✗")} ${errors} 个问题要先解决 / ${errors} problem(s) to fix first`);
+        process.exit(1);
+      }
+      console.log(`\n${c.green("✓")} 可以运行 / ready to run${warnings ? `（${warnings} 个提醒 / ${warnings} warning(s)）` : ""}`);
     } catch (err) {
       fail(err);
     }

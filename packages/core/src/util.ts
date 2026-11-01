@@ -100,3 +100,32 @@ export function truncate(s: string, max: number): string {
   if (s.length <= max) return s;
   return `${s.slice(0, max)}\n... [truncated ${s.length - max} chars]`;
 }
+
+/** An environment variable, matched case-insensitively on Windows (where PATH is often "Path"). */
+export function envValue(env: NodeJS.ProcessEnv, name: string): string | undefined {
+  if (env[name] !== undefined || process.platform !== "win32") return env[name];
+  const key = Object.keys(env).find((k) => k.toUpperCase() === name.toUpperCase());
+  return key === undefined ? undefined : env[key];
+}
+
+/** Where a program is on PATH (trying PATHEXT, e.g. ".CMD", on Windows), or undefined. */
+export function findOnPath(program: string, env: NodeJS.ProcessEnv = process.env): string | undefined {
+  const win = process.platform === "win32";
+  const dirs = (envValue(env, "PATH") ?? "").split(path.delimiter).filter(Boolean);
+  const exts = (envValue(env, "PATHEXT") ?? ".COM;.EXE;.BAT;.CMD").split(";").filter(Boolean);
+  const hasExt = exts.some((e) => program.toUpperCase().endsWith(e.toUpperCase()));
+  const names = win && !hasExt ? exts.map((e) => `${program}${e.toLowerCase()}`) : [program];
+  for (const dir of dirs) {
+    for (const name of names) {
+      const abs = path.join(dir.replace(/^"|"$/g, ""), name);
+      try {
+        if (!fs.statSync(abs).isFile()) continue;
+        if (!win) fs.accessSync(abs, fs.constants.X_OK);
+        return abs;
+      } catch {
+        // not here
+      }
+    }
+  }
+  return undefined;
+}

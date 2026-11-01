@@ -44,6 +44,22 @@ describe("flowgit CLI with the short-video template", () => {
     expect(status.out).toContain("flow inputs not set: topic");
   });
 
+  it("checks what the flow needs with doctor", () => {
+    const noKey = flowgit(["doctor"], { ANTHROPIC_API_KEY: "", ANTHROPIC_AUTH_TOKEN: "", FLOWGIT_LLM_MOCK_DIR: "" });
+    expect(noKey.code).toBe(1);
+    expect(noKey.out).toContain("! 还没填流程输入 / flow inputs not set: topic");
+    expect(noKey.out).toContain("✗ script, storyboard: 模型 claude-opus-5-5 的密钥 ANTHROPIC_API_KEY 没有设置");
+    expect(noKey.out).toContain("FLOWGIT_LLM_MOCK_DIR=demo-replies");
+    expect(noKey.out).toContain("✓ edit, export: 找到 / found node");
+
+    const demo = flowgit(["doctor", "--json"], { FLOWGIT_LLM_MOCK_DIR: path.join(flowDir, "demo-replies") });
+    const report = JSON.parse(demo.out);
+    expect(report.ok).toBe(hasFfmpeg);
+    expect(demo.code).toBe(hasFfmpeg ? 0 : 1);
+    expect(report.checks).toContainEqual({ level: "ok", stage: "script", message: `用固定回复 / canned reply ${path.join("demo-replies", "script.md")}` });
+    expect(report.checks).toContainEqual(expect.objectContaining({ level: hasFfmpeg ? "ok" : "error", stage: "export", message: expect.stringContaining("ffmpeg") }));
+  });
+
   it("shows a short, quoted path when the new flow is below the current folder", () => {
     const init = spawnSync(process.execPath, [cli, "init", "my video"], { cwd: work, encoding: "utf8" });
     expect(init.status).toBe(0);
