@@ -102,6 +102,7 @@ export function renderSkillMd(flow: Flow): string {
     "```bash",
     "flowgit doctor          # 跑之前检查密钥和要用的命令",
     "flowgit status          # 看每个阶段的状态",
+    "flowgit run all --dry-run   # 先预演：哪些阶段会跑、最多调用几次模型，什么都不运行",
     "flowgit run all         # 按顺序跑完，遇到需要人的阶段会停下并说明",
     "flowgit run <stage>     # 只跑一个阶段",
     "flowgit log <stage>     # 看这个阶段的历史版本",

@@ -11,9 +11,11 @@ flowgit init my-video             # 用自带的短视频模板建流程 / new f
 cd my-video
 flowgit status                    # 看板 / the board
 flowgit inputs set topic="为什么猫喜欢纸箱"
-flowgit run all --model deepseek/deepseek-v4-pro   # 任何模型 / any model
 flowgit providers                 # 内置的模型供应商和密钥状态 / built-in providers and key status
 flowgit doctor                    # 跑之前检查密钥、FFmpeg、agent / check keys, FFmpeg and agents before a run
+flowgit run all --dry-run         # 预演：会跑哪些阶段、调用几次模型 / preview: which stages run, how many model calls
+flowgit run all --model deepseek/deepseek-v4-pro   # 任何模型 / any model
+flowgit log                       # 整个流程的历史和 token 合计 / the whole history and token total
 ```
 
 自带的模板 / Bundled templates：

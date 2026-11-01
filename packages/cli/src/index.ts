@@ -595,6 +595,7 @@ program
           ? `\n${c.yellow("!")} 没有必须先解决的问题，但先看看上面的 ${warnings} 个提醒 / nothing blocking, but check the ${warnings} warning(s) above`
           : `\n${c.green("✓")} 可以运行 / ready to run`,
       );
+      console.log(c.dim(`  先预演一下 / preview it first: flowgit run all --dry-run${opts.model ? ` --model ${opts.model}` : ""}`));
     } catch (err) {
       fail(err);
     }

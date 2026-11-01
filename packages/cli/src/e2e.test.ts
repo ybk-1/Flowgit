@@ -58,6 +58,9 @@ describe("flowgit CLI with the short-video template", () => {
     expect(demo.code).toBe(hasFfmpeg ? 0 : 1);
     expect(report.checks).toContainEqual({ level: "ok", stage: "script", message: `用固定回复 / canned reply ${path.join("demo-replies", "script.md")}` });
     expect(report.checks).toContainEqual(expect.objectContaining({ level: hasFfmpeg ? "ok" : "error", stage: "export", message: expect.stringContaining("ffmpeg") }));
+    // when nothing blocks, doctor points at the dry run, with the same --model
+    const text = flowgit(["doctor", "--model", "glm/glm-5.3"], { FLOWGIT_LLM_MOCK_DIR: path.join(flowDir, "demo-replies") });
+    expect(text.out.includes("先预演一下 / preview it first: flowgit run all --dry-run --model glm/glm-5.3")).toBe(hasFfmpeg);
   });
 
   it("lists the bundled templates, and names them when -t is wrong", () => {
@@ -183,6 +186,7 @@ describe("flowgit CLI with the short-video template", () => {
     expect(r.out).toContain("name: short-video");
     expect(r.out).toContain("# 短视频制作");
     expect(r.out).toContain("flowgit run storyboard");
+    expect(r.out).toContain("flowgit run all --dry-run");
   });
 
   it("lists providers and whether their keys are set, never the keys", () => {
