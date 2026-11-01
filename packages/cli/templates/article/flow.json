@@ -1,0 +1,87 @@
+{
+  "format": "flowgit",
+  "version": "0.1",
+  "id": "article",
+  "name": "图文帖子",
+  "description": "从一个主题写出一篇图文：大纲 → 正文 → 配图方案 → 照片 → 导出。平台决定篇幅和语气，每一步都可以回看、修改、重跑。 / Write an illustrated post from a topic: outline → draft → image plan → photos → export. The platform sets length and tone. Every step can be reviewed, edited and re-run.",
+  "language": "zh",
+  "author": { "name": "Flowgit" },
+  "license": "Apache-2.0",
+  "tags": ["article", "writing", "starter"],
+  "inputs": {
+    "topic": {
+      "type": "string",
+      "description": "文章主题，例如：为什么猫喜欢纸箱 / What the post is about, e.g. why cats love boxes",
+      "required": true
+    },
+    "platform": {
+      "type": "string",
+      "enum": ["xiaohongshu", "wechat", "blog"],
+      "default": "xiaohongshu",
+      "description": "发布平台：xiaohongshu 小红书，wechat 公众号，blog 博客。决定篇幅和语气 / Where it will be published. Sets length and tone"
+    },
+    "audience": {
+      "type": "string",
+      "description": "目标读者 / Who the post is for",
+      "default": "对这个话题好奇的普通读者"
+    },
+    "style": {
+      "type": "string",
+      "description": "风格和语气，例如：口语、温柔、有干货 / Tone and style, e.g. conversational, warm, practical",
+      "default": "清楚、有画面感"
+    },
+    "language": {
+      "type": "string",
+      "enum": ["zh", "en"],
+      "default": "zh",
+      "description": "输出语言：zh 中文，en English。决定大纲、正文、配图说明和导出日志的语言 / Output language: zh or en. Sets the language of the outline, draft, image notes and the export log"
+    }
+  },
+  "stages": [
+    {
+      "id": "outline",
+      "name": "大纲",
+      "description": "按平台和读者列出发文结构：标题、各段要讲什么、收尾。 / Plan the post for the platform and audience: title, what each section covers, and the ending.",
+      "executor": { "type": "llm", "prompt": "prompts/outline.md", "effort": "medium" },
+      "outputs": [{ "type": "text/markdown", "path": "outline.md" }]
+    },
+    {
+      "id": "draft",
+      "name": "正文",
+      "description": "按大纲写成可以发出去的正文。篇幅和语气随平台变化。 / Write a publishable draft from the outline. Length and tone follow the platform.",
+      "inputs": ["outline"],
+      "executor": { "type": "llm", "prompt": "prompts/draft.md", "effort": "medium" },
+      "outputs": [{ "type": "text/markdown", "path": "draft.md" }]
+    },
+    {
+      "id": "images",
+      "name": "配图",
+      "description": "为正文列出每张图的用途、可直接用于图像模型的画面描述，以及替代文本。 / List each image's purpose, a scene description usable as an image-model prompt, and alt text.",
+      "inputs": ["outline", "draft"],
+      "executor": { "type": "llm", "prompt": "prompts/images.md", "effort": "medium" },
+      "outputs": [{ "type": "application/json", "path": "images.json" }]
+    },
+    {
+      "id": "photos",
+      "name": "照片",
+      "description": "按配图方案准备照片。缺的图导出时会用画面描述占位。 / Add photos for the image plan. Missing files become placeholders that show the scene description.",
+      "inputs": ["images"],
+      "executor": {
+        "type": "human",
+        "instructions": "把照片放进 photos/，文件名对应 images.json 里每张图的 file 字段。缺的图导出时会用画面描述做成占位，所以也可以先放一个空的 photos/ 文件夹（mkdir photos）。 / Put photos in photos/, named after each image's file field in images.json. Missing images become placeholders with the scene description on export, so an empty photos/ folder (mkdir photos) also works."
+      },
+      "outputs": [{ "type": "dir", "path": "photos/" }]
+    },
+    {
+      "id": "export",
+      "name": "导出",
+      "description": "把标题、正文和照片合成 post.md 与 post.html。没有照片的位置用画面描述占位。 / Assemble the title, body and photos into post.md and post.html. A missing photo becomes a placeholder with its scene description.",
+      "inputs": ["draft", "images", "photos"],
+      "executor": { "type": "script", "run": "node scripts/export-post.mjs" },
+      "outputs": [
+        { "type": "text/markdown", "path": "post.md" },
+        { "type": "text/html", "path": "post.html" }
+      ]
+    }
+  ]
+}
