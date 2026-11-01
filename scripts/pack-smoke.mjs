@@ -45,7 +45,7 @@ try {
       check(files.includes("dist/index.js") && files.includes("schema/flow.schema.json"), `${name}: ships dist and the schema`);
     } else {
       check(files.includes("dist/index.js"), `${name}: ships the CLI entry`);
-      check(files.includes("templates/short-video/flow.json"), `${name}: ships the short-video template`);
+      for (const t of ["short-video", "weekly-report"]) check(files.includes(`templates/${t}/flow.json`), `${name}: ships the ${t} template`);
     }
   }
   // pnpm may report the tarball path as absolute or relative to the destination.

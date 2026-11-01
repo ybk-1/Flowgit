@@ -1,12 +1,12 @@
 # 周报（入门示例）/ Weekly report (starter example)
 
-最小的"人 + 模型 + 脚本"流程，也是 [动手做一个流程](../../docs/guide.md) 教程最后做出来的样子：
+最小的"人 + 模型 + 脚本"流程，也是 [动手做一个流程](https://github.com/cgold9820-dotcom/Flowgit/blob/main/docs/guide.md) 教程最后做出来的样子：
 
 1. **随手记**（人）：把这周的事一行一件写进 `notes.md`。
 2. **周报草稿**（模型）：整理成三段，本周完成、下周计划、需要帮助，写进 `report.md`。
 3. **检查**（脚本）：检查三个小节都在、每节都有要点、没有占位符、长度合适，结果写进 `check.json`。
 
-The smallest "person + model + script" flow, and what the [Build your own flow](../../docs/guide.md) tutorial ends up with:
+The smallest "person + model + script" flow, and what the [Build your own flow](https://github.com/cgold9820-dotcom/Flowgit/blob/main/docs/guide.md) tutorial ends up with:
 
 1. **Notes** (person): one line per thing you did this week, in `notes.md`.
 2. **Draft** (model): turns them into three sections (done this week, next week, need help) in `report.md`.
@@ -14,23 +14,21 @@ The smallest "person + model + script" flow, and what the [Build your own flow](
 
 ## 运行 / Run
 
-macOS / Linux（在 Flowgit 仓库根目录，先 `pnpm install && pnpm build` / from the Flowgit repo root, after `pnpm install && pnpm build`）：
+macOS / Linux（`flowgit` 命令的设置见根目录 README 的"快速开始" / see "Quick start" in the root README to set up the `flowgit` command）：
 
 ```bash
-alias flowgit="node $PWD/packages/cli/dist/index.js"
-flowgit init ~/my-report -t examples/weekly-report
+flowgit init ~/my-report -t weekly-report
 cd ~/my-report
 flowgit inputs set name="小林"
 flowgit run notes --from sample-notes.md          # 或者自己写 notes.md / or write notes.md yourself
 FLOWGIT_LLM_MOCK_DIR=demo-replies flowgit run all  # 用示例回复试跑，不花钱 / try it with the demo reply, free
 ```
 
-Windows PowerShell（把路径换成你自己的 / use your own paths）：
+Windows PowerShell：
 
 ```powershell
-function flowgit { node E:\claude_code\Flowgit\Flowgit\packages\cli\dist\index.js @args }
-flowgit init E:\claude_code\my-report -t E:\claude_code\Flowgit\Flowgit\examples\weekly-report
-cd E:\claude_code\my-report
+flowgit init $HOME\my-report -t weekly-report
+cd $HOME\my-report
 flowgit inputs set name="小林"
 flowgit run notes --from sample-notes.md
 $env:FLOWGIT_LLM_MOCK_DIR = "demo-replies"; flowgit run all; Remove-Item Env:FLOWGIT_LLM_MOCK_DIR

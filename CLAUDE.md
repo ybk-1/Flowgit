@@ -19,14 +19,14 @@ Open-source tool for turning any process into a visual, staged, versioned flow (
 - `packages/core`（`@flowgit/core`）：flow.json 的 schema（`schema/flow.schema.json` 是唯一标准，`src/types.ts` 跟它保持一致）、校验、`runs/<stage>/<n>/` 下的运行历史、阶段执行器（`human`、`llm`、`script`、`agent` 可运行；`workflow`/`service`/`mcp` 是预留）。
 - `packages/cli`（`flowgit`）：commander 命令行在 `src/index.ts`，自带模板在 `templates/`。
 - `docs/spec.md`：给人看的规范，改 schema 时一起改。
-- `docs/guide.md`：入门教程，照着做出 `examples/weekly-report`。里面贴了真实的命令行输出，改了命令行输出或格式时要跟着改。
-- `examples/`：示例流程，`packages/core/src/examples.test.ts` 会校验它们。发布流程见 `docs/releasing.md`。
+- `docs/guide.md`：入门教程，照着做出自带的 `weekly-report` 模板（`packages/cli/templates/weekly-report`）。里面贴了真实的命令行输出，改了命令行输出或格式时要跟着改。
+- `examples/`：只在仓库里的示例流程。它们和 `packages/cli/templates/` 里的模板都由 `packages/core/src/examples.test.ts` 校验。发布流程见 `docs/releasing.md`。
 
 - `packages/core` (`@flowgit/core`): the flow.json schema (`schema/flow.schema.json` is the source of truth; `src/types.ts` mirrors it), validation, run history under `runs/<stage>/<n>/`, and stage executors (`human`, `llm`, `script`, `agent`; `workflow`/`service`/`mcp` are reserved).
 - `packages/cli` (`flowgit`): the commander CLI in `src/index.ts`, bundled templates in `templates/`.
 - `docs/spec.md`: the human-readable spec. Change it together with the schema.
-- `docs/guide.md`: the starter tutorial; it builds `examples/weekly-report`. It quotes real CLI output, so update it when CLI output or the format changes.
-- `examples/`: example flows, validated by `packages/core/src/examples.test.ts`. Releasing is in `docs/releasing.md`.
+- `docs/guide.md`: the starter tutorial; it builds the bundled `weekly-report` template (`packages/cli/templates/weekly-report`). It quotes real CLI output, so update it when CLI output or the format changes.
+- `examples/`: repo-only example flows. They and the templates in `packages/cli/templates/` are validated by `packages/core/src/examples.test.ts`. Releasing is in `docs/releasing.md`.
 
 ## 命令 / Commands
 

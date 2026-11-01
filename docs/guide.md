@@ -1,8 +1,8 @@
 # 动手做一个流程 / Build your own flow
 
-这篇教程从一个空文件夹开始，做出一个"周报"流程：你随手记下这周做的事，模型整理成周报，脚本检查格式。大约 15 分钟，不需要 API key。做完的样子在 [`examples/weekly-report`](../examples/weekly-report)，随时可以对照。
+这篇教程从一个空文件夹开始，做出一个"周报"流程：你随手记下这周做的事，模型整理成周报，脚本检查格式。大约 15 分钟，不需要 API key。做完的样子是命令行自带的 `weekly-report` 模板（[源文件](../packages/cli/templates/weekly-report)），随时可以用 `flowgit init ~/my-report -t weekly-report` 建一份对照。
 
-This tutorial starts from an empty folder and builds a "weekly report" flow: you jot down what you did this week, a model turns it into a report, and a script checks the format. About 15 minutes, no API key needed. The finished version is in [`examples/weekly-report`](../examples/weekly-report) if you want to compare.
+This tutorial starts from an empty folder and builds a "weekly report" flow: you jot down what you did this week, a model turns it into a report, and a script checks the format. About 15 minutes, no API key needed. The finished version ships with the CLI as the `weekly-report` template ([source](../packages/cli/templates/weekly-report)); run `flowgit init ~/my-report -t weekly-report` to get a copy to compare with.
 
 ## 0. 准备 / Before you start
 
@@ -298,9 +298,9 @@ A template and a project are the same format. To share the flow, keep `flow.json
 - `flowgit.local.json`：你填的输入值 / your input values
 - 各阶段的产物（`notes.md`、`report.md`、`check.json`）/ the stage outputs
 
-别人拿到后用它新建自己的流程：
+别人拿到这个文件夹后，用它新建自己的流程：
 
-Others start their own copy from it:
+Others start their own copy from the folder:
 
 ```bash
 flowgit init ~/my-report -t path/to/weekly-report
@@ -326,6 +326,6 @@ flowgit export-skill -o SKILL.md
 | 连不上这个地址 / Could not reach it | 需要代理的话，同时设置 `HTTPS_PROXY` 和 `NODE_USE_ENV_PROXY=1` | If you need a proxy, set both `HTTPS_PROXY` and `NODE_USE_ENV_PROXY=1` |
 | 脚本阶段失败 / a script stage failed | 看 `flowgit log <阶段>` 和 `runs/<阶段>/<版本>/run.json` 里的 `log`。改好产物或脚本后再跑 | Read `flowgit log <stage>` and the `log` in `runs/<stage>/<n>/run.json`. Fix the output or the script and run again |
 
-做出了好用的流程？欢迎用 [流程想法](https://github.com/cgold9820-dotcom/Flowgit/issues/new?template=flow_idea.yml) 告诉我们，或者直接开 PR 放进 `examples/`。
+做出了好用的流程？欢迎用 [流程想法](https://github.com/cgold9820-dotcom/Flowgit/issues/new?template=flow_idea.yml) 告诉我们，或者直接开 PR 放进 `examples/`（只在仓库里的示例）或 `packages/cli/templates/`（随命令行一起安装的模板）。
 
-Made a flow that works well? Tell us with a [flow idea](https://github.com/cgold9820-dotcom/Flowgit/issues/new?template=flow_idea.yml), or open a PR adding it to `examples/`.
+Made a flow that works well? Tell us with a [flow idea](https://github.com/cgold9820-dotcom/Flowgit/issues/new?template=flow_idea.yml), or open a PR adding it to `examples/` (repo-only examples) or `packages/cli/templates/` (templates installed with the CLI).

@@ -219,9 +219,9 @@ A minimal `flow.json`:
 
 The full spec is in [docs/spec.md](docs/spec.md); the JSON Schema is [packages/core/schema/flow.schema.json](packages/core/schema/flow.schema.json).
 
-想从零做一个自己的流程，跟着 [docs/guide.md](docs/guide.md) 做一遍（约 15 分钟，不需要 API key），做完的样子在 [`examples/weekly-report`](examples/weekly-report)。
+想从零做一个自己的流程，跟着 [docs/guide.md](docs/guide.md) 做一遍（约 15 分钟，不需要 API key），做完的样子就是自带的 `weekly-report` 模板：`flowgit init ~/my-report -t weekly-report`。
 
-To build your own flow from scratch, follow [docs/guide.md](docs/guide.md) (about 15 minutes, no API key needed); the finished flow is [`examples/weekly-report`](examples/weekly-report).
+To build your own flow from scratch, follow [docs/guide.md](docs/guide.md) (about 15 minutes, no API key needed); the finished flow is the bundled `weekly-report` template: `flowgit init ~/my-report -t weekly-report`.
 
 ## 仓库结构 / Repository layout
 
@@ -229,11 +229,11 @@ To build your own flow from scratch, follow [docs/guide.md](docs/guide.md) (abou
 packages/
   core/   @flowgit/core  格式、校验、版本记录、执行器 / format, validation, runs, executors
   cli/    flowgit        命令行工具和模板 / CLI and templates
-    templates/short-video/  短视频示例流程 / the short-video example flow
+    templates/             自带模板：short-video（短视频）、weekly-report（周报入门）/ bundled templates: short-video, weekly-report (starter)
 docs/
   spec.md                  格式规范 / format spec
   guide.md                 教程：动手做一个流程 / tutorial: build your own flow
-examples/                  示例流程 / example flows
+examples/                  只在仓库里的示例，比如 agent-page / repo-only examples such as agent-page
 ```
 
 ## 开发 / Development

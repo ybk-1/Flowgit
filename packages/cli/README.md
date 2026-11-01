@@ -15,6 +15,17 @@ flowgit run all --model deepseek/deepseek-v4-pro   # 任何模型 / any model
 flowgit providers                 # 内置的模型供应商和密钥状态 / built-in providers and key status
 ```
 
+自带的模板 / Bundled templates：
+
+| `-t` | 做什么 | What it makes |
+| --- | --- | --- |
+| `short-video`（默认 / default） | 竖屏短视频：脚本 → 分镜 → 素材 → 剪辑 → 导出 | A vertical short video: script → storyboard → assets → edit → export |
+| `weekly-report` | 周报入门示例：随手记（人）→ 草稿（模型）→ 检查（脚本） | Starter: a weekly report from rough notes (person → model → script) |
+
+```bash
+flowgit init my-report -t weekly-report
+```
+
 密钥只从环境变量读（例如 `ANTHROPIC_API_KEY`、`DEEPSEEK_API_KEY`），不会写进任何文件。导出视频需要 [FFmpeg](https://ffmpeg.org/download.html)。
 
 Keys are read only from environment variables (such as `ANTHROPIC_API_KEY` or `DEEPSEEK_API_KEY`) and never written to a file. Exporting video needs [FFmpeg](https://ffmpeg.org/download.html).

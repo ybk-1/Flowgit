@@ -5,20 +5,30 @@ import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { loadFlow, mockCompleteFromDir, runAll, runStage, validateFlow } from "./index.js";
 
-const examplesDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../examples");
-const examples = fs
-  .readdirSync(examplesDir, { withFileTypes: true })
-  .filter((e) => e.isDirectory() && fs.existsSync(path.join(examplesDir, e.name, "flow.json")))
-  .map((e) => e.name);
+const repoDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
+const examplesDir = path.join(repoDir, "examples");
+const templatesDir = path.join(repoDir, "packages/cli/templates");
 
-describe("examples/", () => {
-  it("has examples", () => {
-    expect(examples.length).toBeGreaterThan(0);
+/** Every folder with a flow.json under dir. */
+function flowsIn(dir: string): string[] {
+  return fs
+    .readdirSync(dir, { withFileTypes: true })
+    .filter((e) => e.isDirectory() && fs.existsSync(path.join(dir, e.name, "flow.json")))
+    .map((e) => e.name);
+}
+
+describe.each([
+  ["examples/", examplesDir],
+  ["packages/cli/templates/", templatesDir],
+])("%s", (_label, dir) => {
+  const flows = flowsIn(dir);
+  it("has flows", () => {
+    expect(flows.length).toBeGreaterThan(0);
   });
 
-  for (const name of examples) {
+  for (const name of flows) {
     it(`${name} is a valid flow with no warnings`, () => {
-      const loaded = loadFlow(path.join(examplesDir, name));
+      const loaded = loadFlow(path.join(dir, name));
       expect(validateFlow(loaded.flow, { dir: loaded.dir })).toEqual([]);
     });
   }
@@ -93,12 +103,12 @@ describe("examples/agent-page end to end (fake Claude Code)", () => {
   });
 });
 
-describe("examples/weekly-report end to end (demo reply)", () => {
+describe("weekly-report template end to end (demo reply)", () => {
   let dir: string;
 
   beforeEach(() => {
     dir = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-weekly-"));
-    fs.cpSync(path.join(examplesDir, "weekly-report"), dir, { recursive: true });
+    fs.cpSync(path.join(templatesDir, "weekly-report"), dir, { recursive: true });
   });
 
   afterEach(() => {
