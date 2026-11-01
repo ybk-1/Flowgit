@@ -187,6 +187,18 @@ describe("running a flow", () => {
     expect(() => loadFlowInputs(dir, flow, { topic: "cats", language: "fr" })).toThrow(/must be one of "zh", "en"/);
   });
 
+  it("rejects numbers and booleans that don't parse, instead of running with NaN or false", () => {
+    const flow: Flow = {
+      ...baseFlow(),
+      inputs: { n: { type: "number", default: 3 }, loud: { type: "boolean", default: false } },
+    };
+    expect(loadFlowInputs(dir, flow, { n: "2.5", loud: "true" })).toEqual({ n: 2.5, loud: true });
+    expect(() => loadFlowInputs(dir, flow, { n: "abc" })).toThrow('Input "n" must be a number, got "abc"');
+    expect(() => loadFlowInputs(dir, flow, { loud: "yes" })).toThrow('Input "loud" must be true or false, got "yes"');
+    // status still resolves them, unchecked, so the board can show what was typed
+    expect(resolveFlowInputs(dir, flow, { n: "abc" })).toMatchObject({ n: "abc" });
+  });
+
   it("runs stages, records versions, detects stale and edited stages, and restores", async () => {
     writeProject();
     const loaded = loadFlow(dir);

@@ -79,6 +79,17 @@ describe("flowgit CLI with the short-video template", () => {
     expect(init.stdout).toContain('next: cd "my video" && flowgit status');
   });
 
+  it("checks input names and values before saving them", () => {
+    const typo = flowgit(["inputs", "set", "topci=猫"]);
+    expect(typo.code).toBe(1);
+    expect(typo.out).toContain("known inputs: topic, duration, style, audience, language");
+    const bad = flowgit(["inputs", "set", "language=fr", "duration=abc"]);
+    expect(bad.code).toBe(1);
+    expect(bad.out).toContain('Input "language" must be one of "zh", "en", got "fr"');
+    expect(bad.out).toContain('Input "duration" must be a number, got "abc"');
+    expect(fs.existsSync(path.join(flowDir, "flowgit.local.json"))).toBe(false);
+  });
+
   it("runs until the human stage and waits", () => {
     expect(flowgit(["inputs", "set", "topic=为什么猫喜欢纸箱", "duration=25"]).code).toBe(0);
     const r = flowgit(["run", "all"], { FLOWGIT_LLM_MOCK_DIR: path.join(flowDir, "demo-replies") });

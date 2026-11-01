@@ -10,7 +10,9 @@ import {
   LOCAL_FILE,
   MissingInputsError,
   UpstreamNotReadyError,
+  coerceFlowInput,
   doctor,
+  flowInputProblem,
   effectiveProvider,
   globalProvidersFile,
   listRuns,
@@ -313,9 +315,16 @@ inputs
     try {
       const loaded = loadFlow(dirOf());
       const kv = parseKv(pairs);
-      const unknown = Object.keys(kv).filter((k) => !(loaded.flow.inputs ?? {})[k]);
-      if (unknown.length) throw new Error(`没有这个输入 / Unknown input(s): ${unknown.join(", ")}`);
-      saveFlowInputs(loaded.dir, kv);
+      const defs = loaded.flow.inputs ?? {};
+      const unknown = Object.keys(kv).filter((k) => !defs[k]);
+      if (unknown.length) {
+        throw new Error(`没有这个输入 / Unknown input(s): ${unknown.join(", ")}\n  可以填的 / known inputs: ${Object.keys(defs).join(", ")}`);
+      }
+      // Check each value now, so a typo is caught here rather than at the next run.
+      const values = Object.fromEntries(Object.entries(kv).map(([k, v]) => [k, coerceFlowInput(defs[k], v)]));
+      const problems = Object.entries(values).flatMap(([k, v]) => flowInputProblem(k, defs[k], v) ?? []);
+      if (problems.length) throw new Error(problems.join("\n  "));
+      saveFlowInputs(loaded.dir, values);
       console.log(`${c.green("✓")} 已保存到 / saved to flowgit.local.json: ${Object.keys(kv).join(", ")}`);
     } catch (err) {
       fail(err);

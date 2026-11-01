@@ -63,11 +63,15 @@ Parameters the user fills in once at the start, such as the video topic. Values 
 
 | 字段 / Field | 说明 | Description |
 | --- | --- | --- |
-| `type` | `string`、`text`、`number`、`boolean`、`file` | One of `string`, `text`, `number`, `boolean`, `file` |
+| `type` | `string`、`text`、`number`、`boolean`、`file`。`number` 要能读成数字，`boolean` 只能是 `true` 或 `false`，否则运行前报错 | One of `string`, `text`, `number`, `boolean`, `file`. A `number` must parse as a number and a `boolean` must be `true` or `false`, or the run fails before it starts |
 | `description` | 给填写的人看的说明 | Help text for whoever fills it in |
 | `default` | 没填时用的值 | Value used when nothing is set |
 | `required` | 为 `true` 时，没填就不能运行 | When `true`, runs are refused until it is set |
 | `enum` | 允许的取值；填了别的值，运行前就报错 | Allowed values; any other value fails before the run starts |
+
+`flowgit inputs set` 保存前就做同样的检查，写错名字或值时会直接报错，不会存进 `flowgit.local.json`。
+
+`flowgit inputs set` runs the same checks before saving, so a wrong name or value is refused right away and never reaches `flowgit.local.json`.
 
 在 llm 提示词里用 `{{inputs.topic}}` 引用；script 阶段从 `FLOWGIT_FLOW_INPUTS` 读取。比如短视频模板用 `language`（`zh` | `en`）让用户选择脚本、字幕和日志的语言。
 

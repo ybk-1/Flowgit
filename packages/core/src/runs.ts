@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type {
   Flow,
+  FlowInput,
   LoadedFlow,
   Output,
   RunInputRef,
@@ -216,10 +217,33 @@ export function resolveFlowInputs(
   }
   Object.assign(values, overrides);
   for (const [k, def] of Object.entries(defs)) {
-    if (def.type === "number" && typeof values[k] === "string" && values[k] !== "") values[k] = Number(values[k]);
-    if (def.type === "boolean" && typeof values[k] === "string") values[k] = values[k] === "true";
+    if (k in values) values[k] = coerceFlowInput(def, values[k]);
   }
   return values;
+}
+
+/** "30" → 30 for number inputs and "true"/"false" → booleans; anything else is left as it is for the checks to report. */
+export function coerceFlowInput(def: FlowInput, value: unknown): unknown {
+  if (typeof value !== "string" || value === "") return value;
+  if (def.type === "number" && Number.isFinite(Number(value))) return Number(value);
+  if (def.type === "boolean" && (value === "true" || value === "false")) return value === "true";
+  return value;
+}
+
+/** What is wrong with one flow input value (type and enum), or undefined. Bilingual. */
+export function flowInputProblem(key: string, def: FlowInput, value: unknown): string | undefined {
+  if (value === undefined || value === "") return undefined;
+  if (def.type === "number" && (typeof value !== "number" || !Number.isFinite(value))) {
+    return `输入 ${key} 要填数字 / Input "${key}" must be a number, got ${JSON.stringify(value)}`;
+  }
+  if (def.type === "boolean" && typeof value !== "boolean") {
+    return `输入 ${key} 只能是 true 或 false / Input "${key}" must be true or false, got ${JSON.stringify(value)}`;
+  }
+  if (def.enum && !def.enum.includes(value)) {
+    const allowed = def.enum.map((v) => JSON.stringify(v)).join(", ");
+    return `输入 ${key} 只能是 ${allowed} / Input "${key}" must be one of ${allowed}, got ${JSON.stringify(value)}`;
+  }
+  return undefined;
 }
 
 /** resolveFlowInputs plus checks: required inputs are set and enum values are allowed. */
@@ -235,10 +259,8 @@ export function loadFlowInputs(
     .map(([k]) => k);
   if (missing.length) throw new MissingInputsError(missing);
   for (const [k, def] of Object.entries(defs)) {
-    if (def.enum && values[k] !== undefined && !def.enum.includes(values[k])) {
-      const allowed = def.enum.map((v) => JSON.stringify(v)).join(", ");
-      throw new Error(`输入 ${k} 只能是 ${allowed} / Input "${k}" must be one of ${allowed}, got ${JSON.stringify(values[k])}`);
-    }
+    const problem = flowInputProblem(k, def, values[k]);
+    if (problem) throw new Error(problem);
   }
   return values;
 }
