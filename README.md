@@ -139,7 +139,7 @@ CLI messages and errors are bilingual. What a template produces (script, caption
 | `flowgit inputs` / `flowgit inputs set k=v` | 查看 / 填写流程输入 | Show / set flow inputs |
 | `flowgit run <stage\|all>` | 跑一个阶段，或按顺序跑完所有需要跑的阶段 | Run one stage, or every stage that needs it, in order |
 | `flowgit run <stage> --from <path>` | 人工阶段：把文件或文件夹放进产物位置 | Human stage: put a file or folder in place as the output |
-| `flowgit log <stage>` | 这个阶段的历史版本 | The stage's version history |
+| `flowgit log [stage]` | 这个阶段的历史版本；不写阶段就按时间列出整个流程的，并合计 token 用量 | The stage's version history; without a stage, the whole flow's by time, with a token total |
 | `flowgit restore <stage> <n>` | 回退到某个版本 | Roll back to a version |
 | `flowgit providers [--json]` | 列出模型供应商，以及密钥有没有设置（不显示密钥） | List model providers and whether each key is set (never the key) |
 | `flowgit doctor [--model m] [--json]` | 跑之前检查这台电脑：Node、流程输入、密钥、脚本和 agent 要用的命令。不调用模型，不运行阶段 | Check this machine before a run: Node, flow inputs, keys, and the programs script and agent stages use. Calls no model and runs no stage |
@@ -169,9 +169,9 @@ flowgit doctor --model glm/glm-5.3                  # 跑之前检查密钥、�
 
 Built in: `anthropic`, `openai`, `openrouter`, `glm`, `deepseek`, `moonshot`, `qwen`, `ollama`. Any other service that speaks the Anthropic or OpenAI API is one entry in `~/.flowgit/providers.json`. Keys are read only from environment variables, never written to a file or to `flow.json`, so flows are safe to share.
 
-每次调用模型后会显示这次用了多少 token；`run all` 调用了好几次时，最后再显示一个合计。`flowgit log <阶段>` 里每个版本也写着用量，方便估算花费。
+每次调用模型后会显示这次用了多少 token；`run all` 调用了好几次时，最后再显示一个合计。`flowgit log <阶段>` 里每个版本也写着用量，`flowgit log` 不写阶段时会合计整个流程用掉的 token，方便估算花费。
 
-After each model call Flowgit shows the tokens it used; when `run all` makes several calls it also prints a total. `flowgit log <stage>` lists the usage of every version too, so you can estimate the cost.
+After each model call Flowgit shows the tokens it used; when `run all` makes several calls it also prints a total. `flowgit log <stage>` lists the usage of every version too, and `flowgit log` without a stage adds up the tokens the whole flow has used, so you can estimate the cost.
 
 用代理或 VPN 上网时：Node 默认不走 `HTTPS_PROXY`，需要再设置 `NODE_USE_ENV_PROXY=1`（PowerShell：`$env:NODE_USE_ENV_PROXY="1"`）。连不上模型时 Flowgit 会提醒你。
 
@@ -291,14 +291,14 @@ Everything on GitHub (commit messages, PRs, docs) is bilingual, Chinese first.
 
 ## 路线图 / Roadmap
 
-1. **格式 + 命令行**（本仓库现状，0.1.0 准备发布）：Flow 规范 v0.1；短视频和周报两个自带模板；llm 阶段接任何模型，agent 阶段接 Claude Code、Codex、Cursor、Gemini；`doctor`、`templates` 等命令。更新记录见 [CHANGELOG.md](CHANGELOG.md)。
+1. **格式 + 命令行**（本仓库现状，0.1.0 准备发布）：Flow 规范 v0.1；短视频和周报两个自带模板；llm 阶段接任何模型，agent 阶段接 Claude Code、Codex、Cursor、Gemini；`doctor`、`templates`、`graph`（流程图）等命令。更新记录见 [CHANGELOG.md](CHANGELOG.md)。
 2. **阶段看板网站**：打开一个流程就是一块看板，每张卡能看产物、改、重跑、看历史。
 3. **发布与复用**：画廊、发布（自动去隐私）、fork、版本对比。
 4. **更多领域**：图文内容、客服 SOP 等模板（做网站已经有 `examples/agent-page` 示例）；之后让作者把流程变成 MCP 服务供别人调用。
 
 English:
 
-1. **Format + CLI** (this repo today, 0.1.0 getting ready to ship): Flow spec v0.1; bundled short-video and weekly-report templates; llm stages on any model and agent stages on Claude Code, Codex, Cursor or Gemini; commands such as `doctor` and `templates`. See [CHANGELOG.md](CHANGELOG.md) for details.
+1. **Format + CLI** (this repo today, 0.1.0 getting ready to ship): Flow spec v0.1; bundled short-video and weekly-report templates; llm stages on any model and agent stages on Claude Code, Codex, Cursor or Gemini; commands such as `doctor`, `templates` and `graph` (a diagram of the flow). See [CHANGELOG.md](CHANGELOG.md) for details.
 2. **Stage board web app**: opening a flow shows a board; each card lets you see its outputs, edit them, re-run, and browse history.
 3. **Publish and reuse**: a gallery, publishing (with private data stripped), forks, and version diffs.
 4. **More domains**: templates such as article posts and a support SOP (building a website already has the `examples/agent-page` example); later, authors can expose a flow as an MCP service for others to call.

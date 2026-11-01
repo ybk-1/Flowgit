@@ -94,5 +94,11 @@ describe("token usage", () => {
     const one = await flowgit(["run", "polish"]);
     expect(one.out).toContain("usage: 12 输入 input + 7 输出 output tokens");
     expect(one.out).not.toContain("total usage");
+
+    // the whole-flow log lists every run, newest first, and adds up every call so far
+    const all = await flowgit(["log"]);
+    expect(all.out).toContain("usage · 3 个版本 / run(s)");
+    expect(all.out).toMatch(/polish polish\s+v2\s+ok[\s\S]*polish polish\s+v1\s+ok[\s\S]*draft draft\s+v1\s+ok/);
+    expect(all.out).toContain("模型用量合计 / total model usage: 36 输入 input + 21 输出 output tokens（3 次模型调用 / model calls）");
   });
 });

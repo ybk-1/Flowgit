@@ -279,6 +279,20 @@ v2      ok           2026-11-01 16:10:30  manual
 v1      ok           2026-11-01 16:10:29  llm            mock:draft.md
 ```
 
+不写阶段，`flowgit log` 会按时间列出整个流程的所有版本，最新的在最上面。调用过真实模型的话，最后还会加一行 token 合计。
+
+Without a stage, `flowgit log` lists every version of the whole flow by time, newest first. When real models were called, it ends with a token total.
+
+```text
+完成时间 finished    阶段 stage      版本 v  结果 status  执行 executor  详情 details
+2026-11-01 17:52:17  周报草稿 draft  v3      ok           llm            mock:draft.md
+2026-11-01 17:52:17  周报草稿 draft  v2      ok           manual
+2026-11-01 17:52:17  随手记 notes    v2      ok           manual
+2026-11-01 17:52:16  检查 check      v1      ok           script         node scripts/check-report.mjs
+2026-11-01 17:52:16  周报草稿 draft  v1      ok           llm            mock:draft.md
+2026-11-01 17:52:15  随手记 notes    v1      ok           human          from
+```
+
 ```bash
 flowgit restore draft 2          # 回到你手改的那一版 / back to your hand-edited version
 flowgit run all                  # 下游会重跑 / downstream re-runs

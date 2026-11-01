@@ -33,7 +33,9 @@ import {
   validateFlow,
   usageTokens,
   type Flow,
+  type LoadedFlow,
   type RunEvent,
+  type RunRecord,
   type RunOptions,
 } from "@flowgit/core";
 import { c, nextHint, statusBoard, table } from "./format.js";
@@ -59,9 +61,14 @@ function collect(value: string, prev: string[] = []): string[] {
 const used = { input: 0, output: 0, calls: 0 };
 
 /** One line with the total when more than one model call was made (each call already logs its own). */
+/** "用量合计 / total usage: 12 输入 input + 7 输出 output tokens（2 次模型调用 / model calls）" */
+function usageLine(label: string, t: { input: number; output: number; calls: number }): string {
+  return `${label}: ${t.input} 输入 input + ${t.output} 输出 output tokens（${t.calls} 次模型调用 / model calls）`;
+}
+
 function printUsageTotal(gap = false): void {
   if (used.calls < 2) return;
-  console.log(c.dim(`${gap ? "\n" : ""}用量合计 / total usage: ${used.input} 输入 input + ${used.output} 输出 output tokens（${used.calls} 次模型调用 / model calls）`));
+  console.log(c.dim(`${gap ? "\n" : ""}${usageLine("用量合计 / total usage", used)}`));
 }
 
 function printEvent(e: RunEvent): void {
@@ -371,13 +378,58 @@ function tokenNote(usage: unknown): string {
   return t ? ` · ${t.input + t.output} tokens` : "";
 }
 
+/** The details column of `flowgit log`: model, command, agent, or what a person provided. */
+function runDetail(r: RunRecord): string {
+  const p = r.params ?? {};
+  if (r.status === "error") return c.red((r.error ?? "").split("\n")[0].slice(0, 80));
+  const took = p.durationMs ? ` · ${Math.round(Number(p.durationMs) / 1000)}s` : "";
+  if (r.executor === "llm") return `${p.provider && p.provider !== "anthropic" ? `${p.provider}/` : ""}${p.model ?? ""}${took}${tokenNote(p.usage)}`;
+  if (r.executor === "script") return String(p.run ?? "");
+  if (r.executor === "agent") return `${p.agent ?? ""}${took}`;
+  return String(p.provided ?? "");
+}
+
+const finished = (r: RunRecord) => r.finishedAt.replace("T", " ").slice(0, 19);
+const runResult = (r: RunRecord) => (r.status === "ok" ? c.green("ok") : c.red("error"));
+
+/** Every run of every stage, newest first, with the model usage they add up to. */
+function logAll(loaded: LoadedFlow): void {
+  const names = new Map(loaded.flow.stages.map((s) => [s.id, s.name]));
+  const runs = loaded.flow.stages
+    .flatMap((s) => listRuns(loaded.dir, s.id))
+    .sort((a, b) => b.finishedAt.localeCompare(a.finishedAt));
+  console.log(`${c.bold(loaded.flow.name)} ${c.dim(`· ${runs.length} 个版本 / run(s)`)}\n`);
+  if (!runs.length) {
+    console.log(c.dim("还没有运行过。/ Nothing has run yet."));
+    return;
+  }
+  const rows = [[c.dim("完成时间 finished"), c.dim("阶段 stage"), c.dim("版本 v"), c.dim("结果 status"), c.dim("执行 executor"), c.dim("详情 details")]];
+  const total = { input: 0, output: 0, calls: 0 };
+  for (const r of runs) {
+    rows.push([finished(r), `${names.get(r.stage)} ${c.dim(r.stage)}`, `v${r.n}`, runResult(r), r.executor, runDetail(r)]);
+    const t = usageTokens(r.params?.usage as Record<string, unknown> | undefined);
+    if (t) {
+      total.input += t.input;
+      total.output += t.output;
+      total.calls += 1;
+    }
+  }
+  console.log(table(rows));
+  if (total.calls) console.log(c.dim(`\n${usageLine("模型用量合计 / total model usage", total)}`));
+  console.log(c.dim(`\n一个阶段的历史 / one stage: flowgit log <stage>`));
+}
+
 program
   .command("log")
-  .description("列出一个阶段的历史版本 / list the versions (runs) of a stage")
-  .argument("<stage>", "阶段 id / stage id")
-  .action((stageId: string) => {
+  .description("历史版本：一个阶段的，不写阶段就列出整个流程的 / version history of one stage, or of the whole flow when no stage is given")
+  .argument("[stage]", "阶段 id，不写就是全部阶段 / stage id (omit for every stage)")
+  .action((stageId: string | undefined) => {
     try {
       const loaded = loadFlow(dirOf());
+      if (!stageId) {
+        logAll(loaded);
+        return;
+      }
       const status = stageStatus(loaded, stageId, (() => {
         try {
           return loadFlowInputs(loaded.dir, loaded.flow);
@@ -390,18 +442,7 @@ program
       if (!runs.length) return;
       const rows = [[c.dim("版本 v"), c.dim("结果 status"), c.dim("完成时间 finished"), c.dim("执行 executor"), c.dim("详情 details")]];
       for (const r of [...runs].reverse()) {
-        const p = r.params ?? {};
-        const detail =
-          r.status === "error"
-            ? c.red((r.error ?? "").split("\n")[0].slice(0, 80))
-            : r.executor === "llm"
-              ? `${p.provider && p.provider !== "anthropic" ? `${p.provider}/` : ""}${p.model ?? ""}${p.durationMs ? ` · ${Math.round(Number(p.durationMs) / 1000)}s` : ""}${tokenNote(p.usage)}`
-              : r.executor === "script"
-                ? String(p.run ?? "")
-                : r.executor === "agent"
-                  ? `${p.agent ?? ""}${p.durationMs ? ` · ${Math.round(Number(p.durationMs) / 1000)}s` : ""}`
-                  : String(p.provided ?? "");
-        rows.push([`v${r.n}`, r.status === "ok" ? c.green("ok") : c.red("error"), r.finishedAt.replace("T", " ").slice(0, 19), r.executor, detail]);
+        rows.push([`v${r.n}`, runResult(r), finished(r), r.executor, runDetail(r)]);
       }
       console.log(table(rows));
       console.log(c.dim(`\n快照 / snapshots: runs/${stageId}/<n>/outputs/   回退 / restore: flowgit restore ${stageId} <n>`));
