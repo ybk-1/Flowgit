@@ -16,6 +16,7 @@ import {
   proxyHint,
   resolveModel,
   runStage,
+  usageTokens,
   type Flow,
   type LlmRequest,
   type ResolvedProvider,
@@ -247,6 +248,7 @@ describe("calling a provider over HTTP", () => {
     expect(r.headers["x-api-key"]).toBe("glm-key");
     expect(JSON.stringify(r.headers)).not.toContain("claude-key-must-not-leak");
     expect(logs.join("\n")).toMatch(/effort only applies to Anthropic's own API/);
+    expect(logs.join("\n")).toContain("usage: 12 输入 input + 7 输出 output tokens");
     expect(run.params).toMatchObject({ provider: "myglm", protocol: "anthropic", model: "glm-5.3", requestedModel: "glm-5.3", usage: { output_tokens: 7 } });
     expect(listRuns(dir, "write")[0].params?.provider).toBe("myglm");
   });
@@ -283,6 +285,13 @@ describe("calling a provider over HTTP", () => {
     // effort was not sent, so it is not recorded either
     expect(run.params).not.toHaveProperty("effort");
     expect(listRuns(dir, "write")[0].params).not.toHaveProperty("effort");
+  });
+
+  it("reads token counts from either protocol's usage", () => {
+    expect(usageTokens({ input_tokens: 10, output_tokens: 5, cache_read_input_tokens: 90 })).toEqual({ input: 100, output: 5 });
+    expect(usageTokens({ prompt_tokens: 12, completion_tokens: 7, total_tokens: 19 })).toEqual({ input: 12, output: 7 });
+    expect(usageTokens({ something: "else" })).toBeUndefined();
+    expect(usageTokens(undefined)).toBeUndefined();
   });
 
   it("suggests NODE_USE_ENV_PROXY when a proxy variable is set and a request can't connect", async () => {

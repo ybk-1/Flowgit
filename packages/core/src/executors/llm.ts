@@ -249,6 +249,22 @@ export const openaiComplete: LlmComplete = async (req: LlmRequest): Promise<LlmR
   return { text, model, stopReason: finish, usage };
 };
 
+/**
+ * Input and output token counts from either protocol's usage object
+ * (Anthropic: input_tokens/output_tokens; OpenAI: prompt_tokens/completion_tokens).
+ * Anthropic reports cached prompt tokens separately, so they are added to the input.
+ */
+export function usageTokens(usage: Record<string, unknown> | undefined): { input: number; output: number } | undefined {
+  if (!usage) return undefined;
+  const n = (k: string) => (typeof usage[k] === "number" ? (usage[k] as number) : 0);
+  const has = (k: string) => typeof usage[k] === "number";
+  if (has("input_tokens") || has("output_tokens")) {
+    return { input: n("input_tokens") + n("cache_read_input_tokens") + n("cache_creation_input_tokens"), output: n("output_tokens") };
+  }
+  if (has("prompt_tokens") || has("completion_tokens")) return { input: n("prompt_tokens"), output: n("completion_tokens") };
+  return undefined;
+}
+
 /** Real call: pick the protocol of the request's provider. */
 export const providerComplete: LlmComplete = (req) =>
   req.provider.protocol === "openai" ? openaiComplete(req) : anthropicComplete(req);
@@ -316,6 +332,8 @@ export const llmExecutor: StageExecutor = {
     fs.mkdirSync(path.dirname(abs), { recursive: true });
     fs.writeFileSync(abs, content.endsWith("\n") ? content : `${content}\n`);
     ctx.log(`已写入 / wrote ${outputRel(output)} (${content.length} chars, ${ms} ms)`);
+    const tokens = usageTokens(res.usage);
+    if (tokens) ctx.log(`用量 / usage: ${tokens.input} 输入 input + ${tokens.output} 输出 output tokens`);
     return {
       params: {
         provider: provider.id,

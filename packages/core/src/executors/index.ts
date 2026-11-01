@@ -25,6 +25,7 @@ export {
   providerComplete,
   providerKey,
   proxyHint,
+  usageTokens,
   anthropicBody,
   openaiBody,
   mockCompleteFromDir,
