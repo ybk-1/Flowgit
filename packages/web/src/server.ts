@@ -6,16 +6,25 @@ import path from "node:path";
 import { pipeline } from "node:stream/promises";
 import { fileURLToPath } from "node:url";
 import {
+  HumanInputNeededError,
   isDirOutput,
   isSafeRelative,
   isTextType,
   listFiles,
   loadFlow,
+  loadFlowInputs,
+  MissingInputsError,
   outputRel,
   resolveFlowInputs,
+  runAll,
+  runStage,
+  saveFlowInputs,
   statusAll,
+  UpstreamNotReadyError,
   type Flow,
+  type FlowInput,
   type Output,
+  type RunEvent,
 } from "@flowgit/core";
 
 const publicDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "public");
@@ -78,7 +87,21 @@ export interface BoardStage {
   state: string;
   runs: number;
   latest: { n: number; time: string; status: string } | null;
+  /** Human stage instructions, when the executor has them. */
+  instructions?: string;
   outputs: BoardOutput[];
+}
+
+/** One flow input as GET /api/inputs returns it. `value` is resolveFlowInputs. */
+export interface BoardInputField {
+  name: string;
+  type: string;
+  description?: string;
+  required: boolean;
+  enum?: unknown[];
+  default?: unknown;
+  /** null when the input has no value yet. */
+  value: unknown;
 }
 
 /** JSON body of GET /api/flow. `inputs` is exactly resolveFlowInputs. */
@@ -125,6 +148,9 @@ export function flowBoard(dir: string): FlowBoard {
       latest: status.latest
         ? { n: status.latest.n, time: status.latest.finishedAt, status: status.latest.status }
         : null,
+      ...(status.stage.executor.type === "human" && status.stage.executor.instructions
+        ? { instructions: status.stage.executor.instructions }
+        : {}),
       outputs: status.stage.outputs.map((output) => {
         const directory = isDirOutput(output);
         return {
@@ -162,13 +188,24 @@ export function startBoard(options: StartBoardOptions): Promise<BoardServer> {
   }
   const token = crypto.randomBytes(32).toString("hex");
   const bound = { port: options.port ?? 4747 };
+  const ctx: HandlerCtx = {
+    dir,
+    token,
+    port: bound.port,
+    running: false,
+    nextEventId: 0,
+    history: [],
+    clients: new Set(),
+  };
   const server = http.createServer((req, res) => {
     try {
-      handle(req, res, { dir, token, port: bound.port });
+      handle(req, res, ctx);
     } catch (err) {
       sendError(res, err);
     }
   });
+  // A stage run can take longer than Node's default request timeout (5 minutes).
+  server.requestTimeout = 0;
 
   const listenPort = options.port ?? 4747;
   return new Promise((resolve, reject) => {
@@ -183,6 +220,7 @@ export function startBoard(options: StartBoardOptions): Promise<BoardServer> {
     server.listen(listenPort, "127.0.0.1", () => {
       const addr = server.address();
       bound.port = typeof addr === "object" && addr ? addr.port : listenPort;
+      ctx.port = bound.port;
       const url = `http://127.0.0.1:${bound.port}/`;
       if (options.open) openBrowser(url);
       resolve({
@@ -200,11 +238,25 @@ export function startBoard(options: StartBoardOptions): Promise<BoardServer> {
   });
 }
 
+interface SseFrame {
+  id: number;
+  event: string;
+  data: string;
+}
+
 interface HandlerCtx {
   dir: string;
   token: string;
   port: number;
+  /** True while runStage/runAll from this server has not finished. */
+  running: boolean;
+  nextEventId: number;
+  /** Events from the current or most recent run, so a late SSE client can catch up. */
+  history: SseFrame[];
+  clients: Set<http.ServerResponse>;
 }
+
+const JSON_LIMIT = 1_000_000;
 
 function handle(req: http.IncomingMessage, res: http.ServerResponse, ctx: HandlerCtx): void {
   if (!hostAllowed(req.headers.host, ctx.port)) {
@@ -215,6 +267,16 @@ function handle(req: http.IncomingMessage, res: http.ServerResponse, ctx: Handle
   const url = new URL(req.url ?? "/", "http://127.0.0.1");
   const pathname = url.pathname.length > 1 ? url.pathname.replace(/\/+$/, "") : url.pathname;
 
+  if (pathname === "/api/events") {
+    if (req.method !== "GET") {
+      req.resume();
+      sendJson(res, 405, { error: "不支持这个方法 / method not allowed" });
+      return;
+    }
+    // EventSource cannot set headers, so this one route takes the token from the query string.
+    serveEvents(req, res, ctx, url);
+    return;
+  }
   if (req.method === "PUT" && pathname === "/api/file") {
     if (!authorized(req, res, ctx)) return;
     void putFlowFile(req, res, ctx, url.searchParams.get("path")).catch((err) => sendError(res, err));
@@ -223,6 +285,16 @@ function handle(req: http.IncomingMessage, res: http.ServerResponse, ctx: Handle
   if (req.method === "POST" && pathname === "/api/upload") {
     if (!authorized(req, res, ctx)) return;
     void uploadFlowFile(req, res, ctx, url).catch((err) => sendError(res, err));
+    return;
+  }
+  if (req.method === "POST" && pathname === "/api/run") {
+    if (!authorized(req, res, ctx)) return;
+    void postRun(req, res, ctx).catch((err) => sendError(res, err));
+    return;
+  }
+  if (req.method === "PUT" && pathname === "/api/inputs") {
+    if (!authorized(req, res, ctx)) return;
+    void putInputs(req, res, ctx).catch((err) => sendError(res, err));
     return;
   }
   if (req.method !== "GET" && req.method !== "HEAD") {
@@ -247,6 +319,10 @@ function handle(req: http.IncomingMessage, res: http.ServerResponse, ctx: Handle
     }
     if (pathname === "/api/file") {
       serveFlowFile(req, res, ctx, url.searchParams.get("path"));
+      return;
+    }
+    if (pathname === "/api/inputs") {
+      sendJson(res, 200, boardInputs(ctx.dir));
       return;
     }
     sendJson(res, 404, { error: "找不到 / not found" });
@@ -285,6 +361,222 @@ function authorized(req: http.IncomingMessage, res: http.ServerResponse, ctx: Ha
   req.resume();
   sendJson(res, 401, { error: "未授权：缺少或错误的令牌 / unauthorized: missing or invalid token" });
   return false;
+}
+
+function boardInputs(dir: string): { inputs: BoardInputField[] } {
+  const loaded = loadFlow(dir);
+  const values = resolveFlowInputs(loaded.dir, loaded.flow);
+  const inputs = Object.entries(loaded.flow.inputs ?? {}).map(([name, def]) => inputField(name, def, values[name]));
+  return { inputs };
+}
+
+function inputField(name: string, def: FlowInput, value: unknown): BoardInputField {
+  const field: BoardInputField = {
+    name,
+    type: def.type,
+    required: def.required === true,
+    value: value === undefined ? null : value,
+  };
+  if (def.description) field.description = def.description;
+  if (def.enum) field.enum = def.enum;
+  if (def.default !== undefined) field.default = def.default;
+  return field;
+}
+
+async function readJsonObject(req: http.IncomingMessage): Promise<Record<string, unknown>> {
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const chunk of req) {
+    const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    size += buf.length;
+    if (size > JSON_LIMIT) {
+      req.destroy();
+      throw new HttpError(400, "请求太大 / request too large");
+    }
+    chunks.push(buf);
+  }
+  const text = Buffer.concat(chunks).toString("utf8");
+  if (!text.trim()) throw new HttpError(400, "请求是空的 / empty request body");
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+  } catch {
+    throw new HttpError(400, "请求不是合法的 JSON / request body is not valid JSON");
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new HttpError(400, "请求必须是 JSON 对象 / request body must be a JSON object");
+  }
+  return value as Record<string, unknown>;
+}
+
+async function putInputs(req: http.IncomingMessage, res: http.ServerResponse, ctx: HandlerCtx): Promise<void> {
+  const body = await readJsonObject(req);
+  const loaded = loadFlow(ctx.dir);
+  const defs = loaded.flow.inputs ?? {};
+  const unknown = Object.keys(body).filter((key) => !defs[key]);
+  if (unknown.length) {
+    sendJson(res, 400, { error: `没有这个输入 / unknown input(s): ${unknown.join(", ")}` });
+    return;
+  }
+  try {
+    // Same checks as a run: required inputs are set, enum values are allowed.
+    loadFlowInputs(loaded.dir, loaded.flow, body);
+  } catch (err) {
+    if (err instanceof MissingInputsError) {
+      sendJson(res, 400, { error: `缺少流程输入 / missing flow inputs: ${err.missing.join(", ")}` });
+      return;
+    }
+    sendJson(res, 400, { error: err instanceof Error ? err.message : String(err) });
+    return;
+  }
+  saveFlowInputs(loaded.dir, body);
+  sendJson(res, 200, { ok: true, inputs: resolveFlowInputs(loaded.dir, loaded.flow) });
+}
+
+function parseRunBody(body: Record<string, unknown>): { stage: string; model?: string } {
+  if (typeof body.stage !== "string" || !body.stage.trim()) {
+    throw new HttpError(400, "缺少阶段 / missing stage");
+  }
+  let model: string | undefined;
+  if (body.model !== undefined && body.model !== null && body.model !== "") {
+    if (typeof body.model !== "string") throw new HttpError(400, "model 必须是字符串 / model must be a string");
+    const trimmed = body.model.trim();
+    if (trimmed) model = trimmed;
+  }
+  return { stage: body.stage.trim(), model };
+}
+
+async function postRun(req: http.IncomingMessage, res: http.ServerResponse, ctx: HandlerCtx): Promise<void> {
+  const body = await readJsonObject(req);
+  const { stage, model } = parseRunBody(body);
+  const loaded = loadFlow(ctx.dir);
+  if (stage !== "all" && !loaded.flow.stages.some((item) => item.id === stage)) {
+    sendJson(res, 404, { error: `没有这个阶段 / unknown stage: ${stage}` });
+    return;
+  }
+  if (ctx.running) {
+    sendJson(res, 409, { error: "已有运行在进行 / a run is already in progress" });
+    return;
+  }
+  ctx.running = true;
+  ctx.history = [];
+  const options = {
+    ...(model ? { model } : {}),
+    onEvent: (event: RunEvent) => publishRunEvent(ctx, event),
+  };
+  try {
+    try {
+      if (stage === "all") await runAll(loaded, options);
+      else await runStage(loaded, stage, options);
+      const payload = { ok: true as const };
+      publish(ctx, "run:end", payload);
+      sendJson(res, 200, payload);
+    } catch (err) {
+      if (err instanceof HumanInputNeededError) {
+        const payload = {
+          ok: true as const,
+          waiting: {
+            stage: err.stage.id,
+            name: err.stage.name,
+            missing: err.missing,
+            ...(err.instructions ? { instructions: err.instructions } : {}),
+          },
+        };
+        publish(ctx, "run:end", payload);
+        sendJson(res, 200, payload);
+        return;
+      }
+      const failure = runFailure(err);
+      publish(ctx, "run:end", { ok: false, error: failure.error });
+      sendJson(res, failure.status, { error: failure.error });
+    }
+  } finally {
+    ctx.running = false;
+  }
+}
+
+function runFailure(err: unknown): { status: number; error: string } {
+  if (err instanceof MissingInputsError) {
+    return { status: 400, error: `缺少流程输入 / missing flow inputs: ${err.missing.join(", ")}` };
+  }
+  if (err instanceof UpstreamNotReadyError) return { status: 400, error: err.message };
+  if (err instanceof HttpError) return { status: err.status, error: err.message };
+  return { status: 500, error: err instanceof Error ? err.message : String(err) };
+}
+
+function publishRunEvent(ctx: HandlerCtx, event: RunEvent): void {
+  const stage = event.stage.id;
+  const name = event.stage.name;
+  switch (event.type) {
+    case "stage:start":
+      publish(ctx, event.type, { stage, name, executor: event.stage.executor.type });
+      return;
+    case "stage:skip":
+      publish(ctx, event.type, { stage, name, reason: event.reason });
+      return;
+    case "stage:log":
+      publish(ctx, event.type, { stage, line: event.line });
+      return;
+    case "stage:done":
+      publish(ctx, event.type, { stage, name, n: event.n });
+      return;
+    case "stage:error":
+      publish(ctx, event.type, { stage, name, error: event.error.message });
+      return;
+  }
+}
+
+function publish(ctx: HandlerCtx, event: string, data: unknown): void {
+  const frame: SseFrame = { id: ++ctx.nextEventId, event, data: JSON.stringify(data) };
+  ctx.history.push(frame);
+  const text = formatFrame(frame);
+  for (const client of [...ctx.clients]) {
+    if (!writeSse(client, text)) ctx.clients.delete(client);
+  }
+}
+
+function formatFrame(frame: SseFrame): string {
+  return `id: ${frame.id}\nevent: ${frame.event}\ndata: ${frame.data}\n\n`;
+}
+
+function writeSse(res: http.ServerResponse, text: string): boolean {
+  if (res.writableEnded || res.destroyed) return false;
+  try {
+    res.write(text);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Token is `?token=`, not the X-Flowgit-Token header. */
+function serveEvents(req: http.IncomingMessage, res: http.ServerResponse, ctx: HandlerCtx, url: URL): void {
+  if (!tokenMatches(url.searchParams.get("token") ?? undefined, ctx.token)) {
+    sendJson(res, 401, { error: "未授权：缺少或错误的令牌 / unauthorized: missing or invalid token" });
+    return;
+  }
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream; charset=utf-8",
+    "Cache-Control": "no-store",
+    Connection: "keep-alive",
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "no-referrer",
+    "Content-Security-Policy": CSP,
+    "X-Accel-Buffering": "no",
+  });
+  res.socket?.setNoDelay(true);
+  const last = Number(headerString(req, "last-event-id") ?? "0");
+  const after = Number.isFinite(last) ? last : 0;
+  writeSse(res, ": connected\n\n");
+  for (const frame of ctx.history) {
+    if (frame.id > after) writeSse(res, formatFrame(frame));
+  }
+  ctx.clients.add(res);
+  const drop = () => {
+    ctx.clients.delete(res);
+  };
+  req.on("close", drop);
+  res.on("error", drop);
 }
 
 /** `application/json` and `*+json`. Extension alone does not count. */

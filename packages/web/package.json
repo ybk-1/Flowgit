@@ -1,7 +1,7 @@
 {
   "name": "@flowgit/web",
   "version": "0.1.0",
-  "description": "本机看板，可查看和修改阶段产物。 / Local board: view and edit stage outputs.",
+  "description": "本机看板：查看、修改、运行阶段，并填写流程输入。 / Local board: view, edit, and run stages, and edit flow inputs.",
   "license": "Apache-2.0",
   "type": "module",
   "main": "./dist/index.js",

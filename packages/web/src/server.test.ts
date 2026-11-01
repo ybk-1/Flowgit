@@ -103,6 +103,7 @@ describe("read-only board", () => {
         runs: number;
         latest: { n: number; time: string; status: string } | null;
         outputs: Array<{ path: string; type: string }>;
+        instructions?: string;
       }>;
     };
     expect(body.name).toBe("短视频制作");
@@ -123,6 +124,7 @@ describe("read-only board", () => {
     expect(body.stages[0].outputs[0]).toMatchObject({ path: "script.md", type: "text/markdown", directory: false, text: true });
     expect(body.stages[1].outputs[0]).toMatchObject({ path: "storyboard.json", directory: false, text: true });
     expect(body.stages[2].outputs[0]).toMatchObject({ path: "assets", directory: true, text: false });
+    expect(body.stages[2].instructions).toContain("assets/");
     expect(body.stages[4].outputs[0]).toMatchObject({ path: "final.mp4", directory: false, text: false });
   });
 
@@ -308,4 +310,292 @@ describe("read-only board", () => {
     expect(page.body).toContain("已手动修改");
     expect(page.body).toContain("Before this stage next runs, the edit is saved as its own version and is not lost.");
   });
+
+  it("rejects run, inputs, and the event stream without a token", async () => {
+    const run = await httpCall(server.port, "POST", "/api/run", JSON.stringify({ stage: "all" }), {
+      "Content-Type": "application/json",
+    });
+    expect(run.status).toBe(401);
+    const inputs = await httpGet(server.port, "/api/inputs");
+    expect(inputs.status).toBe(401);
+    const put = await httpCall(server.port, "PUT", "/api/inputs", JSON.stringify({ language: "en" }), {
+      "Content-Type": "application/json",
+    });
+    expect(put.status).toBe(401);
+    const events = await httpGet(server.port, "/api/events");
+    expect(events.status).toBe(401);
+    const wrong = await httpGet(server.port, "/api/events?token=nope");
+    expect(wrong.status).toBe(401);
+  });
+
+  it("GET /api/inputs lists enum choices and required fields", async () => {
+    const res = await httpGet(server.port, "/api/inputs", authed());
+    expect(res.status).toBe(200);
+    const body = JSON.parse(res.body) as {
+      inputs: Array<{ name: string; type: string; required: boolean; enum?: string[]; value: unknown; description?: string }>;
+    };
+    const topic = body.inputs.find((item) => item.name === "topic");
+    const language = body.inputs.find((item) => item.name === "language");
+    const duration = body.inputs.find((item) => item.name === "duration");
+    expect(topic).toMatchObject({ type: "string", required: true, value: "为什么猫喜欢纸箱" });
+    expect(language).toMatchObject({ required: false, value: "zh" });
+    expect(language?.enum).toEqual(["zh", "en"]);
+    expect(duration).toMatchObject({ type: "number", required: false, value: 30 });
+    expect(topic?.description).toContain("主题");
+  });
+
+  it("PUT /api/inputs with language=fr returns 400 and does not save", async () => {
+    const local = path.join(flowDir, "flowgit.local.json");
+    const before = fs.readFileSync(local, "utf8");
+    const res = await httpCall(server.port, "PUT", "/api/inputs", JSON.stringify({ language: "fr" }), authed({ "Content-Type": "application/json" }));
+    expect(res.status).toBe(400);
+    expect(res.body).toMatch(/zh/);
+    expect(res.body).toMatch(/en/);
+    expect(fs.readFileSync(local, "utf8")).toBe(before);
+    const unknown = await httpCall(server.port, "PUT", "/api/inputs", JSON.stringify({ nope: "x" }), authed({ "Content-Type": "application/json" }));
+    expect(unknown.status).toBe(400);
+    expect(fs.readFileSync(local, "utf8")).toBe(before);
+  });
+
+  it("offers run controls, a model field, and the human upload", async () => {
+    const page = await httpGet(server.port, "/");
+    const app = await httpGet(server.port, "/app.js");
+    expect(page.body).toContain("全部运行 Run all");
+    expect(page.body).toContain("保存输入 Save inputs");
+    expect(app.body).toContain("运行这一步 Run");
+    expect(app.body).toContain("全部运行 Run all");
+    expect(app.body).toContain('stage.state === "waiting-upstream"');
+    expect(app.body).toContain("stage.instructions");
+    expect(app.body).toContain("上传文件 / Upload a file");
+    expect(app.body).toContain("provider/model");
+    expect(app.body).toContain("必填 required");
+    expect(app.body).toContain("/api/events?token=");
+  });
+});
+
+interface SseEvent {
+  event: string;
+  data: string;
+}
+
+function openEvents(port: number, token: string): Promise<{
+  events: SseEvent[];
+  waitFor(type: string, timeoutMs?: number): Promise<SseEvent>;
+  close(): void;
+}> {
+  return new Promise((resolve, reject) => {
+    const req = http.get(
+      {
+        hostname: "127.0.0.1",
+        port,
+        path: `/api/events?token=${encodeURIComponent(token)}`,
+        headers: { Accept: "text/event-stream" },
+      },
+      (res) => {
+        if ((res.statusCode ?? 0) !== 200) {
+          res.resume();
+          reject(new Error(`event stream status ${res.statusCode}`));
+          return;
+        }
+        const events: SseEvent[] = [];
+        const waiters: Array<{ type: string; after: number; resolve: (event: SseEvent) => void; timer: NodeJS.Timeout }> = [];
+        let buf = "";
+        const push = (event: SseEvent) => {
+          events.push(event);
+          const index = events.length - 1;
+          for (const waiter of [...waiters]) {
+            if (waiter.type !== event.event || index < waiter.after) continue;
+            clearTimeout(waiter.timer);
+            waiters.splice(waiters.indexOf(waiter), 1);
+            waiter.resolve(event);
+          }
+        };
+        res.setEncoding("utf8");
+        res.on("data", (chunk: string) => {
+          buf += chunk.replace(/\r/g, "");
+          let split = buf.indexOf("\n\n");
+          while (split >= 0) {
+            const raw = buf.slice(0, split);
+            buf = buf.slice(split + 2);
+            split = buf.indexOf("\n\n");
+            if (!raw || raw.startsWith(":")) continue;
+            let event = "message";
+            const data: string[] = [];
+            for (const line of raw.split("\n")) {
+              if (line.startsWith("event:")) event = line.slice(6).trim();
+              else if (line.startsWith("data:")) data.push(line.slice(5).replace(/^ /, ""));
+            }
+            if (data.length) push({ event, data: data.join("\n") });
+          }
+        });
+        resolve({
+          events,
+          waitFor(type: string, timeoutMs = 20_000, after = 0) {
+            const existing = events.find((event, index) => index >= after && event.event === type);
+            if (existing) return Promise.resolve(existing);
+            return new Promise((resWait, rejWait) => {
+              const timer = setTimeout(
+                () => rejWait(new Error(`timed out waiting for ${type}; saw ${events.map((event) => event.event).join(",") || "(nothing)"}`)),
+                timeoutMs,
+              );
+              waiters.push({ type, after, resolve: resWait, timer });
+            });
+          },
+          close() {
+            req.destroy();
+          },
+        });
+      },
+    );
+    req.on("error", reject);
+  });
+}
+
+describe("run and inputs on the board", () => {
+  const previousMock = process.env.FLOWGIT_LLM_MOCK_DIR;
+
+  afterAll(() => {
+    if (previousMock === undefined) delete process.env.FLOWGIT_LLM_MOCK_DIR;
+    else process.env.FLOWGIT_LLM_MOCK_DIR = previousMock;
+  });
+
+  it("POST /api/run all streams stage:done and run:end, then stops at assets", async () => {
+    const work = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-web-run-"));
+    const flowDir = path.join(work, "video");
+    const init = flowgit(["init", flowDir]);
+    expect(init.status, init.stderr).toBe(0);
+    const board = await startBoard({ dir: flowDir, port: 0, open: false });
+    process.env.FLOWGIT_LLM_MOCK_DIR = templateReplies;
+    const authed = (extra: Record<string, string> = {}) => ({ "X-Flowgit-Token": board.token, ...extra });
+    const jsonHeaders = authed({ "Content-Type": "application/json" });
+    try {
+      const missing = await httpCall(board.port, "PUT", "/api/inputs", JSON.stringify({ language: "en" }), jsonHeaders);
+      expect(missing.status).toBe(400);
+      const saved = await httpCall(
+        board.port,
+        "PUT",
+        "/api/inputs",
+        JSON.stringify({ topic: "为什么猫喜欢纸箱", language: "en" }),
+        jsonHeaders,
+      );
+      expect(saved.status).toBe(200);
+      const stored = JSON.parse(fs.readFileSync(path.join(flowDir, "flowgit.local.json"), "utf8")) as {
+        inputs: Record<string, unknown>;
+      };
+      expect(stored.inputs).toMatchObject({ topic: "为什么猫喜欢纸箱", language: "en" });
+      const listed = JSON.parse((await httpGet(board.port, "/api/inputs", authed())).body) as {
+        inputs: Array<{ name: string; value: unknown; enum?: string[] }>;
+      };
+      expect(listed.inputs.find((item) => item.name === "language")).toMatchObject({ value: "en", enum: ["zh", "en"] });
+
+      const live = await openEvents(board.port, board.token);
+      const post = await httpCall(board.port, "POST", "/api/run", JSON.stringify({ stage: "all" }), jsonHeaders);
+      expect(post.status, post.body).toBe(200);
+      const end = await live.waitFor("run:end");
+      const done = live.events.filter((event) => event.event === "stage:done").map((event) => JSON.parse(event.data).stage);
+      expect(done).toEqual(["script", "storyboard"]);
+      expect(live.events.at(-1)?.event).toBe("run:end");
+      const ended = JSON.parse(end.data) as { ok: boolean; waiting?: { stage: string; missing: string[]; instructions?: string } };
+      expect(ended.ok).toBe(true);
+      expect(ended.waiting?.stage).toBe("assets");
+      expect(ended.waiting?.missing).toContain("assets");
+      expect(ended.waiting?.instructions).toContain("assets/");
+      const flow = JSON.parse((await httpGet(board.port, "/api/flow", authed())).body) as {
+        stages: Array<{ id: string; state: string; instructions?: string }>;
+      };
+      expect(flow.stages.map((stage) => stage.state)).toEqual(["ok", "ok", "never-run", "waiting-upstream", "waiting-upstream"]);
+      expect(flow.stages.find((stage) => stage.id === "assets")?.instructions).toContain("assets/");
+
+      const late = await openEvents(board.port, board.token);
+      await late.waitFor("run:end");
+      expect(late.events.filter((event) => event.event === "stage:done").map((event) => JSON.parse(event.data).stage)).toEqual([
+        "script",
+        "storyboard",
+      ]);
+      const cursor = live.events.length;
+      const again = await httpCall(
+        board.port,
+        "POST",
+        "/api/run",
+        JSON.stringify({ stage: "script", model: "ollama/board-model" }),
+        jsonHeaders,
+      );
+      expect(again.status, again.body).toBe(200);
+      await live.waitFor("run:end", 20_000, cursor);
+      const lines = live.events
+        .slice(cursor)
+        .filter((event) => event.event === "stage:log")
+        .map((event) => JSON.parse(event.data).line as string);
+      expect(lines.some((line) => line.includes("ollama/board-model"))).toBe(true);
+      live.close();
+      late.close();
+    } finally {
+      await board.close();
+      fs.rmSync(work, { recursive: true, force: true });
+    }
+  }, 60_000);
+
+  it("returns 409 when a second run starts while one is in progress", async () => {
+    const work = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-web-busy-"));
+    fs.writeFileSync(
+      path.join(work, "flow.json"),
+      JSON.stringify(
+        {
+          format: "flowgit",
+          version: "0.1",
+          name: "slow",
+          stages: [
+            {
+              id: "slow",
+              name: "慢",
+              executor: { type: "script", run: "node slow.cjs" },
+              outputs: [{ type: "text/plain", path: "out.txt" }],
+            },
+          ],
+        },
+        null,
+        2,
+      ),
+    );
+    fs.writeFileSync(
+      path.join(work, "slow.cjs"),
+      [
+        'const fs = require("node:fs");',
+        'fs.writeFileSync("started", "1");',
+        "const deadline = Date.now() + 15000;",
+        'while (!fs.existsSync("go")) {',
+        "  if (Date.now() > deadline) process.exit(2);",
+        "  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 30);",
+        "}",
+        'fs.writeFileSync("out.txt", "ok\\n");',
+        "",
+      ].join("\n"),
+    );
+    const board = await startBoard({ dir: work, port: 0, open: false });
+    const headers = { "X-Flowgit-Token": board.token, "Content-Type": "application/json" };
+    const body = JSON.stringify({ stage: "slow" });
+    const first = httpCall(board.port, "POST", "/api/run", body, headers);
+    try {
+      const started = path.join(work, "started");
+      const deadline = Date.now() + 10_000;
+      while (!fs.existsSync(started)) {
+        if (Date.now() > deadline) throw new Error("slow stage did not start");
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      const second = await httpCall(board.port, "POST", "/api/run", body, headers);
+      expect(second.status).toBe(409);
+      expect(second.body).toMatch(/已有运行在进行/);
+      fs.writeFileSync(path.join(work, "go"), "1");
+      const done = await first;
+      expect(done.status, done.body).toBe(200);
+      expect(fs.readFileSync(path.join(work, "out.txt"), "utf8")).toBe("ok\n");
+      const third = await httpCall(board.port, "POST", "/api/run", body, headers);
+      expect(third.status, third.body).toBe(200);
+    } finally {
+      fs.writeFileSync(path.join(work, "go"), "1");
+      await first.catch(() => undefined);
+      await board.close();
+      fs.rmSync(work, { recursive: true, force: true });
+    }
+  }, 30_000);
 });

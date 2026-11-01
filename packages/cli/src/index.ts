@@ -408,7 +408,7 @@ program
 
 program
   .command("board")
-  .description("在浏览器打开本地看板，可查看和修改产物 / open a local board in the browser to view and edit outputs")
+  .description("在浏览器打开本地看板，可查看、修改、运行和填写输入 / open a local board in the browser to view, edit, run, and fill in inputs")
   .option("--port <port>", "端口，只绑定 127.0.0.1 / port, bound to 127.0.0.1 only", "4747")
   .option("--no-open", "不打开浏览器 / do not open a browser")
   .action(async (opts: { port: string; open: boolean }) => {
@@ -419,7 +419,7 @@ program
       }
       const board = await startBoard({ dir: dirOf(), port, open: false });
       console.log(`${c.green("✓")} 看板 / board: ${board.url}`);
-      console.log(c.dim("绑定 127.0.0.1。可以修改产物。按 Ctrl+C 停止 / bound to 127.0.0.1. Outputs can be edited. Press Ctrl+C to stop"));
+      console.log(c.dim("绑定 127.0.0.1。可以修改产物，也可以运行和填写输入。按 Ctrl+C 停止 / bound to 127.0.0.1. Outputs can be edited; you can also run stages and edit inputs. Press Ctrl+C to stop"));
       if (opts.open) openBrowser(board.url);
     } catch (err) {
       fail(err);

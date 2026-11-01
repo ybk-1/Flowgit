@@ -15,14 +15,23 @@ const EDIT_NOTE =
 const boardEl = document.getElementById("board");
 const bannerEl = document.getElementById("banner");
 const inputsEl = document.getElementById("inputs");
+const inputsForm = document.getElementById("inputs-form");
+const inputsStatus = document.getElementById("inputs-status");
+const inputsSave = document.getElementById("inputs-save");
 const noticeEl = document.getElementById("notice");
 const panelEl = document.getElementById("panel");
 const panelTitle = document.getElementById("panel-title");
 const panelBody = document.getElementById("panel-body");
+const logEl = document.getElementById("log");
+const runAllButton = document.getElementById("run-all");
 
 let lastJson = "";
+let lastInputValues = "";
 let refreshing = false;
 let currentBlob = null;
+let runBusy = false;
+let runGen = 0;
+const modelDrafts = new Map();
 
 function headers() {
   return { "X-Flowgit-Token": token };
@@ -40,6 +49,12 @@ function el(tag, className, text) {
   return node;
 }
 
+function captureModelDrafts() {
+  for (const input of document.querySelectorAll("input[data-model-for]")) {
+    modelDrafts.set(input.getAttribute("data-model-for"), input.value);
+  }
+}
+
 function render(data) {
   document.getElementById("flow-name").textContent = data.name || "看板 / Board";
   document.title = `${data.name || "Flowgit"} · 看板 / Board`;
@@ -50,25 +65,23 @@ function render(data) {
     bannerEl.hidden = false;
     bannerEl.append(
       el("p", null, `还没填流程输入 / flow inputs not set: ${missing.join(", ")}`),
-      el("p", "banner-hint", `flowgit inputs set ${missing[0]}=...`),
+      el("p", "banner-hint", "在下面的表单里填写，或 / or: flowgit inputs set " + missing[0] + "=..."),
     );
   } else {
     bannerEl.hidden = true;
   }
 
-  inputsEl.replaceChildren();
-  const inputs = data.inputs && typeof data.inputs === "object" ? data.inputs : {};
-  for (const [key, value] of Object.entries(inputs)) {
-    const unset = value === undefined || value === "";
-    const chip = el("span", missing.includes(key) ? "chip missing" : "chip");
-    chip.textContent = unset ? `${key}=（未填 unset）` : `${key}=${String(value)}`;
-    inputsEl.append(chip);
-  }
-
+  captureModelDrafts();
   const scroll = boardEl.scrollLeft;
   boardEl.replaceChildren();
   for (const stage of data.stages ?? []) boardEl.append(renderCard(stage));
   boardEl.scrollLeft = scroll;
+  syncRunButtons();
+}
+
+function humanDir(stage) {
+  const dirs = (stage.outputs ?? []).filter((output) => output.directory);
+  return dirs.length === 1 ? dirs[0] : null;
 }
 
 function renderCard(stage) {
@@ -92,6 +105,24 @@ function renderCard(stage) {
   }
   card.append(version, el("p", "runs", `${stage.runs ?? 0} 个版本 / ${stage.runs ?? 0} run(s)`));
 
+  // A human stage whose upstream is ready is waiting on the person: show what to do, and the upload button.
+  if (stage.executor === "human" && stage.state !== "waiting-upstream") {
+    if (stage.instructions) card.append(el("p", "instructions", stage.instructions));
+    const dir = humanDir(stage);
+    if (dir) card.append(uploadControl(stage, dir.path));
+  }
+
+  if (stage.executor === "llm") card.append(modelField(stage.id));
+
+  const run = document.createElement("button");
+  run.type = "button";
+  run.className = "run";
+  run.textContent = "运行这一步 Run";
+  run.dataset.waiting = stage.state === "waiting-upstream" ? "1" : "0";
+  if (stage.state === "waiting-upstream") run.title = "等上游完成 / waiting for upstream";
+  run.addEventListener("click", () => startRun(stage.id, modelForStage(stage.id)));
+  card.append(run);
+
   const outputs = el("div", "outputs");
   outputs.append(el("p", "outputs-label", "产物 / outputs"));
   for (const output of stage.outputs ?? []) {
@@ -103,6 +134,97 @@ function renderCard(stage) {
   }
   card.append(outputs);
   return card;
+}
+
+function modelField(stageId) {
+  const label = el("label", "model-field");
+  label.append(el("span", null, "模型 model（可选 optional）"));
+  const input = document.createElement("input");
+  input.type = "text";
+  input.placeholder = "provider/model";
+  input.autocomplete = "off";
+  input.spellcheck = false;
+  input.setAttribute("data-model-for", stageId);
+  input.value = modelDrafts.get(stageId) || "";
+  input.addEventListener("input", () => modelDrafts.set(stageId, input.value));
+  label.append(input);
+  return label;
+}
+
+function modelForStage(stageId) {
+  for (const input of document.querySelectorAll("input[data-model-for]")) {
+    if (input.getAttribute("data-model-for") === stageId) {
+      const value = input.value.trim();
+      return value || undefined;
+    }
+  }
+  return undefined;
+}
+
+function modelForAll() {
+  const values = [];
+  for (const input of document.querySelectorAll("input[data-model-for]")) {
+    const value = input.value.trim();
+    if (value) values.push(value);
+  }
+  const unique = [...new Set(values)];
+  if (unique.length > 1) {
+    return {
+      error: "各阶段填的模型不一样。全部运行请留空，或填成同一个。 / Model fields differ. For run all, leave them blank or use the same one.",
+    };
+  }
+  return { model: unique[0] };
+}
+
+function syncRunButtons() {
+  if (runAllButton) runAllButton.disabled = runBusy;
+  for (const button of document.querySelectorAll("button.run")) {
+    button.disabled = runBusy || button.dataset.waiting === "1";
+  }
+}
+
+function appendLog(line) {
+  logEl.hidden = false;
+  logEl.textContent = logEl.textContent ? `${logEl.textContent}\n${line}` : line;
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+function clearLog() {
+  logEl.textContent = "";
+  logEl.hidden = false;
+}
+
+async function startRun(stage, model) {
+  if (runBusy) {
+    appendLog("已有运行在进行 / a run is already in progress");
+    return;
+  }
+  const gen = ++runGen;
+  runBusy = true;
+  syncRunButtons();
+  clearLog();
+  appendLog(stage === "all" ? "全部运行 Run all" : `运行 / run ${stage}${model ? ` · ${model}` : ""}`);
+  try {
+    const body = { stage };
+    if (model) body.model = model;
+    const res = await fetch("/api/run", {
+      method: "POST",
+      headers: { ...headers(), "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      cache: "no-store",
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.status === 409) appendLog(data.error || "已有运行在进行 / a run is already in progress");
+    else if (!res.ok) appendLog(data.error || `运行失败 / run failed (${res.status})`);
+  } catch {
+    appendLog("运行失败 / run failed");
+  } finally {
+    if (gen === runGen) {
+      runBusy = false;
+      syncRunButtons();
+    }
+    await refresh();
+  }
 }
 
 function closePanel() {
@@ -224,6 +346,9 @@ async function saveText(rel, text, button, status) {
 
 function renderFileList(dir, files, stage) {
   panelBody.replaceChildren();
+  if (stage && stage.executor === "human" && stage.instructions) {
+    panelBody.append(el("p", "instructions", stage.instructions));
+  }
   if (stage && stage.executor === "human") panelBody.append(uploadControl(stage, dir));
   if (!files.length) {
     panelBody.append(el("p", null, "空文件夹 / empty folder"));
@@ -249,20 +374,19 @@ function uploadControl(stage, dir) {
   label.append(el("span", null, "上传文件 / Upload a file"));
   const input = document.createElement("input");
   input.type = "file";
+  const status = el("p", "upload-status");
+  status.hidden = true;
   input.addEventListener("change", () => {
     const file = input.files && input.files[0];
     input.value = "";
-    if (file) void uploadInto(stage, dir, file);
+    if (file) void uploadInto(stage, dir, file, status);
   });
   label.append(input);
-  const status = el("p", "upload-status");
-  status.hidden = true;
   form.append(label, status);
   return form;
 }
 
-async function uploadInto(stage, dir, file) {
-  const status = panelBody.querySelector(".upload-status");
+async function uploadInto(stage, dir, file, status) {
   if (status) {
     status.hidden = false;
     status.className = "upload-status";
@@ -285,6 +409,181 @@ async function uploadInto(stage, dir, file) {
   }
 }
 
+function editingInputs() {
+  const active = document.activeElement;
+  return Boolean(active && inputsEl.contains(active) && active.matches("input, textarea, select"));
+}
+
+async function loadInputs() {
+  if (editingInputs()) return false;
+  let res;
+  try {
+    res = await fetch("/api/inputs", { headers: headers(), cache: "no-store" });
+  } catch {
+    return false;
+  }
+  if (!res.ok) return false;
+  const data = await res.json();
+  renderInputs(Array.isArray(data.inputs) ? data.inputs : []);
+  return true;
+}
+
+function renderInputs(fields) {
+  inputsEl.replaceChildren();
+  if (!fields.length) {
+    inputsEl.append(el("p", "field-help", "这个流程没有输入 / This flow has no inputs."));
+    inputsSave.hidden = true;
+    return;
+  }
+  inputsSave.hidden = false;
+  inputsSave.disabled = false;
+  for (const field of fields) inputsEl.append(renderInput(field));
+}
+
+function renderInput(field) {
+  const wrap = el("label", "field");
+  const name = el("span", "field-name", field.name || "");
+  if (field.required) name.append(el("span", "req", "必填 required"));
+  wrap.append(name, controlFor(field));
+  if (field.description) wrap.append(el("span", "field-help", field.description));
+  return wrap;
+}
+
+function controlFor(field) {
+  const value = field.value == null ? "" : field.value;
+  if (Array.isArray(field.enum) && field.enum.length) {
+    const select = document.createElement("select");
+    select.dataset.input = field.name;
+    select.dataset.type = field.type || "string";
+    const options = field.enum.slice();
+    if (value !== "" && !options.some((item) => String(item) === String(value))) options.unshift(value);
+    for (const option of options) {
+      const node = document.createElement("option");
+      node.value = String(option);
+      node.textContent = String(option);
+      if (String(option) === String(value)) node.selected = true;
+      select.append(node);
+    }
+    return select;
+  }
+  if (field.type === "boolean") {
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.dataset.input = field.name;
+    input.dataset.type = "boolean";
+    input.checked = value === true || value === "true";
+    return input;
+  }
+  if (field.type === "text") {
+    const area = document.createElement("textarea");
+    area.dataset.input = field.name;
+    area.dataset.type = "text";
+    area.value = value === "" ? "" : String(value);
+    area.rows = 3;
+    return area;
+  }
+  const input = document.createElement("input");
+  input.dataset.input = field.name;
+  input.dataset.type = field.type || "string";
+  if (field.type === "number") {
+    input.type = "number";
+    input.step = "any";
+    input.value = value === "" ? "" : String(value);
+  } else {
+    input.type = "text";
+    input.value = value === "" ? "" : String(value);
+  }
+  if (field.required) input.required = true;
+  input.autocomplete = "off";
+  return input;
+}
+
+async function saveInputs(event) {
+  event.preventDefault();
+  const payload = {};
+  for (const control of inputsEl.querySelectorAll("[data-input]")) {
+    const name = control.getAttribute("data-input");
+    const type = control.getAttribute("data-type");
+    if (control.type === "checkbox") {
+      payload[name] = control.checked;
+      continue;
+    }
+    if (type === "number") {
+      if (control.value === "") continue;
+      const number = Number(control.value);
+      if (!Number.isFinite(number)) {
+        inputsStatus.hidden = false;
+        inputsStatus.className = "inputs-status error";
+        inputsStatus.textContent = `输入 ${name} 必须是数字 / input "${name}" must be a number`;
+        return;
+      }
+      payload[name] = number;
+      continue;
+    }
+    payload[name] = control.value;
+  }
+  inputsSave.disabled = true;
+  inputsStatus.hidden = true;
+  try {
+    const res = await fetch("/api/inputs", {
+      method: "PUT",
+      headers: { ...headers(), "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      cache: "no-store",
+    });
+    const data = await res.json().catch(() => ({}));
+    inputsStatus.hidden = false;
+    if (!res.ok) {
+      inputsStatus.className = "inputs-status error";
+      inputsStatus.textContent = data.error || `没有保存 / not saved (${res.status})`;
+      return;
+    }
+    inputsStatus.className = "inputs-status ok";
+    inputsStatus.textContent = "已保存 / saved";
+    lastInputValues = "";
+    await refresh();
+  } catch {
+    inputsStatus.hidden = false;
+    inputsStatus.className = "inputs-status error";
+    inputsStatus.textContent = "没有保存 / not saved";
+  } finally {
+    inputsSave.disabled = false;
+  }
+}
+
+function onStreamEvent(type, data) {
+  if (type === "stage:start") appendLog(`▶ ${data.name || data.stage} (${data.stage})`);
+  else if (type === "stage:log") appendLog(`    ${data.line ?? ""}`);
+  else if (type === "stage:done") appendLog(`✓ ${data.name || data.stage} → v${data.n}`);
+  else if (type === "stage:skip") appendLog(`· ${data.name || data.stage} 跳过 / skipped: ${data.reason ?? ""}`);
+  else if (type === "stage:error") appendLog(`✗ ${data.name || data.stage}: ${data.error ?? ""}`);
+  else if (type === "run:end") {
+    if (data.waiting) {
+      const missing = Array.isArray(data.waiting.missing) ? data.waiting.missing.join(", ") : "";
+      appendLog(`「${data.waiting.name || data.waiting.stage}」在等你 / waiting for you: ${missing}`);
+      if (data.waiting.instructions) appendLog(data.waiting.instructions);
+    } else if (data.ok) appendLog("运行结束 / run finished");
+    else appendLog(data.error || "运行失败 / run failed");
+    void refresh();
+  }
+}
+
+function connectEvents() {
+  if (!token || typeof EventSource === "undefined") return;
+  const source = new EventSource(`/api/events?token=${encodeURIComponent(token)}`);
+  for (const type of ["stage:start", "stage:log", "stage:done", "stage:error", "stage:skip", "run:end"]) {
+    source.addEventListener(type, (event) => {
+      let data = {};
+      try {
+        data = JSON.parse(event.data);
+      } catch {
+        data = {};
+      }
+      onStreamEvent(type, data);
+    });
+  }
+}
+
 async function refresh() {
   if (refreshing) return;
   refreshing = true;
@@ -299,7 +598,13 @@ async function refresh() {
     noticeEl.hidden = true;
     if (text === lastJson) return;
     lastJson = text;
-    render(JSON.parse(text));
+    const data = JSON.parse(text);
+    render(data);
+    const signature = JSON.stringify(data.inputs ?? {});
+    if (signature !== lastInputValues) {
+      const loaded = await loadInputs();
+      if (loaded) lastInputValues = signature;
+    }
   } catch {
     noticeEl.hidden = false;
     noticeEl.textContent = "无法刷新看板 / could not refresh the board";
@@ -312,6 +617,18 @@ document.getElementById("panel-close").addEventListener("click", closePanel);
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") closePanel();
 });
+runAllButton.addEventListener("click", () => {
+  const picked = modelForAll();
+  if (picked.error) {
+    appendLog(picked.error);
+    return;
+  }
+  void startRun("all", picked.model);
+});
+inputsForm.addEventListener("submit", (event) => {
+  void saveInputs(event);
+});
 
+connectEvents();
 refresh();
 setInterval(refresh, 3000);

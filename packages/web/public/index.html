@@ -12,13 +12,24 @@
     <div class="brand-block">
       <p class="brand">Flowgit</p>
       <h1 id="flow-name">看板 / Board</h1>
-      <p class="tagline">可修改 · 本机 / editable · local</p>
+      <p class="tagline">可运行、可修改 · 本机 / run and edit · local</p>
     </div>
-    <p class="hint" id="refresh-hint">每 3 秒刷新 / refreshes every 3s</p>
+    <div class="top-side">
+      <p class="hint" id="refresh-hint">每 3 秒刷新 / refreshes every 3s</p>
+      <button id="run-all" type="button">全部运行 Run all</button>
+    </div>
   </header>
   <div id="banner" class="banner" hidden></div>
-  <div id="inputs" class="inputs"></div>
+  <section class="inputs-panel" aria-labelledby="inputs-heading">
+    <h2 id="inputs-heading">流程输入 / Flow inputs</h2>
+    <form id="inputs-form">
+      <div id="inputs" class="input-fields"></div>
+      <p id="inputs-status" class="inputs-status" hidden></p>
+      <button id="inputs-save" type="submit" disabled>保存输入 Save inputs</button>
+    </form>
+  </section>
   <p id="notice" class="notice" hidden></p>
+  <pre id="log" class="log" hidden></pre>
   <main id="board" class="board" aria-live="polite"></main>
   <aside id="panel" class="panel" hidden>
     <div class="panel-bar">
