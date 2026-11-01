@@ -307,7 +307,9 @@ program
               ? `${p.provider && p.provider !== "anthropic" ? `${p.provider}/` : ""}${p.model ?? ""}${p.durationMs ? ` · ${Math.round(Number(p.durationMs) / 1000)}s` : ""}`
               : r.executor === "script"
                 ? String(p.run ?? "")
-                : String(p.provided ?? "");
+                : r.executor === "agent"
+                  ? `${p.agent ?? ""}${p.durationMs ? ` · ${Math.round(Number(p.durationMs) / 1000)}s` : ""}`
+                  : String(p.provided ?? "");
         rows.push([`v${r.n}`, r.status === "ok" ? c.green("ok") : c.red("error"), r.finishedAt.replace("T", " ").slice(0, 19), r.executor, detail]);
       }
       console.log(table(rows));

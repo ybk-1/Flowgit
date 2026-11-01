@@ -109,6 +109,7 @@ Stages must not form a cycle. Run order follows `inputs`; ties keep the order in
 | `human` | 能 / yes | `instructions?` | 由人完成。运行时检查产物是否到位；可用 `--from <path>` 把文件复制进来。缺产物时阶段停下，显示 `instructions` | Done by a person. A run checks the outputs are in place; `--from <path>` copies files in. If outputs are missing the stage stops and shows `instructions` |
 | `llm` | 能 / yes | `prompt`, `system?`, `model?`, `effort?`, `maxTokens?` | 读取 `prompt` 指向的 Markdown，替换 `{{inputs.*}}`，把上游产物附在后面，调用模型，把回复写进唯一的产物。产物是 JSON 时自动从回复里提取 JSON。`model` 可写 `<provider>/<model>`（见下面的"模型供应商"），不写前缀就是 Claude。默认模型 `claude-opus-5-5`，优先级：`--model` > `model` > `FLOWGIT_MODEL` > 默认 | Reads the Markdown file named by `prompt`, fills in `{{inputs.*}}`, appends the upstream artifacts, calls the model and writes the reply to the stage's single output. JSON outputs have the JSON extracted from the reply. `model` may be `<provider>/<model>` (see "Model providers" below); no prefix means Claude. Default model `claude-opus-5-5`; precedence: `--model` > `model` > `FLOWGIT_MODEL` > default |
 | `script` | 能 / yes | `run`, `cwd?`, `env?` | 在流程目录执行一条 shell 命令。命令自己负责写出产物 | Runs a shell command in the flow directory. The command writes the outputs itself |
+| `agent` | 能 / yes | `agent`, `prompt`, `command?`, `args?` | 在流程目录里以无界面模式启动一个 agent CLI（Claude Code、Codex、Cursor、Gemini，或自定义命令），把渲染好的提示词交给它，由它自己写出产物。见下面的"agent 执行器" | Starts an agent CLI headless in the flow directory (Claude Code, Codex, Cursor, Gemini, or a custom command), hands it the rendered prompt, and lets it write the outputs itself. See "The agent executor" below |
 | `workflow` | 预留 / reserved | `engine`, `file`, `params?` | 运行外部工作流文件（ComfyUI、n8n 等） | Runs an external workflow file (ComfyUI, n8n, ...) |
 | `service` | 预留 / reserved | `url`, `method?` | 调用 HTTP 服务 | Calls an HTTP service |
 | `mcp` | 预留 / reserved | `server`, `tool`, `args?` | 调用 MCP 服务器上的工具。以后整个流程也会通过这一层暴露给别人调用 | Calls a tool on an MCP server. Later, whole flows will be exposed to others through this layer |
@@ -178,7 +179,7 @@ Every preset's endpoint comes from the vendor's official docs, linked in `packag
 
 Note: Zhipu's GLM Coding Plan quota only applies inside the tools Zhipu lists ([official docs](https://docs.bigmodel.cn/cn/coding-plan/overview)); Flowgit's `glm` provider uses regular API balance and a regular API key.
 
-script 阶段运行时可以读到这些环境变量 / Environment variables for script stages:
+script 和 agent 阶段运行时可以读到这些环境变量 / Environment variables for script and agent stages:
 
 | 变量 / Variable | 内容 | Content |
 | --- | --- | --- |
@@ -187,6 +188,58 @@ script 阶段运行时可以读到这些环境变量 / Environment variables for
 | `FLOWGIT_INPUTS` | JSON：上游产物 `[{stage, path, type}]` | JSON: upstream artifacts `[{stage, path, type}]` |
 | `FLOWGIT_OUTPUTS` | JSON：本阶段应写出的产物 `[{path, type}]` | JSON: the outputs this stage must write `[{path, type}]` |
 | `FLOWGIT_FLOW_INPUTS` | JSON：流程输入的值 | JSON: the flow input values |
+| `FLOWGIT_PROMPT_FILE` | 只有 agent 阶段：渲染好的提示词文件路径 | agent stages only: path of the rendered prompt file |
+
+### agent 执行器 / The agent executor
+
+```json
+{ "type": "agent", "agent": "claude-code", "prompt": "prompts/research.md" }
+{ "type": "agent", "agent": "custom", "prompt": "prompts/research.md", "command": "my-agent --prompt-file {{promptFile}}" }
+```
+
+运行时 Flowgit 会：
+
+1. 读取 `prompt` 指向的文件，替换 `{{inputs.*}}`，再在后面附上上游产物的路径（只读）、本阶段要写出的文件，以及流程输入的值。
+2. 在流程目录里启动 agent，把提示词从 stdin 交给它。`custom` 的 `command` 里 `{{promptFile}}` 会换成提示词文件的路径；`FLOWGIT_PROMPT_FILE` 也指向这个文件。
+3. agent 退出码不是 0 就记为失败。之后照常检查产物是否写出、存成一个版本。
+4. agent 如果改了产物以外的文件（不算 `runs/`、`node_modules/`、`.git/`），会在日志里提醒，并记录在 `run.json` 的 `params.changedOutside`。
+
+When it runs, Flowgit:
+
+1. Reads the file named by `prompt`, fills in `{{inputs.*}}`, and appends the upstream artifact paths (read only), the files this stage must write, and the flow input values.
+2. Starts the agent in the flow directory with the prompt on stdin. In a `custom` `command`, `{{promptFile}}` becomes the path of the prompt file; `FLOWGIT_PROMPT_FILE` points to it too.
+3. Treats a non-zero exit code as a failure, then checks the outputs and records a version as usual.
+4. Notes in the log, and in `params.changedOutside` in `run.json`, any file the agent changed besides its outputs (ignoring `runs/`, `node_modules/` and `.git/`).
+
+内置适配 / Built-in adapters（参数都照官方文档写，链接在 `packages/core/src/executors/agent.ts` / every flag is taken from the official docs, linked in `packages/core/src/executors/agent.ts`）：
+
+| `agent` | 实际命令 / Command | 权限 / Permission | 提示词 / Prompt |
+| --- | --- | --- | --- |
+| `claude-code` | `claude -p --permission-mode acceptEdits "..."` | 可以在当前目录建立和修改文件；无界面模式下其他需要批准的操作会被拒绝 / creates and edits files in the working directory; other calls that need approval are denied in `-p` runs | stdin |
+| `codex` | `codex exec --sandbox workspace-write --skip-git-repo-check -` | 只能在工作区内写入（`exec` 默认只读）/ writes inside the workspace only (`exec` is read-only by default) | stdin（`-`） |
+| `cursor` | `agent -p --output-format text "Read runs/.agent/<stage>.prompt.md ..."` | 默认只提出修改、不写文件，见下面 / proposes changes only by default, see below | 提示词文件 / prompt file |
+| `gemini` | `gemini --approval-mode auto_edit -p "..."` | 自动批准编辑；其他需要批准的工具在无界面模式下被拒绝 / auto-approves edits; other tools that need approval are denied headless | stdin |
+| `custom` | `command` + `args` | 由你的命令决定 / up to your command | stdin 和 / and `{{promptFile}}` |
+
+渲染好的提示词在运行期间放在 `runs/.agent/<stage>.prompt.md`，结束后删除，并完整记录在 `run.json` 的 `params.prompt` 里。
+
+The rendered prompt lives at `runs/.agent/<stage>.prompt.md` while the agent runs, is deleted afterwards, and is kept in full in `params.prompt` in `run.json`.
+
+**Cursor**：官方文档写明，无界面模式不加 `--force` 只会提出修改、不会写文件，而 `--force`（别名 `--yolo`）同时允许执行命令，所以 Flowgit 不会默认加。确认信任这个流程后，在 `args` 里写 `["--force"]`。如果 Cursor 什么都没写出来，Flowgit 会给出这个提示。
+
+**Cursor**: per its docs, headless mode only proposes changes unless `--force` is passed, and `--force` (alias `--yolo`) also allows shell commands, so Flowgit never adds it by default. If you trust the flow, set `args` to `["--force"]`. When Cursor writes nothing, Flowgit tells you this.
+
+**Claude Code**：`-p` 运行时会执行流程目录里 `.claude/settings.json` 的 hooks，并连接 `.mcp.json` 里的服务器，不会弹出信任确认。从别人那里 fork 来的流程，和 `script` 阶段一样，运行前先看过。
+
+**Claude Code**: a `-p` run executes the hooks in the flow directory's `.claude/settings.json` and connects the servers in its `.mcp.json` without a trust prompt. As with `script` stages, review a flow forked from someone else before running it.
+
+`args` 里的参数会加在命令后面，比如指定模型。**安全**：内置适配只给"能在流程目录里写文件"的最小权限，**不会默认加任何跳过所有权限的参数**。如果你在 `args` 里自己加了（例如 Claude Code 的 `--dangerously-skip-permissions`、Codex 的 `--dangerously-bypass-approvals-and-sandbox`、Gemini 的 `--approval-mode yolo`、Cursor 的 `--force`），agent 就能不经确认执行任何命令、改任何文件。只在你信任这个提示词、而且是在隔离环境里时才这样做。从别人那里 fork 来的流程，先看一下它的 `args`。
+
+`args` are appended to the command, e.g. to pick a model. **Safety**: built-in adapters give the agent the least permission that still lets it write files in the flow directory, and **never pass a bypass-all-permissions flag by default**. If you add one yourself in `args` (such as Claude Code's `--dangerously-skip-permissions`, Codex's `--dangerously-bypass-approvals-and-sandbox`, Gemini's `--approval-mode yolo` or Cursor's `--force`), the agent can run any command and change any file without asking. Only do that for a prompt you trust, in an isolated environment. When you fork someone else's flow, check its `args` first.
+
+执行器配置的哈希包含 `agent`、`command`、`args`、提示词文件，以及 `command` 里提到的、在流程目录中的脚本文件。
+
+The executor config hash covers `agent`, `command`, `args`, the prompt file, and any file in the flow directory named in `command`.
 
 ## 运行与版本 / Runs and versions
 

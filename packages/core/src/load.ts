@@ -32,11 +32,13 @@ function schemaIssues(errors: ErrorObject[] | null | undefined): ValidationIssue
   const seen = new Set<string>();
   const issues: ValidationIssue[] = [];
   for (const e of errors) {
+    // if/then failures repeat the "required" error they wrap
+    if (e.keyword === "if") continue;
     let message = e.message ?? "invalid";
     if (e.keyword === "additionalProperties") {
       message = `不认识的字段 / unknown property "${(e.params as { additionalProperty: string }).additionalProperty}"`;
     } else if (e.keyword === "discriminator") {
-      message = `executor.type 只能是 human、llm、script、workflow、service、mcp 之一 / executor.type must be one of human, llm, script, workflow, service, mcp`;
+      message = `executor.type 只能是 human、llm、script、agent、workflow、service、mcp 之一 / executor.type must be one of human, llm, script, agent, workflow, service, mcp`;
     } else if (e.keyword === "required") {
       message = `缺少必填字段 / missing required property "${(e.params as { missingProperty: string }).missingProperty}"`;
     }
@@ -96,24 +98,32 @@ export function validateFlow(data: unknown, opts: ValidateOptions = {}): Validat
       outputPaths.set(rel, stage.id);
     });
     const ex = stage.executor;
-    if (ex.type === "llm") {
-      if (stage.outputs.length !== 1) {
-        issues.push({ level: "error", path: `${base}/outputs`, message: `llm 阶段只能有一个产物 / llm executor needs exactly one output (stage "${stage.id}" has ${stage.outputs.length})` });
-      }
-      if (!isSafeRelative(ex.prompt)) {
-        issues.push({ level: "error", path: `${base}/executor/prompt`, message: `提示词路径必须是相对路径 / prompt path must be relative: "${ex.prompt}"` });
+    const checkPrompt = (prompt: string) => {
+      if (!isSafeRelative(prompt)) {
+        issues.push({ level: "error", path: `${base}/executor/prompt`, message: `提示词路径必须是相对路径 / prompt path must be relative: "${prompt}"` });
       } else if (opts.dir) {
-        const abs = path.join(opts.dir, ex.prompt);
+        const abs = path.join(opts.dir, prompt);
         if (!fs.existsSync(abs)) {
-          issues.push({ level: "error", path: `${base}/executor/prompt`, message: `找不到提示词文件 / prompt file not found: ${ex.prompt}` });
+          issues.push({ level: "error", path: `${base}/executor/prompt`, message: `找不到提示词文件 / prompt file not found: ${prompt}` });
         } else {
           const tpl = fs.readFileSync(abs, "utf8");
           for (const m of tpl.matchAll(/\{\{\s*inputs\.([A-Za-z0-9_]+)\s*\}\}/g)) {
             if (!flow.inputs || !(m[1] in flow.inputs)) {
-              issues.push({ level: "warning", path: `${base}/executor/prompt`, message: `${ex.prompt} 用了 {{inputs.${m[1]}}}，但 flow.inputs 里没有 "${m[1]}" / ${ex.prompt} uses {{inputs.${m[1]}}} but flow.inputs has no "${m[1]}"` });
+              issues.push({ level: "warning", path: `${base}/executor/prompt`, message: `${prompt} 用了 {{inputs.${m[1]}}}，但 flow.inputs 里没有 "${m[1]}" / ${prompt} uses {{inputs.${m[1]}}} but flow.inputs has no "${m[1]}"` });
             }
           }
         }
+      }
+    };
+    if (ex.type === "llm") {
+      if (stage.outputs.length !== 1) {
+        issues.push({ level: "error", path: `${base}/outputs`, message: `llm 阶段只能有一个产物 / llm executor needs exactly one output (stage "${stage.id}" has ${stage.outputs.length})` });
+      }
+      checkPrompt(ex.prompt);
+    } else if (ex.type === "agent") {
+      checkPrompt(ex.prompt);
+      if (ex.command && ex.agent !== "custom") {
+        issues.push({ level: "warning", path: `${base}/executor/command`, message: `command 只在 agent 为 "custom" 时使用，这里会被忽略 / command is only used when agent is "custom"; it is ignored here` });
       }
     } else if (ex.type === "workflow" || ex.type === "service" || ex.type === "mcp") {
       issues.push({ level: "warning", path: `${base}/executor`, message: `执行器 "${ex.type}" 在 v0.1 里只是预留，还不能运行 / executor "${ex.type}" is reserved in spec v0.1 and cannot run yet` });

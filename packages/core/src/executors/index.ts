@@ -1,4 +1,5 @@
 import type { ExecutorType } from "../types.js";
+import { agentExecutor } from "./agent.js";
 import { humanExecutor } from "./human.js";
 import { llmExecutor } from "./llm.js";
 import { scriptExecutor } from "./script.js";
@@ -7,6 +8,16 @@ import { ExecutorNotImplementedError, type StageExecutor } from "./types.js";
 export * from "./types.js";
 export { humanExecutor } from "./human.js";
 export { scriptExecutor } from "./script.js";
+export {
+  agentExecutor,
+  AGENT_ADAPTERS,
+  STDIN_INSTRUCTION,
+  agentCommandLine,
+  agentPromptRel,
+  buildAgentPrompt,
+  shellQuote,
+  type AgentAdapter,
+} from "./agent.js";
 export {
   llmExecutor,
   anthropicComplete,
@@ -28,6 +39,7 @@ const registry: Partial<Record<ExecutorType, StageExecutor>> = {
   human: humanExecutor,
   llm: llmExecutor,
   script: scriptExecutor,
+  agent: agentExecutor,
 };
 
 export function getExecutor(type: ExecutorType): StageExecutor {

@@ -21,6 +21,8 @@ function executorLine(ex: Executor): string {
       return `由人完成 (human)。${ex.instructions ?? "把产物放到下面列出的路径。"}`;
     case "script":
       return `运行命令 (script)：\`${ex.run}\``;
+    case "agent":
+      return `由 agent 执行 (${ex.agent})。提示词在 \`${ex.prompt}\`${ex.agent === "custom" && ex.command ? `，命令 \`${ex.command}\`` : ""}。`;
     case "workflow":
       return `运行外部工作流 (${ex.engine})：\`${ex.file}\`（v0.1 尚未实现）`;
     case "service":

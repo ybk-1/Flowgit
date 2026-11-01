@@ -112,24 +112,30 @@ export function inputRefs(dir: string, flow: Flow, stage: Stage): RunInputRef[] 
   return refs;
 }
 
+/** Words of a shell command that name a file in the flow directory, e.g. "scripts/render.mjs" in "node scripts/render.mjs". */
+export function commandFiles(dir: string, command: string): string[] {
+  const files: string[] = [];
+  for (const word of command.split(/\s+/)) {
+    const clean = word.replace(/^['"]|['"]$/g, "");
+    if (!clean || clean.startsWith("-") || path.isAbsolute(clean) || clean.includes("..")) continue;
+    const abs = path.join(dir, clean);
+    if (fs.existsSync(abs) && fs.statSync(abs).isFile()) files.push(clean);
+  }
+  return files;
+}
+
 /**
  * Fingerprint of how a stage runs: its executor definition, plus the files it
- * uses (the llm prompt file; for scripts, any word of the command that is a
- * file in the flow directory, e.g. "node scripts/render.mjs").
+ * uses (the llm/agent prompt file; for scripts and custom agents, any word of
+ * the command that is a file in the flow directory, e.g. "node scripts/render.mjs").
  * Editing a prompt or a script therefore marks the stage stale.
  */
 export function stageConfigHash(dir: string, stage: Stage): string {
   const files: string[] = [];
   const ex = stage.executor;
-  if (ex.type === "llm") files.push(ex.prompt);
-  if (ex.type === "script") {
-    for (const word of ex.run.split(/\s+/)) {
-      const clean = word.replace(/^['"]|['"]$/g, "");
-      if (!clean || clean.startsWith("-") || path.isAbsolute(clean) || clean.includes("..")) continue;
-      const abs = path.join(dir, clean);
-      if (fs.existsSync(abs) && fs.statSync(abs).isFile()) files.push(clean);
-    }
-  }
+  if (ex.type === "llm" || ex.type === "agent") files.push(ex.prompt);
+  if (ex.type === "script") files.push(...commandFiles(dir, ex.run));
+  if (ex.type === "agent" && ex.agent === "custom" && ex.command) files.push(...commandFiles(dir, ex.command));
   const fileHashes = files.map((f) => {
     const abs = path.join(dir, f);
     return [f, fs.existsSync(abs) ? hashPath(abs).sha256 : null];

@@ -16,6 +16,7 @@
 - **每一步都有版本**：改了分镜，后面需要重跑的阶段自动标出来；不满意随时回退。
 - **人和 AI 混合**：一个阶段可以由模型做、由脚本做，也可以由人来做。
 - **接任何模型**：Claude、GPT、GLM、DeepSeek、Kimi、通义千问、OpenRouter、本机 Ollama 都能接，流程里只写模型名。
+- **接任何 agent**：一个阶段可以交给 Claude Code、Codex、Cursor、Gemini CLI 或你自己的 agent，它在流程目录里把产物写出来。
 - **开放格式**：流程就是一个文件夹加一个 `flow.json`，可以放进 Git、分享、fork。
 - **能导出成 Skill**：同一个流程可以生成 `SKILL.md`，让 Claude Code 这类工具直接按阶段跑。
 
@@ -25,6 +26,7 @@ Today's AI tools are either one-click black boxes or node graphs built for engin
 - **Every step is versioned**: change the storyboard and the stages that need a re-run are marked for you; roll back any time.
 - **People and AI together**: a stage can be done by a model, by a script, or by a person.
 - **Any model**: Claude, GPT, GLM, DeepSeek, Kimi, Qwen, OpenRouter or a local Ollama. The flow only names the model.
+- **Any agent**: hand a stage to Claude Code, Codex, Cursor, Gemini CLI or your own agent, which writes the outputs in the flow directory.
 - **Open format**: a flow is a folder with a `flow.json`. Put it in Git, share it, fork it.
 - **Exports to a Skill**: the same flow can generate a `SKILL.md` so tools like Claude Code can run it stage by stage.
 
@@ -127,6 +129,22 @@ Built in: `anthropic`, `openai`, `openrouter`, `glm`, `deepseek`, `moonshot`, `q
 细节见 [docs/spec.md 的"模型供应商"](docs/spec.md#模型供应商--model-providers)。
 
 Details: ["Model providers" in docs/spec.md](docs/spec.md#模型供应商--model-providers).
+
+## 接任何 agent / Any agent
+
+`agent` 阶段会在流程目录里以无界面模式启动一个 agent CLI。Flowgit 把提示词渲染好（填入流程输入、列出上游产物和要写出的文件）交给它，由 agent 自己写出产物，之后照常检查产物、存成版本。
+
+An `agent` stage starts an agent CLI headless in the flow directory. Flowgit renders the prompt (flow inputs, upstream artifacts, the files to write) and hands it over; the agent writes the outputs itself, and Flowgit checks them and records a version as usual.
+
+```json
+{ "type": "agent", "agent": "claude-code", "prompt": "prompts/research.md" }
+{ "type": "agent", "agent": "codex", "prompt": "prompts/research.md", "args": ["--model", "gpt-5"] }
+{ "type": "agent", "agent": "custom", "prompt": "prompts/research.md", "command": "my-agent --prompt-file {{promptFile}}" }
+```
+
+内置 `claude-code`、`codex`、`cursor`、`gemini`，另外 `custom` 可以接任何命令。内置适配默认只给"能在流程目录里写文件"的最小权限，**不会加任何跳过所有权限的参数**。要放宽权限，需要自己在 `args` 里加，风险说明见 [docs/spec.md 的"agent 执行器"](docs/spec.md#agent-执行器--the-agent-executor)。
+
+Built in: `claude-code`, `codex`, `cursor` and `gemini`, plus `custom` for any command. Built-in adapters give the agent the least permission that still lets it write files in the flow directory, and **never add a bypass-all-permissions flag**. Widening that is your call, in `args`; the risks are in ["The agent executor" in docs/spec.md](docs/spec.md#agent-执行器--the-agent-executor).
 
 ## 格式 / Format
 

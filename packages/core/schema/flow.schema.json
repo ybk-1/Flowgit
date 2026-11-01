@@ -196,6 +196,9 @@
           "$ref": "#/$defs/executorScript"
         },
         {
+          "$ref": "#/$defs/executorAgent"
+        },
+        {
           "$ref": "#/$defs/executorWorkflow"
         },
         {
@@ -284,6 +287,58 @@
             "type": "string"
           }
         }
+      }
+    },
+    "executorAgent": {
+      "type": "object",
+      "required": [
+        "type",
+        "agent",
+        "prompt"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "agent"
+        },
+        "agent": {
+          "enum": [
+            "claude-code",
+            "codex",
+            "cursor",
+            "gemini",
+            "custom"
+          ],
+          "description": "Which agent CLI to start headless in the flow directory. \"custom\" runs `command`."
+        },
+        "prompt": {
+          "type": "string",
+          "description": "Path to a prompt file (Markdown). {{inputs.key}} is replaced by flow inputs; Flowgit appends the upstream artifacts and the files the agent must write."
+        },
+        "command": {
+          "type": "string",
+          "minLength": 1,
+          "description": "custom only: shell command run in the flow directory. {{promptFile}} is replaced by the rendered prompt's path; the prompt is also piped to stdin."
+        },
+        "args": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Extra arguments for the agent command, e.g. a model flag. Built-in adapters never pass a bypass-all-permissions flag; adding one here (e.g. Cursor's --force) is your own choice. See docs/spec.md."
+        }
+      },
+      "if": {
+        "properties": {
+          "agent": {
+            "const": "custom"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "command"
+        ]
       }
     },
     "executorWorkflow": {

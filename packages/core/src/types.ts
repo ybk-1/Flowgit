@@ -52,6 +52,20 @@ export interface ExecutorScript {
   env?: Record<string, string>;
 }
 
+/** Built-in agent CLIs, plus "custom" for any other command. */
+export type AgentName = "claude-code" | "codex" | "cursor" | "gemini" | "custom";
+
+export interface ExecutorAgent {
+  type: "agent";
+  agent: AgentName;
+  /** Prompt file (Markdown). {{inputs.key}} is filled in; Flowgit appends the upstream and output file lists. */
+  prompt: string;
+  /** custom only: shell command. {{promptFile}} becomes the path of the rendered prompt; the prompt is also on stdin. */
+  command?: string;
+  /** Extra arguments added to the agent command (e.g. a model flag). */
+  args?: string[];
+}
+
 export interface ExecutorWorkflow {
   type: "workflow";
   engine: string;
@@ -76,6 +90,7 @@ export type Executor =
   | ExecutorHuman
   | ExecutorLlm
   | ExecutorScript
+  | ExecutorAgent
   | ExecutorWorkflow
   | ExecutorService
   | ExecutorMcp;
