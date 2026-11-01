@@ -30,6 +30,30 @@ Today's AI tools are either one-click black boxes or node graphs built for engin
 - **Open format**: a flow is a folder with a `flow.json`. Put it in Git, share it, fork it.
 - **Exports to a Skill**: the same flow can generate a `SKILL.md` so tools like Claude Code can run it stage by stage.
 
+自带的短视频模板跑完一遍、再手动改过分镜之后，`flowgit graph --status` 画出来是这样：分镜标成“手动修改”，下游三个阶段标成“需重跑”。
+
+The bundled short-video template after one full run and a hand edit of the storyboard, as drawn by `flowgit graph --status`: the storyboard shows as edited and the three stages after it as stale.
+
+```mermaid
+flowchart LR
+  s1["脚本<br/>llm · ✓ ok"]
+  s2["分镜<br/>llm · ✎ edited"]
+  s3["素材<br/>human · ↻ stale"]
+  s4["剪辑<br/>script · ↻ stale"]
+  s5["导出<br/>script · ↻ stale"]
+  s1 --> s2
+  s2 --> s3
+  s2 --> s4
+  s3 --> s4
+  s4 --> s5
+  classDef ok fill:#dcfce7,stroke:#16a34a,color:#14532d
+  class s1 ok
+  classDef stale fill:#fef3c7,stroke:#d97706,color:#78350f
+  class s3,s4,s5 stale
+  classDef edited fill:#cffafe,stroke:#0891b2,color:#164e63
+  class s2 edited
+```
+
 ## 快速开始 / Quick start
 
 需要 Node.js 22+、[pnpm](https://pnpm.io)，导出视频需要 [FFmpeg](https://ffmpeg.org/download.html)。
@@ -119,6 +143,7 @@ CLI messages and errors are bilingual. What a template produces (script, caption
 | `flowgit restore <stage> <n>` | 回退到某个版本 | Roll back to a version |
 | `flowgit providers [--json]` | 列出模型供应商，以及密钥有没有设置（不显示密钥） | List model providers and whether each key is set (never the key) |
 | `flowgit doctor [--model m] [--json]` | 跑之前检查这台电脑：Node、流程输入、密钥、脚本和 agent 要用的命令。不调用模型，不运行阶段 | Check this machine before a run: Node, flow inputs, keys, and the programs script and agent stages use. Calls no model and runs no stage |
+| `flowgit graph [--status] [--md]` | 把流程画成 Mermaid 流程图（GitHub、Obsidian 能直接显示），`--status` 按状态上色 | Draw the flow as a Mermaid diagram (GitHub and Obsidian render it); `--status` colors it by state |
 | `flowgit export-skill [-o SKILL.md]` | 生成 `SKILL.md`，给 AI 工具用 | Generate a `SKILL.md` for AI tools |
 
 所有命令都接受 `-C <dir>` 指定流程目录。`run` 还接受 `--input k=v`（只对这次运行生效）、`--model` 和 `--force`。

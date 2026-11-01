@@ -335,6 +335,26 @@ You can also generate a `SKILL.md`, so tools that read Skills, such as Claude Co
 flowgit export-skill -o SKILL.md
 ```
 
+想在 README 里放一张流程图，用 `flowgit graph --md`。它输出一段 Mermaid 代码块，GitHub、GitLab 和 Obsidian 都会直接画成图：
+
+To put a diagram of the flow in the README, use `flowgit graph --md`. It prints a Mermaid code block that GitHub, GitLab and Obsidian draw as a diagram:
+
+````console
+$ flowgit graph --md
+```mermaid
+flowchart LR
+  s1["随手记<br/>human"]
+  s2["周报草稿<br/>llm"]
+  s3["检查<br/>script"]
+  s1 --> s2
+  s2 --> s3
+```
+````
+
+加 `--status` 会按每个阶段现在的状态上色（已完成是绿色，需重跑是黄色），适合贴进进度笔记。
+
+Add `--status` to color each stage by its current state (green when done, amber when it needs a re-run), which suits a progress note.
+
 ## 常见问题 / Troubleshooting
 
 | 看到 / You see | 怎么办 | What to do |

@@ -13,6 +13,7 @@ import {
   coerceFlowInput,
   doctor,
   flowInputProblem,
+  flowToMermaid,
   effectiveProvider,
   globalProvidersFile,
   listRuns,
@@ -507,6 +508,22 @@ program
           ? `\n${c.yellow("!")} 没有必须先解决的问题，但先看看上面的 ${warnings} 个提醒 / nothing blocking, but check the ${warnings} warning(s) above`
           : `\n${c.green("✓")} 可以运行 / ready to run`,
       );
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+program
+  .command("graph")
+  .description("把流程画成 Mermaid 流程图，GitHub 和 Obsidian 都能直接显示 / draw the flow as a Mermaid diagram that GitHub and Obsidian render")
+  .option("--status", "按每个阶段现在的状态上色 / color each stage by its current state")
+  .option("--md", "包进 ```mermaid 代码块，直接贴进 Markdown / wrap it in a ```mermaid block to paste into Markdown")
+  .action((opts: { status?: boolean; md?: boolean }) => {
+    try {
+      const loaded = loadFlow(dirOf());
+      const statuses = opts.status ? statusAll(loaded, resolveFlowInputs(loaded.dir, loaded.flow)) : undefined;
+      const diagram = flowToMermaid(loaded.flow, statuses);
+      console.log(opts.md ? `\`\`\`mermaid\n${diagram}\n\`\`\`` : diagram);
     } catch (err) {
       fail(err);
     }

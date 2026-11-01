@@ -26,6 +26,7 @@ flowgit doctor                    # 跑之前检查密钥、FFmpeg、agent / che
 ```bash
 flowgit templates                 # 列出模板和它们的阶段 / list templates and their stages
 flowgit init my-report -t weekly-report
+flowgit -C my-report graph --md   # 画成 Mermaid 流程图贴进 README / a Mermaid diagram for your README
 ```
 
 密钥只从环境变量读（例如 `ANTHROPIC_API_KEY`、`DEEPSEEK_API_KEY`），不会写进任何文件。导出视频需要 [FFmpeg](https://ffmpeg.org/download.html)。

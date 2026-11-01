@@ -30,14 +30,16 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 
 ### 命令行 / CLI
 
-- `init`、`templates`、`validate`、`status`（看板）、`inputs`、`run`、`log`、`restore`、`providers`、`doctor`、`export-skill`。
+- `init`、`templates`、`validate`、`status`（看板）、`inputs`、`run`、`log`、`restore`、`providers`、`doctor`、`graph`、`export-skill`。
 - `doctor` 在运行前检查 Node、流程输入、密钥、代理设置，以及脚本和 agent 要用的命令。
 - `export-skill` 把流程导出成 `SKILL.md`，AI 工具不用界面也能按步骤运行。
+- `graph` 把流程画成 Mermaid 流程图，贴进 GitHub 或 Obsidian 就能看到；加 `--status` 按状态上色。
 - `inputs set` 保存前就检查名字和值（数字、`true`/`false`、可选值），写错了不会存进去。
 - 提示和报错都是中英双语，并针对余额不足、限流、连不上（包括代理）给出具体建议。
-- `init`, `templates`, `validate`, `status` (the board), `inputs`, `run`, `log`, `restore`, `providers`, `doctor`, `export-skill`.
+- `init`, `templates`, `validate`, `status` (the board), `inputs`, `run`, `log`, `restore`, `providers`, `doctor`, `graph`, `export-skill`.
 - `doctor` checks Node, flow inputs, keys, proxy settings, and the programs script and agent stages use, before a run.
 - `export-skill` exports a flow as a `SKILL.md`, so AI tools can run it step by step without the UI.
+- `graph` draws the flow as a Mermaid diagram that GitHub and Obsidian render; `--status` colors it by state.
 - `inputs set` checks names and values (numbers, `true`/`false`, allowed values) before saving, so a typo is never stored.
 - Messages and errors are bilingual, with specific advice for an empty balance, rate limits and connection problems (including proxies).
 

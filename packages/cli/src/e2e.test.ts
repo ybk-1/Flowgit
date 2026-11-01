@@ -100,6 +100,19 @@ describe("flowgit CLI with the short-video template", () => {
     expect(status.stages.map((s: { state: string }) => s.state)).toEqual(["ok", "ok", "never-run", "waiting-upstream", "waiting-upstream"]);
   });
 
+  it("draws the flow as a Mermaid diagram, colored by state", () => {
+    const plain = flowgit(["graph"]);
+    expect(plain.code).toBe(0);
+    expect(plain.out).toMatch(/^flowchart LR\n {2}s1\["脚本<br\/>llm"\]/);
+    expect(plain.out).toContain("  s2 --> s4\n  s3 --> s4\n");
+    const md = flowgit(["graph", "--status", "--md"]);
+    expect(md.out.startsWith("```mermaid\nflowchart LR\n")).toBe(true);
+    expect(md.out.trimEnd().endsWith("```")).toBe(true);
+    expect(md.out).toContain('s3["素材<br/>human · ○ never-run"]');
+    expect(md.out).toContain("  class s1,s2 ok");
+    expect(md.out).toContain("  class s4,s5 waitingUpstream");
+  });
+
   it.skipIf(!hasFfmpeg)("finishes the flow and renders final.mp4", () => {
     fs.mkdirSync(path.join(flowDir, "assets"));
     const r = flowgit(["run", "all"]);
