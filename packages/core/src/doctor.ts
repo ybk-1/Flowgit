@@ -7,6 +7,7 @@ import { isRunnableExecutor } from "./executors/index.js";
 import { loadFlow } from "./load.js";
 import { isHttpServer, isStdioServer, mcpEnvNames } from "./mcp.js";
 import { inspectPlugin } from "./plugins.js";
+import { imageKeyState, resolveImageModel } from "./image-providers.js";
 import { DEFAULT_PROVIDER, flowKeyEndpoint, flowKeyEndpointNote, providerKeyState, resolveModel, type ResolvedProvider } from "./providers.js";
 import { pickProxy, proxyOff, proxyProblem, proxySourceLabel, showProxy, systemProxy, type ProxyInfo } from "./proxy.js";
 import { MissingInputsError, loadFlowInputs } from "./runs.js";
@@ -206,6 +207,50 @@ function ttsCheck(stageId: string, command: string, env: NodeJS.ProcessEnv): Doc
   };
 }
 
+function imageChecks(stage: Stage, env: NodeJS.ProcessEnv): DoctorCheck[] {
+  const ex = stage.executor;
+  if (ex.type !== "image") return [];
+  const mockDir = env.FLOWGIT_IMAGE_MOCK_DIR;
+  if (mockDir) {
+    const dir = path.join(path.resolve(mockDir), stage.id);
+    const pictures = fs.existsSync(dir) && fs.statSync(dir).isDirectory()
+      ? fs.readdirSync(dir).filter((name) => [".png", ".jpg", ".jpeg", ".webp", ".gif"].includes(path.extname(name).toLowerCase()))
+      : [];
+    return [
+      pictures.length
+        ? { level: "ok", stage: stage.id, message: `用固定图片 / canned pictures in ${dir}` }
+        : {
+            level: "error",
+            stage: stage.id,
+            message: `FLOWGIT_IMAGE_MOCK_DIR 里没有这个阶段的图片 / no canned pictures for this stage in FLOWGIT_IMAGE_MOCK_DIR`,
+            hint: `需要 / expected pictures in ${dir}`,
+          },
+    ];
+  }
+  let label = ex.model;
+  let apiKeyEnv = "";
+  try {
+    const resolved = resolveImageModel(ex.model, env);
+    label = `${resolved.preset.id}/${resolved.model}`;
+    apiKeyEnv = resolved.preset.apiKeyEnv;
+  } catch (err) {
+    return [{ level: "error", stage: stage.id, message: (err as Error).message }];
+  }
+  if (imageKeyState({ apiKeyEnv }, env) === "set") {
+    return [{ level: "ok", stage: stage.id, message: `生图 ${label}，密钥 ${apiKeyEnv} 已设置 / image ${label}, key ${apiKeyEnv} is set` }];
+  }
+  return [
+    {
+      level: "error",
+      stage: stage.id,
+      message: `生图 ${label} 的密钥 ${apiKeyEnv} 没有设置 / key ${apiKeyEnv} for image ${label} is not set`,
+      hint:
+        `PowerShell：$env:${apiKeyEnv}="..."；macOS/Linux：export ${apiKeyEnv}=...\n` +
+        `或者先用固定图片试跑 / or try canned pictures first: FLOWGIT_IMAGE_MOCK_DIR=<目录 directory>`,
+    },
+  ];
+}
+
 function pluginChecks(loaded: LoadedFlow, stage: Stage): DoctorCheck[] {
   const ex = stage.executor;
   if (ex.type !== "plugin") return [];
@@ -304,6 +349,8 @@ function stageChecks(loaded: LoadedFlow, stage: Stage, opts: DoctorOptions, env:
       return mcpChecks(loaded, stage, env);
     case "plugin":
       return pluginChecks(loaded, stage);
+    case "image":
+      return imageChecks(stage, env);
     case "agent": {
       if (ex.agent === "custom") {
         const program = ex.command ? commandProgram(ex.command) : undefined;
@@ -369,7 +416,9 @@ export function doctor(loaded: LoadedFlow, opts: DoctorOptions = {}): DoctorChec
   checks.push(...merged);
 
   // llm stages inside a flowgit sub-flow call models too
-  const callsNetwork = loaded.flow.stages.some((s) => s.executor.type === "service") || (!env.FLOWGIT_LLM_MOCK_DIR && flowUsesLlm(loaded));
+  const callsNetwork =
+    loaded.flow.stages.some((s) => s.executor.type === "service" || (s.executor.type === "image" && !env.FLOWGIT_IMAGE_MOCK_DIR)) ||
+    (!env.FLOWGIT_LLM_MOCK_DIR && flowUsesLlm(loaded));
   if (callsNetwork) checks.push(...proxyChecks(env, opts.systemProxy ?? systemProxy));
   return checks;
 }

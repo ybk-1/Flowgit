@@ -9,6 +9,7 @@ export * from "./run.js";
 export * from "./executors/index.js";
 export * from "./skill.js";
 export * from "./providers.js";
+export * from "./image-providers.js";
 export * from "./doctor.js";
 export * from "./mermaid.js";
 export * from "./plan.js";

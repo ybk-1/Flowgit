@@ -259,6 +259,20 @@ A `service` stage calls an HTTP endpoint. `POST` sends the flow inputs and text 
 { "type": "service", "method": "POST", "url": "https://example.com/hook", "headers": { "Authorization": "Bearer {{env.ECHO_TOKEN}}" } }
 ```
 
+## 生图 / Image generation
+
+`image` 阶段按提示词生成图片，写进一个以 `/` 结尾的目录。这是可选阶段：自带模板仍然默认用你上传的照片或素材。`model` 写成 `<provider>/<model>`，预设有 OpenAI、智谱 CogView、火山方舟 Seedream 和阿里云百炼万相。`each` 可以按上游 JSON 里的数组逐张出图。密钥只从环境变量读。`flowgit providers` 会多一节「生图 / Image」。不调用接口的试跑：
+
+An `image` stage generates pictures from a prompt into a directory whose path ends with `/`. It is optional: bundled templates still default to photos or assets you upload. `model` is `<provider>/<model>`, with presets for OpenAI, Zhipu CogView, Volcengine Ark Seedream and Alibaba Cloud Model Studio Wanxiang. `each` makes one picture per item of an array in an upstream JSON file. Keys are read only from environment variables. `flowgit providers` adds a "生图 / Image" section. To try it without calling a vendor:
+
+```bash
+FLOWGIT_IMAGE_MOCK_DIR=demo-pictures flowgit run shots
+```
+
+密钥、费用和版权见 [docs/image.md](docs/image.md)。例子是 [`examples/image-shots`](examples/image-shots)。
+
+Keys, cost and copyright are in [docs/image.md](docs/image.md). The example is [`examples/image-shots`](examples/image-shots).
+
 ## 接 MCP 工具 / MCP tools
 
 `mcp` 阶段调用一个 MCP 工具。服务器写在 `mcpServers` 里，和 Claude Desktop、Cursor 一样：本机用 `command` / `args` / `env`，远程用 `url`（Streamable HTTP）。`env` 的值必须是 `${变量名}`，密钥不写进 flow.json。`flowgit mcp tools <服务器>` 列出工具和参数，`flowgit doctor` 检查命令在不在 PATH 上、变量有没有设置。说明见 [docs/mcp.md](docs/mcp.md)，可运行的例子是 [`examples/mcp-echo`](examples/mcp-echo)。
@@ -376,14 +390,14 @@ Everything on GitHub (commit messages, PRs, docs) is bilingual, Chinese first.
 
 ## 路线图 / Roadmap
 
-1. **格式 + 命令行**（本仓库现状，0.1.0 准备发布）：Flow 规范 v0.1，JSON 产物可以带 schema；十一个自带模板（短视频、周报入门、图文、客服 SOP、求职材料、调研报告、电商上架、PPT 演示稿、直播带货、竖屏短剧、老师备课）；llm 阶段接任何模型，agent 阶段接 Claude Code、Codex、Cursor、Gemini，service 阶段调用 HTTP 服务，`workflow` 阶段用 `engine: "flowgit"` 运行子流程；script、agent 和 service 阶段可以设超时；`stage add` / `stage rm`、`diff`（版本对比）、`doctor`、`templates`、`graph`（流程图）等命令。更新记录见 [CHANGELOG.md](CHANGELOG.md)。
+1. **格式 + 命令行**（本仓库现状，0.1.0 准备发布）：Flow 规范 v0.1，JSON 产物可以带 schema；十一个自带模板（短视频、周报入门、图文、客服 SOP、求职材料、调研报告、电商上架、PPT 演示稿、直播带货、竖屏短剧、老师备课）；llm 阶段接任何模型，agent 阶段接 Claude Code、Codex、Cursor、Gemini，service 阶段调用 HTTP 服务，image 阶段按提示词生成图片，`workflow` 阶段用 `engine: "flowgit"` 运行子流程；script、agent 和 service 阶段可以设超时；`stage add` / `stage rm`、`diff`（版本对比）、`doctor`、`templates`、`graph`（流程图）等命令。更新记录见 [CHANGELOG.md](CHANGELOG.md)。
 2. **阶段看板**：本机看板已经有了（`flowgit board`）：每张卡能看产物、改、运行、看历史、对比和回退；可以新增和删除阶段，在卡片和流程图之间切换；文件一变就实时刷新（SSE 的 `flow:changed`）。「预演 / Preview」列出每个阶段会跳过、运行、等你还是不能运行，以及最多调用几次模型；全部运行前如果会调用真实模型会先确认。每张卡显示用过的 token，页面顶部是合计。下一步是网站：在网上打开一个流程就是一块看板。
 3. **发布与复用**：已经能从别人的流程开始（`flowgit init -t <Git 地址>`，默认不带产物），分享前自动去隐私（`flowgit share`）。下一步是画廊。
 4. **更多领域**：更多模板（下一个是落地页网站，做网站现在有 `examples/agent-page` 示例）；之后让作者把流程变成 MCP 服务供别人调用。
 
 English:
 
-1. **Format + CLI** (this repo today, 0.1.0 getting ready to ship): Flow spec v0.1, with optional schemas for JSON outputs; eleven bundled templates (short video, weekly-report starter, article posts, support SOP, job application, research report, e-commerce listing, slide deck, live selling, vertical short drama, lesson prep); llm stages on any model, agent stages on Claude Code, Codex, Cursor or Gemini, service stages that call HTTP services, and `workflow` stages that run a sub-flow with `engine: "flowgit"`; timeouts for script, agent and service stages; commands such as `stage add` / `stage rm`, `diff` (compare versions), `doctor`, `templates` and `graph` (a diagram of the flow). See [CHANGELOG.md](CHANGELOG.md) for details.
+1. **Format + CLI** (this repo today, 0.1.0 getting ready to ship): Flow spec v0.1, with optional schemas for JSON outputs; eleven bundled templates (short video, weekly-report starter, article posts, support SOP, job application, research report, e-commerce listing, slide deck, live selling, vertical short drama, lesson prep); llm stages on any model, agent stages on Claude Code, Codex, Cursor or Gemini, service stages that call HTTP services, image stages that generate pictures from a prompt, and `workflow` stages that run a sub-flow with `engine: "flowgit"`; timeouts for script, agent and service stages; commands such as `stage add` / `stage rm`, `diff` (compare versions), `doctor`, `templates` and `graph` (a diagram of the flow). See [CHANGELOG.md](CHANGELOG.md) for details.
 2. **Stage board**: the local board is here (`flowgit board`). Each card lets you see its outputs, edit them, run, browse history, compare and restore; stages can be added and removed, the view switches between cards and a flow graph, and it refreshes as soon as files change (the SSE event `flow:changed`). "预演 / Preview" lists whether each stage would be skipped, run, wait for you or cannot run, and at most how many model calls; Run all asks first when it would call a real model. Each card shows the tokens its stage has used, and the top of the page shows the total. Next is the web app: open a flow online and it is a board.
 3. **Publish and reuse**: you can already start from someone else's flow (`flowgit init -t <Git URL>`, without their outputs by default) and strip private data before sharing (`flowgit share`). Next is a gallery.
 4. **More domains**: more templates (a landing-page site is next; building a website has the `examples/agent-page` example today); later, authors can expose a flow as an MCP service for others to call.

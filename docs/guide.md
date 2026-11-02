@@ -294,7 +294,7 @@ flowgit run draft --force --model deepseek/deepseek-v4-pro
 flowgit run all
 ```
 
-`flowgit providers` 列出所有能用的模型供应商，以及密钥有没有设置。/ `flowgit providers` lists every model provider and whether its key is set.
+`flowgit providers` 列出所有能用的模型供应商，以及密钥有没有设置；生图供应商在下面的「生图 / Image」一节。/ `flowgit providers` lists every model provider and whether its key is set; image providers are in the "生图 / Image" section below that.
 
 ## 6. 修改、重跑、回退 / Edit, re-run, roll back
 

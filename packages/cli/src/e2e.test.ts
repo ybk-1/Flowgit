@@ -291,7 +291,15 @@ describe("flowgit CLI with the short-video template", () => {
     const home = path.join(work, "flowgit-home");
     fs.mkdirSync(home, { recursive: true });
     fs.writeFileSync(path.join(home, "providers.json"), JSON.stringify({ providers: { mine: { protocol: "openai", baseUrl: "http://127.0.0.1:1/v1", apiKeyEnv: "MINE_KEY" } } }));
-    const env = { FLOWGIT_HOME: home, GLM_API_KEY: "secret-glm-key", MINE_KEY: "", ANTHROPIC_BASE_URL: "" };
+    const env = {
+      FLOWGIT_HOME: home,
+      GLM_API_KEY: "secret-glm-key",
+      MINE_KEY: "",
+      ANTHROPIC_BASE_URL: "",
+      OPENAI_API_KEY: "",
+      ARK_API_KEY: "",
+      DASHSCOPE_API_KEY: "",
+    };
     const r = flowgit(["providers"], env);
     expect(r.code, r.out).toBe(0);
     expect(r.out).toMatch(/glm\s+anthropic\s+https:\/\/open\.bigmodel\.cn\/api\/anthropic\s+GLM_API_KEY ✓ 已设置 set/);
@@ -300,6 +308,11 @@ describe("flowgit CLI with the short-video template", () => {
     const json = JSON.parse(flowgit(["providers", "--json"], env).out);
     expect(json.providers.find((p: { id: string }) => p.id === "ollama")).toMatchObject({ key: "none", baseUrl: "http://localhost:11434/v1" });
     expect(JSON.stringify(json)).not.toContain("secret-glm-key");
+    expect(r.out).toContain("生图 / Image");
+    expect(r.out).toMatch(/zhipu\s+cogview-4\s+https:\/\/open\.bigmodel\.cn\/api\/paas\/v4\s+GLM_API_KEY ✓ 已设置 set/);
+    expect(r.out).toMatch(/volcengine\s+doubao-seedream-5-0-pro-260628\s+https:\/\/ark\.cn-beijing\.volces\.com\/api\/v3\s+ARK_API_KEY ✗ 未设置 not set/);
+    const image = json.imageProviders.find((p: { id: string }) => p.id === "dashscope");
+    expect(image).toMatchObject({ exampleModel: "wan2.6-t2i", apiKeyEnv: "DASHSCOPE_API_KEY", key: "unset" });
 
     // an unknown provider fails with a hint
     const bad = flowgit(["run", "script", "--model", "nope/x"], env);
@@ -994,6 +1007,30 @@ describe("examples/subflow", () => {
       expect(fs.existsSync(path.join(copy, "brief.md"))).toBe(false);
     } finally {
       fs.rmSync(dest, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("image stage", () => {
+  it("runs the example from canned pictures and logs the count", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-image-e2e-"));
+    const dir = path.join(root, "shots");
+    fs.cpSync(path.resolve(here, "../../../examples/image-shots"), dir, { recursive: true });
+    try {
+      const run = spawnSync(process.execPath, [cli, "-C", dir, "run", "all"], {
+        encoding: "utf8",
+        env: { ...process.env, NO_COLOR: "1", FLOWGIT_IMAGE_MOCK_DIR: path.join(dir, "demo-pictures"), OPENAI_API_KEY: "", GLM_API_KEY: "" },
+      });
+      expect(run.status, `${run.stdout}${run.stderr}`).toBe(0);
+      expect(fs.readdirSync(path.join(dir, "shots")).sort()).toEqual(["001.png", "002.png", "003.png"]);
+      const log = spawnSync(process.execPath, [cli, "-C", dir, "log", "shots"], {
+        encoding: "utf8",
+        env: { ...process.env, NO_COLOR: "1" },
+      });
+      expect(log.status, `${log.stdout}${log.stderr}`).toBe(0);
+      expect(`${log.stdout}${log.stderr}`).toMatch(/zhipu\/cogview-4 1024x1024 · 3 张 \/ 3 image\(s\)/);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
     }
   });
 });

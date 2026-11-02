@@ -232,6 +232,9 @@
         },
         {
           "$ref": "#/$defs/executorPlugin"
+        },
+        {
+          "$ref": "#/$defs/executorImage"
         }
       ]
     },
@@ -592,6 +595,68 @@
           "type": "integer",
           "minimum": 1,
           "description": "Abort the plugin's signal after this many seconds and fail the run. Unset means no limit."
+        }
+      }
+    },
+    "imageEach": {
+      "type": "object",
+      "description": "Generate one image per item of an array inside an upstream JSON output.",
+      "required": ["from", "path", "field"],
+      "additionalProperties": false,
+      "properties": {
+        "from": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Relative path of an upstream JSON output."
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Dotted path to the array inside that JSON, e.g. shots."
+        },
+        "field": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Field on each item. Its text is appended to the rendered prompt."
+        }
+      }
+    },
+    "executorImage": {
+      "type": "object",
+      "description": "Generate pictures into the stage's one directory output. The model is <provider>/<model>. The key is read from the provider's environment variable and never written to a file.",
+      "required": ["type", "model", "prompt"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "image"
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Image model as <provider>/<model>, e.g. zhipu/cogview-4, openai/gpt-image-1, volcengine/doubao-seedream-5-0-pro-260628, dashscope/wan2.6-t2i."
+        },
+        "prompt": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Path to a prompt file (Markdown). {{inputs.key}} is replaced. With each, the item's field is appended."
+        },
+        "size": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Image size, e.g. 1024x1024. Default 1024x1024. DashScope is sent 1024*1024."
+        },
+        "n": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "How many pictures of this one prompt. Default 1. With each, omit it or set 1: one picture per array item."
+        },
+        "each": {
+          "$ref": "#/$defs/imageEach"
+        },
+        "timeoutSec": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Stop one picture, including DashScope polling, after this many seconds. Default 180."
         }
       }
     }

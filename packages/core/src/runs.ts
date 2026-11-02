@@ -130,7 +130,7 @@ export function commandFiles(dir: string, command: string): string[] {
 
 /**
  * Fingerprint of how a stage runs: its executor definition, plus the files it
- * uses (the llm/agent prompt file; for scripts and custom agents, any word of
+ * uses (the llm/agent/image prompt file; for scripts and custom agents, any word of
  * the command that is a file in the flow directory, e.g. "node scripts/render.mjs").
  * A flowgit sub-flow also includes that flow.json and the same fingerprint of
  * every stage inside it, so editing its prompt or script marks this stage stale.
@@ -143,7 +143,7 @@ export function commandFiles(dir: string, command: string): string[] {
 export function stageConfigHash(dir: string, stage: Stage, seen: Set<string> = new Set(), flow?: Flow): string {
   const files: string[] = [];
   const ex = stage.executor;
-  if (ex.type === "llm" || ex.type === "agent") files.push(ex.prompt);
+  if (ex.type === "llm" || ex.type === "agent" || ex.type === "image") files.push(ex.prompt);
   for (const out of stage.outputs) if (out.schema) files.push(out.schema);
   if (ex.type === "script") files.push(...commandFiles(dir, ex.run));
   if (ex.type === "agent" && ex.agent === "custom" && ex.command) files.push(...commandFiles(dir, ex.command));
