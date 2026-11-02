@@ -16,7 +16,10 @@
     </div>
     <div class="top-side">
       <p class="hint" id="refresh-hint">实时更新 / live updates</p>
-      <button id="run-all" type="button">全部运行 Run all</button>
+      <div class="top-actions">
+        <button id="add-stage" type="button">新增阶段 / Add stage</button>
+        <button id="run-all" type="button">全部运行 Run all</button>
+      </div>
     </div>
   </header>
   <div id="banner" class="banner" hidden></div>
@@ -38,6 +41,80 @@
     </div>
     <div id="panel-body"></div>
   </aside>
+  <dialog id="stage-dialog" class="stage-dialog">
+    <form id="stage-form">
+      <h2>新增阶段 / Add stage</h2>
+      <div class="stage-fields">
+        <label class="field">
+          <span class="field-name">类型 / Type</span>
+          <select id="stage-type" name="type" required>
+            <option value="human">人工 human</option>
+            <option value="llm">模型 llm</option>
+            <option value="script">脚本 script</option>
+            <option value="agent">agent</option>
+          </select>
+        </label>
+        <label class="field">
+          <span class="field-name">id</span>
+          <input id="stage-id" name="id" required autocomplete="off" spellcheck="false" pattern="[a-z][a-z0-9_-]*" />
+        </label>
+        <label class="field">
+          <span class="field-name">名称 / Name</span>
+          <input id="stage-name" name="name" autocomplete="off" />
+        </label>
+        <label class="field">
+          <span class="field-name">插在哪个阶段后面 / After</span>
+          <select id="stage-after" name="after"></select>
+        </label>
+        <label class="field">
+          <span class="field-name">上游阶段 / Upstream stages</span>
+          <select id="stage-inputs" name="inputs" multiple size="4"></select>
+          <span class="field-help">不选就用它前面那个阶段。 / Leave this empty to use the stage before it.</span>
+        </label>
+        <label class="field">
+          <span class="field-name">产物 / Outputs</span>
+          <textarea id="stage-outputs" name="outputs" spellcheck="false"></textarea>
+          <span id="stage-outputs-hint" class="field-help">一行一个路径。不填就用默认产物。 / One path per line. Leave empty for the default output.</span>
+        </label>
+        <label class="field" id="stage-prompt-field" hidden>
+          <span class="field-name">提示词 / Prompt</span>
+          <input id="stage-prompt" name="prompt" autocomplete="off" spellcheck="false" placeholder="prompts/stage.md" />
+        </label>
+        <label class="field" id="stage-run-field" hidden>
+          <span class="field-name">命令 / Command</span>
+          <input id="stage-run" name="run" autocomplete="off" spellcheck="false" placeholder="node scripts/check.mjs" />
+        </label>
+        <label class="field" id="stage-agent-field" hidden>
+          <span class="field-name">Agent</span>
+          <select id="stage-agent" name="agent">
+            <option value="claude-code">claude-code</option>
+            <option value="codex">codex</option>
+            <option value="cursor">cursor</option>
+            <option value="gemini">gemini</option>
+            <option value="custom">custom</option>
+          </select>
+        </label>
+      </div>
+      <p id="stage-status" class="stage-status" hidden></p>
+      <div class="dialog-actions">
+        <button id="stage-cancel" type="button" class="ghost">取消 / Cancel</button>
+        <button id="stage-save" type="submit">添加 / Add</button>
+      </div>
+    </form>
+  </dialog>
+  <dialog id="remove-dialog" class="stage-dialog">
+    <form id="remove-form">
+      <h2>删除阶段 / Remove stage</h2>
+      <p id="remove-text"></p>
+      <p id="remove-deps" hidden></p>
+      <p id="remove-status" class="stage-status" hidden></p>
+      <div class="dialog-actions">
+        <button id="remove-cancel" type="button" class="ghost">取消 / Cancel</button>
+        <button id="remove-confirm" type="submit" class="danger">删除 / Remove</button>
+        <button id="remove-force" type="button" class="danger" hidden>一起断开依赖 / detach downstream</button>
+      </div>
+    </form>
+  </dialog>
   <noscript>
     <p class="banner">需要 JavaScript 才能看看板。 / JavaScript is required to show the board.</p>
   </noscript>

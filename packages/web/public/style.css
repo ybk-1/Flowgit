@@ -77,7 +77,32 @@ body {
   gap: 10px;
 }
 
-#run-all, .run, #inputs-save {
+.top-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+#add-stage {
+  font: inherit;
+  cursor: pointer;
+  border: 1px solid rgba(246, 241, 232, 0.4);
+  border-radius: 999px;
+  padding: 8px 14px;
+  background: transparent;
+  color: var(--header-ink);
+  font-weight: 600;
+}
+
+#add-stage:disabled { opacity: 0.45; cursor: default; }
+
+#add-stage:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+#run-all, .run, #inputs-save, #stage-save {
   font: inherit;
   cursor: pointer;
   border: 0;
@@ -88,7 +113,7 @@ body {
   font-weight: 600;
 }
 
-#run-all:disabled, .run:disabled, #inputs-save:disabled {
+#run-all:disabled, .run:disabled, #inputs-save:disabled, #stage-save:disabled {
   opacity: 0.45;
   cursor: default;
 }
@@ -227,12 +252,125 @@ body {
 .card[data-state="never-run"] { border-top-color: var(--never); }
 .card[data-state="waiting-upstream"] { border-top-color: var(--wait); }
 
+.card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .card h2 {
   margin: 0;
+  min-width: 0;
   font-family: Palatino, "Palatino Linotype", "Songti SC", "Noto Serif SC", serif;
   font-size: 26px;
   line-height: 1.15;
 }
+
+.card-menu { position: relative; flex: 0 0 auto; }
+
+.menu-button {
+  font: inherit;
+  cursor: pointer;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ink);
+  line-height: 1;
+}
+
+.menu-button:disabled { opacity: 0.45; cursor: default; }
+
+.menu {
+  position: fixed;
+  z-index: 4;
+  min-width: 200px;
+  padding: 6px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+}
+
+.menu button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  border: 0;
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: transparent;
+  color: var(--error);
+}
+
+.menu button:hover { background: var(--error-bg); }
+
+.stage-dialog {
+  width: min(480px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 0;
+  background: var(--card);
+  color: var(--ink);
+  box-shadow: var(--shadow);
+}
+
+.stage-dialog::backdrop { background: rgba(28, 25, 21, 0.45); }
+
+.stage-dialog form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 18px 18px 16px;
+}
+
+.stage-dialog h2 {
+  margin: 0;
+  font-family: Palatino, "Palatino Linotype", "Songti SC", "Noto Serif SC", serif;
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.stage-dialog p { margin: 0; }
+
+.stage-fields { display: flex; flex-direction: column; gap: 12px; }
+
+.field select[multiple] { min-height: 96px; }
+
+.stage-status { font-size: 13px; line-height: 1.45; white-space: pre-wrap; color: var(--error); }
+
+#remove-deps { color: var(--muted); font-size: 13px; line-height: 1.45; }
+
+.dialog-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+
+.ghost, .danger {
+  font: inherit;
+  cursor: pointer;
+  border-radius: 999px;
+  padding: 8px 14px;
+}
+
+.ghost {
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--ink);
+}
+
+.danger {
+  border: 0;
+  background: var(--error);
+  color: #fff;
+  font-weight: 600;
+}
+
+.ghost:disabled, .danger:disabled { opacity: 0.45; cursor: default; }
 
 .stage-id, .executor, .version, .runs, .outputs-label {
   margin: 0;
@@ -298,7 +436,8 @@ body {
 
 .outputs button:hover, .file-list button:hover { border-color: #c9b8a4; background: #fff; }
 .outputs button:focus-visible, .file-list button:focus-visible, .panel-bar button:focus-visible, .save:focus-visible, .run:focus-visible,
-.history:focus-visible, .back:focus-visible, .restore:focus-visible, .compare button:focus-visible, .version:focus-visible {
+.history:focus-visible, .back:focus-visible, .restore:focus-visible, .compare button:focus-visible, .version:focus-visible,
+.menu-button:focus-visible, .menu button:focus-visible, .ghost:focus-visible, .danger:focus-visible, #stage-save:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
