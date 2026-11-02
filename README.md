@@ -309,17 +309,17 @@ Everything on GitHub (commit messages, PRs, docs) is bilingual, Chinese first.
 
 ## 路线图 / Roadmap
 
-1. **格式 + 命令行**（本仓库现状，0.1.0 准备发布）：Flow 规范 v0.1；短视频和周报两个自带模板；llm 阶段接任何模型，agent 阶段接 Claude Code、Codex、Cursor、Gemini；`doctor`、`templates`、`graph`（流程图）等命令。更新记录见 [CHANGELOG.md](CHANGELOG.md)。
-2. **阶段看板网站**：打开一个流程就是一块看板，每张卡能看产物、改、重跑、看历史。
-3. **发布与复用**：画廊、发布（自动去隐私）、fork、版本对比。
-4. **更多领域**：图文内容、客服 SOP 等模板（做网站已经有 `examples/agent-page` 示例）；之后让作者把流程变成 MCP 服务供别人调用。
+1. **格式 + 命令行**（本仓库现状，0.1.0 准备发布）：Flow 规范 v0.1；四个自带模板（短视频、周报入门、图文、客服 SOP）；llm 阶段接任何模型，agent 阶段接 Claude Code、Codex、Cursor、Gemini；script 和 agent 阶段可以设超时；`diff`（版本对比）、`doctor`、`templates`、`graph`（流程图）等命令。更新记录见 [CHANGELOG.md](CHANGELOG.md)。
+2. **阶段看板**：本机看板已经有了（`flowgit board`），每张卡能看产物、改、运行、看历史、对比和回退。下一步是网站：在网上打开一个流程就是一块看板。
+3. **发布与复用**：从别人的流程开始（fork）、分享前自动去隐私、画廊。
+4. **更多领域**：更多模板（图文和客服 SOP 已经自带，做网站有 `examples/agent-page` 示例）；`service` 执行器调用 HTTP 服务；之后让作者把流程变成 MCP 服务供别人调用。
 
 English:
 
-1. **Format + CLI** (this repo today, 0.1.0 getting ready to ship): Flow spec v0.1; bundled short-video and weekly-report templates; llm stages on any model and agent stages on Claude Code, Codex, Cursor or Gemini; commands such as `doctor`, `templates` and `graph` (a diagram of the flow). See [CHANGELOG.md](CHANGELOG.md) for details.
-2. **Stage board web app**: opening a flow shows a board; each card lets you see its outputs, edit them, re-run, and browse history.
-3. **Publish and reuse**: a gallery, publishing (with private data stripped), forks, and version diffs.
-4. **More domains**: templates such as article posts and a support SOP (building a website already has the `examples/agent-page` example); later, authors can expose a flow as an MCP service for others to call.
+1. **Format + CLI** (this repo today, 0.1.0 getting ready to ship): Flow spec v0.1; four bundled templates (short video, weekly-report starter, article posts, support SOP); llm stages on any model and agent stages on Claude Code, Codex, Cursor or Gemini; timeouts for script and agent stages; commands such as `diff` (compare versions), `doctor`, `templates` and `graph` (a diagram of the flow). See [CHANGELOG.md](CHANGELOG.md) for details.
+2. **Stage board**: the local board is here (`flowgit board`); each card lets you see its outputs, edit them, run, browse history, compare and restore. Next is the web app: open a flow online and it is a board.
+3. **Publish and reuse**: start from someone else's flow (fork), strip private data before sharing, and a gallery.
+4. **More domains**: more templates (article posts and a support SOP are bundled; building a website has the `examples/agent-page` example); a `service` executor for HTTP services; later, authors can expose a flow as an MCP service for others to call.
 
 ## 许可证 / License
 
