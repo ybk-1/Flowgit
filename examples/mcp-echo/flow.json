@@ -1,0 +1,46 @@
+{
+  "format": "flowgit",
+  "version": "0.1",
+  "id": "mcp-echo",
+  "name": "MCP 回声",
+  "description": "用本地的假 MCP 服务器把一段文字写进 echo.md。演示 mcp 执行器：stdio、${变量名}、{{inputs.text}}。 / Echo a line of text through a local fake MCP server into echo.md. Shows the mcp executor: stdio, ${VAR}, and {{inputs.text}}.",
+  "inputs": {
+    "text": {
+      "type": "string",
+      "description": "要回声的文字 / Text to echo",
+      "required": true
+    }
+  },
+  "mcpServers": {
+    "echo": {
+      "command": "node",
+      "args": ["scripts/fake-mcp.mjs"],
+      "env": {
+        "ECHO_TOKEN": "${ECHO_TOKEN}"
+      }
+    }
+  },
+  "stages": [
+    {
+      "id": "echo",
+      "name": "回声",
+      "description": "调用 echo 工具，把 {{inputs.text}} 写进 echo.md。",
+      "executor": {
+        "type": "mcp",
+        "server": "echo",
+        "tool": "echo",
+        "args": {
+          "text": "{{inputs.text}}",
+          "mode": "text"
+        },
+        "timeoutSec": 30
+      },
+      "outputs": [
+        {
+          "type": "text/markdown",
+          "path": "echo.md"
+        }
+      ]
+    }
+  ]
+}

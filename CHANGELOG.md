@@ -27,6 +27,7 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 - `llm`：接任何模型。模型写成 `<provider>/<model>`，内置 Anthropic、OpenAI、OpenRouter、智谱 GLM、DeepSeek、Moonshot、通义千问和本机 Ollama，其他兼容 Anthropic 或 OpenAI 接口的服务加一条配置就行。密钥只从环境变量读。每次调用后显示 token 用量，`run all` 调用了好几次时最后再显示合计。自动修复 schema 算两次调用；修复后仍不合格的失败运行也会记下用量。
 - `script`：在流程目录执行一条命令；`requires` 列出命令还要用到的程序（例如 `ffmpeg`）。
 - `service`：调用 HTTP 服务。`POST` 发送流程输入和 1 MB 以内的文本上游产物，`GET` 把流程输入放进查询参数。请求头用 `{{env.变量名}}` 传密钥，不写进文件；跳转只跟同一个源，不会把请求头带到别的网站。`timeoutSec` 默认 60。示例见 `examples/service-echo`。
+- `mcp`：调用 MCP 工具。`mcpServers` 的写法和 Claude Desktop / Cursor 一样（stdio 的 `command` / `args` / `env`，或 Streamable HTTP 的 `url`）。`env` 必须是 `${变量名}`，把密钥直接写进 flow.json 会校验失败。一个阶段只有一个产物：文本把 `text` 用空行拼起来，JSON 写入 `structuredContent`（没有就写 `content`），目录把图片和音频存成 `001.png` 这样的文件、文字存成 `result.md`。`isError` 会让阶段失败。`timeoutSec` 默认 60，到点停掉子进程，stderr 记进运行日志。改了工具参数或服务器命令会需要重跑，换密钥的值不会。`flowgit doctor` 检查命令在不在 PATH 上、变量有没有设置。`flowgit mcp tools <服务器>` 列出工具和参数。示例见 `examples/mcp-echo`，说明见 `docs/mcp.md`。
 - `workflow`（`engine: "flowgit"`）：运行另一份 `flow.json`。`params.inputs` 传给子流程（字符串可用 `{{inputs.名称}}`），`params.copy` 把子流程的产物复制成本阶段的产物。子流程用自己的 `runs/`。子流程停在人工阶段或失败时，父阶段也停或失败。可以嵌套，环和超过 5 层会报错；改子流程的提示词或脚本会让父阶段需要重跑。其他引擎仍是预留。示例见 `examples/subflow`。
 - `agent`：以无界面模式启动 Claude Code、Codex、Cursor、Gemini 或自定义的 agent CLI，只用能写流程目录的最小权限。
 - `script` 和 `agent` 可以设 `timeoutSec`：到时间就停掉整棵进程树（macOS、Linux 先 `SIGTERM`、5 秒后 `SIGKILL`；Windows 用 `taskkill /T /F`），这次运行记为失败。按 Ctrl+C 时也会一起停掉子进程。
@@ -34,13 +35,14 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 - `llm`: any model. Models are written `<provider>/<model>`, with Anthropic, OpenAI, OpenRouter, Zhipu GLM, DeepSeek, Moonshot, Qwen and local Ollama built in; any other Anthropic- or OpenAI-compatible service is one config entry. Keys are read only from environment variables. Each call shows its token usage, and `run all` ends with a total when it made several calls. A schema repair counts as two calls, and a run that still fails after the repair keeps its usage too.
 - `script`: runs a command in the flow directory; `requires` lists other programs the command needs (e.g. `ffmpeg`).
 - `service`: calls an HTTP service. `POST` sends the flow inputs and text upstream outputs up to 1 MB; `GET` puts the flow inputs in the query string. Headers pass keys with `{{env.NAME}}`, never written to a file, and redirects are followed only within the same origin so headers never reach another site. `timeoutSec` defaults to 60. See `examples/service-echo`.
+- `mcp`: calls an MCP tool. `mcpServers` matches Claude Desktop / Cursor (stdio `command` / `args` / `env`, or a Streamable HTTP `url`). `env` must be `${VAR}`; a literal secret in flow.json fails validation. A stage has one output: text joins `text` items with a blank line, JSON is `structuredContent` (or `content` when that is absent), and a directory saves images and audio as `001.png` and so on, with text in `result.md`. `isError` fails the stage. `timeoutSec` defaults to 60, then the child is killed, and stderr goes to the run log. Changing the tool arguments or the server command marks the stage stale; changing a secret's value does not. `flowgit doctor` checks the command is on PATH and the variables are set. `flowgit mcp tools <server>` lists tools and parameters. See `examples/mcp-echo` and `docs/mcp.md`.
 - `workflow` (`engine: "flowgit"`): runs another `flow.json`. `params.inputs` are passed to the sub-flow (strings may use `{{inputs.name}}`), and `params.copy` copies sub-flow outputs into this stage's outputs. The sub-flow keeps its own `runs/`. A human wait or a failure in the sub-flow waits or fails the parent too. Nesting is allowed; a cycle or more than 5 levels is an error, and editing a sub-flow prompt or script marks the parent stale. Other engines stay reserved. See `examples/subflow`.
 - `agent`: starts Claude Code, Codex, Cursor, Gemini or a custom agent CLI headless, with the least permission that still lets it write in the flow directory.
 - `script` and `agent` take `timeoutSec`: when it runs out, the whole process tree is stopped (`SIGTERM`, then `SIGKILL` after 5 seconds on macOS and Linux; `taskkill /T /F` on Windows) and the run is recorded as failed. Ctrl+C stops the child processes too.
 
 ### 命令行 / CLI
 
-- `init`、`templates`、`validate`、`status`（终端看板）、`board`（网页看板）、`inputs`、`run`、`log`、`diff`、`restore`、`providers`、`doctor`、`graph`、`export-skill`。
+- `init`、`templates`、`validate`、`status`（终端看板）、`board`（网页看板）、`inputs`、`run`、`log`、`diff`、`restore`、`providers`、`doctor`、`graph`、`export-skill`、`mcp tools`。
 - `init -t` 可以是 Git 地址（`git clone --depth 1`，可加 `--ref` 和 `--path`）。从本地目录或 Git 复制时默认不带产物，`--with-outputs` 才带上；Git 来源会把 `forkedFrom` 写进新的 `flow.json`。没有安装 git 时会说明怎么装。
 - `convert --to md|json` 在 `flow.json` 和 `flow.md` 之间转换，内容不变；`init --format md` 新建时直接用 `flow.md`。`stage add`、`stage rm` 写回时保持原来的格式。
 - `stage add` / `stage rm`：用命令加、删阶段。llm 和 agent 没给提示词时会建一个中英双语骨架，已有文件不覆盖。删阶段不删文件，也不动 `runs/`；还有别的阶段依赖它时要 `--force`。
@@ -59,11 +61,11 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 - `run all --dry-run` 预演：每个阶段会跳过、运行还是停下等你，最多调用几次模型，什么都不运行。`doctor` 通过后和导出的 `SKILL.md` 里都会提到它。
 - `inputs set` 保存前就检查名字和值（数字、`true`/`false`、可选值），写错了不会存进去。
 - `board` 打印和打开的链接带着令牌（`?token=…`）。直接打开 `http://127.0.0.1:4747/` 只会看到提示、拿不到令牌，所以同一台电脑上的其他账号或程序没法操作你的看板。
-- 从 Git 地址或别的文件夹 `init` 时，会列出这个流程要运行的命令、要启动的 agent 和要调用的服务（以及请求头里带的环境变量），运行前先看一眼。
+- 从 Git 地址或别的文件夹 `init` 时，会列出这个流程要运行的命令、要启动的 agent、要调用的服务（以及请求头里带的环境变量）和要启动的 MCP 服务器（命令或 URL），运行前先看一眼。
 - 提示词文件，以及要发给模型或服务的上游产物，如果是指向流程目录外面的链接，就不读取（`validate` 也会报出来），免得下载来的流程把 `~/.ssh` 这类文件发出去。脚本和 agent 阶段不受影响。
 - 流程自己的 `flowgit.local.json` 改了某个带密钥的模型服务的地址时，`doctor` 会警告，运行日志也会写出来，因为密钥会发到那个地址。
 - 提示、报错和 `--help` 都是中英双语（包括输错命令、少写参数这类报错，会提示“是不是想输入 …”），并针对余额不足、限流、连不上（包括代理）给出具体建议。
-- `init`, `templates`, `validate`, `status` (terminal board), `board` (web board), `inputs`, `run`, `log`, `diff`, `restore`, `providers`, `doctor`, `graph`, `export-skill`.
+- `init`, `templates`, `validate`, `status` (terminal board), `board` (web board), `inputs`, `run`, `log`, `diff`, `restore`, `providers`, `doctor`, `graph`, `export-skill`, `mcp tools`.
 - `init -t` accepts a Git URL (`git clone --depth 1`, with `--ref` and `--path`). Copying a local directory or a Git URL leaves outputs behind unless `--with-outputs` is set, and a Git source writes `forkedFrom` into the new `flow.json`. If git is not installed, the error says how to install it.
 - `stage add` / `stage rm`: add or remove a stage from the command line. An llm or agent stage without a prompt gets a bilingual skeleton, and an existing file is never overwritten. Removing a stage deletes no files and leaves `runs/` alone; `--force` is required when other stages depend on it.
 - `share` copies a flow into a directory that is safe to hand to someone else. A secret blocks the write entirely; emails and local paths are listed afterwards. `runs/`, `flowgit.local.json` and `.env*` are never copied.
@@ -82,7 +84,7 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 - `run all --dry-run` shows whether each stage would be skipped, run or stop for you, and at most how many model calls it would make, without running anything. `doctor` points to it when nothing blocks, and so does the exported `SKILL.md`.
 - `inputs set` checks names and values (numbers, `true`/`false`, allowed values) before saving, so a typo is never stored.
 - The link `board` prints and opens carries the token (`?token=…`). Opening `http://127.0.0.1:4747/` by itself shows a note and no token, so other accounts or programs on the same computer can't drive your board.
-- `init` from a Git URL or another folder lists the commands the flow runs, the agents it starts and the services it calls (with the environment variables their headers send), so you can look before you run it.
+- `init` from a Git URL or another folder lists the commands the flow runs, the agents it starts, the services it calls (with the environment variables their headers send) and the MCP servers it would start (command or URL), so you can look before you run it.
 - A prompt file, or an upstream output on its way to a model or a service, that is a link to a file outside the flow directory is not read (`validate` reports it too), so a downloaded flow can't send files like `~/.ssh` anywhere. Script and agent stages are not affected.
 - When a flow's own `flowgit.local.json` changes the address of a model provider that sends a key, `doctor` warns and the run log says so, because the key goes to that address.
 - Messages, errors and `--help` are bilingual (including typos in commands and missing arguments, with a “did you mean …”), with specific advice for an empty balance, rate limits and connection problems (including proxies).

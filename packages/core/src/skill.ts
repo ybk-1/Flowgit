@@ -30,7 +30,7 @@ function executorLine(ex: Executor): string {
     case "service":
       return `调用 HTTP 服务 (service)：\`${ex.method ?? "POST"} ${ex.url}\`${ex.headers ? "。请求头里的 {{env.名称}} 从环境变量读取，密钥不写进文件。" : ""}。`;
     case "mcp":
-      return `调用 MCP 工具 ${ex.server}/${ex.tool}（v0.1 尚未实现）`;
+      return `调用 MCP 工具 \`${ex.tool}\`（服务器 \`${ex.server}\`）/ call MCP tool \`${ex.tool}\` on server \`${ex.server}\`。`;
   }
 }
 

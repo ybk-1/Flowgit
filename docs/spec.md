@@ -46,6 +46,7 @@ my-flow/
 | `tags` | 否 / no | 标签数组 | Array of tags |
 | `forkedFrom` | 否 / no | 从 Git 地址 `init` 时记下的来源：`{ "source", "ref"?, "commit"? }`，地址里的账号和密码（令牌）会去掉。从本地目录复制不写这个字段，避免把可能含用户名的本机路径带出去 | Recorded when `init` copies a Git URL: `{ "source", "ref"?, "commit"? }`, with any user name and password (token) removed from the URL. A local directory does not set it, so a path that may contain a user name is never stored |
 | `inputs` | 否 / no | 流程级参数，见下 | Flow-level parameters, see below |
+| `mcpServers` | 否 / no | 具名 MCP 服务器，写法和 Claude Desktop / Cursor 一样。stdio 是 `{ command, args?, env? }`，远程是 `{ url }`（Streamable HTTP）。`env` 的每个值必须是 `${变量名}`。见「MCP 执行器」 | Named MCP servers, shaped like Claude Desktop / Cursor. Stdio is `{ command, args?, env? }`; remote is `{ url }` (Streamable HTTP). Every `env` value must be `${VAR}`. See "The MCP executor" |
 | `stages` | 是 / yes | 阶段数组，至少一个 | Array of stages, at least one |
 
 ### inputs：流程输入 / Flow inputs
@@ -119,7 +120,53 @@ Stages must not form a cycle. Run order follows `inputs`; ties keep the order in
 | `agent` | 能 / yes | `agent`, `prompt`, `command?`, `args?`, `timeoutSec?` | 在流程目录里以无界面模式启动一个 agent CLI（Claude Code、Codex、Cursor、Gemini，或自定义命令），把渲染好的提示词交给它，由它自己写出产物。见下面的"agent 执行器" | Starts an agent CLI headless in the flow directory (Claude Code, Codex, Cursor, Gemini, or a custom command), hands it the rendered prompt, and lets it write the outputs itself. See "The agent executor" below |
 | `workflow` | `engine` 为 `flowgit` 时能 / yes when `engine` is `flowgit` | `engine`, `file`, `params?` | 运行另一个流程。`flowgit` 跑一条 Flowgit 子流程；ComfyUI、n8n 等其他引擎仍是预留。见下面的「子流程」 | Runs another flow. `flowgit` runs a Flowgit sub-flow; other engines such as ComfyUI and n8n stay reserved. See "Sub-flows" below |
 | `service` | 能 / yes | `url`, `method?`, `headers?`, `timeoutSec?` | 调用 HTTP 服务。只允许 `http` 和 `https`。`POST` 发送 `{ inputs, upstream }`（只带 1 MB 以内的文本产物），`GET` 把流程输入放进查询参数。`headers` 的值可以写 `{{env.变量名}}`，运行时从环境变量读取，这是传密钥的唯一方式，密钥不写进文件。`timeoutSec` 默认 60。跳转只跟同一个源（最多 5 次）；要跳到别的源时直接失败，免得请求头里的密钥被带过去。非 2xx、返回的 JSON 不合法、或引用的环境变量没设置，都记为失败。`url`、`method` 和 `headers` 的写法（不是取到的值）算进配置哈希 | Calls an HTTP service. Only `http` and `https`. `POST` sends `{ inputs, upstream }` (text outputs up to 1 MB), `GET` puts flow inputs in the query string. Header values may contain `{{env.NAME}}`, read from the environment at run time; this is the only way to pass a key, and keys are never written to a file. `timeoutSec` defaults to 60. Redirects are followed within the same origin only (up to 5); a redirect to another origin fails the run so a key in the headers is never sent there. A non-2xx response, invalid JSON, or an unset env var fails the run. `url`, `method` and the `headers` as written (not the resolved values) count in the config hash |
-| `mcp` | 预留 / reserved | `server`, `tool`, `args?` | 调用 MCP 服务器上的工具。以后整个流程也会通过这一层暴露给别人调用 | Calls a tool on an MCP server. Later, whole flows will be exposed to others through this layer |
+| `mcp` | 能 / yes | `server`, `tool`, `args?`, `timeoutSec?` | 调用 `mcpServers` 里的一个工具，把结果写进唯一的产物。见下面的「MCP 执行器」 | Calls one tool on a server named in `mcpServers` and writes the result to the stage's single output. See "The MCP executor" below |
+
+### MCP 执行器 / The MCP executor
+
+`mcp` 阶段调用一个 MCP 工具。服务器写在流程顶层的 `mcpServers` 里，阶段用 `server` 点名。`flowgit validate` 会检查这个名字存在，并且每个阶段只有一个产物。
+
+An `mcp` stage calls one MCP tool. Servers live in the top-level `mcpServers` object, and the stage names one with `server`. `flowgit validate` checks that the name exists and that the stage has exactly one output.
+
+```json
+{
+  "mcpServers": {
+    "files": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "."]
+    },
+    "remote": { "url": "https://example.com/mcp" }
+  }
+}
+```
+
+```json
+{
+  "type": "mcp",
+  "server": "files",
+  "tool": "list_directory",
+  "args": { "path": "{{inputs.dir}}" },
+  "timeoutSec": 30
+}
+```
+
+- stdio 服务器和 Claude Desktop / Cursor 一样：`command`、`args`、`env`。`env` 的每个值必须整段都是 `${变量名}`（例如 `"API_KEY": "${API_KEY}"`）。运行时从环境变量读取，不写进任何文件。写成别的字（包括把密钥直接放进 flow.json）校验失败。远程服务器只有 `url`，走 Streamable HTTP，只允许 `http` 和 `https`。
+- `args` 里的字符串可以用 `{{inputs.名称}}`（和提示词同一个 `renderTemplate`）、`{{upstream.<阶段 id>}}`（那个阶段第一个产物的相对路径）和 `{{upstream.<阶段 id>.content}}`（它的文本）。
+- 文本产物把每一段 `type: "text"` 用空行拼起来。JSON 产物写入 `structuredContent`；工具没给这个字段时，写入原来的 `content` 数组。以 `/` 结尾的目录产物按顺序把 `image` / `audio` 存成 `001.png`、`002.wav` 这样的文件，文字存成 `result.md`。
+- `isError: true` 时阶段失败，错误里是工具返回的文字。
+- 超时先看阶段的 `timeoutSec`，没有就用默认 60 秒。到点就停掉 stdio 子进程。子进程的 stderr 写进这次运行的日志。
+- 是否需要重跑的哈希包含 `mcpServers` 里这个服务器的配置（`env` 只算变量名，不算值）、`tool` 和 `args`。改了参数或命令会变成 `stale`；换一个密钥的值不会。
+- `flowgit doctor` 检查 stdio 的 `command` 在不在 PATH 上，以及每个 `${变量名}` 有没有设置。`flowgit mcp tools <服务器>` 列出工具和参数。`init` 和从别处复制来的流程会列出将要启动的命令或 URL。
+- 可运行的例子：[`examples/mcp-echo`](../examples/mcp-echo)（本地假服务器，不访问网络）。更完整的说明见 [docs/mcp.md](mcp.md)。
+
+- A stdio server matches Claude Desktop / Cursor: `command`, `args`, `env`. Every `env` value must be the whole string `${VAR}` (for example `"API_KEY": "${API_KEY}"`). It is read from the environment at run time and never written to a file. Anything else, including a literal secret in flow.json, fails validation. A remote server is only `url`, over Streamable HTTP, and only `http` and `https` are allowed.
+- Strings in `args` may use `{{inputs.name}}` (the same `renderTemplate` as prompts), `{{upstream.<stageId>}}` (the relative path of that stage's first output) and `{{upstream.<stageId>.content}}` (its text).
+- A text output joins every `type: "text"` item with a blank line. A JSON output is `structuredContent`, or the raw `content` array when the tool did not send `structuredContent`. A directory output (path ending in `/`) saves `image` / `audio` items in order as `001.png`, `002.wav` and so on, and text as `result.md`.
+- `isError: true` fails the stage, and the error is the tool's text.
+- The timeout is the stage's `timeoutSec`, or 60 seconds when that is unset. At the deadline the stdio child is killed. The child's stderr is written to the run log.
+- The staleness hash includes that server's `mcpServers` entry with env values removed (the variable names stay), plus `tool` and `args`. Changing args or the command marks the stage `stale`; changing a secret's value does not.
+- `flowgit doctor` checks that a stdio `command` is on PATH and that every `${VAR}` is set. `flowgit mcp tools <server>` lists tools and parameters. `init`, and a flow copied from somewhere else, lists the command or URL that would be started.
+- Runnable example: [`examples/mcp-echo`](../examples/mcp-echo) (a local fake server, no network). The longer write-up is [docs/mcp.md](mcp.md).
 
 ### 子流程 / Sub-flows
 
@@ -392,9 +439,9 @@ Main `run.json` fields: `stage`, `n`, `status`, `executor`, `startedAt`, `finish
 | `edited` | 产物被手动改过：和任何一个成功的版本都不一样（回退到旧版本不算） | Outputs were edited by hand: they match no successful run (restoring an older version does not count) |
 | `error` | 最新一次运行失败 | The latest run failed |
 
-`inputHash` 是"上游产物的 sha256 + 流程输入 + 执行器配置"的指纹。执行器配置包括执行器定义本身、llm 的提示词文件，以及 script 命令里出现的、存在于流程目录中的文件（比如 `node scripts/render.mjs` 里的 `scripts/render.mjs`）。`workflow` 且 `engine` 为 `flowgit` 时，还包含子流程的 `flow.json`，以及那份子流程里同样算法算出来的提示词和脚本文件。所以改一句提示词，或者改了子流程，这个阶段和它下游的阶段都会变成 `stale`。
+`inputHash` 是"上游产物的 sha256 + 流程输入 + 执行器配置"的指纹。执行器配置包括执行器定义本身、llm 的提示词文件，以及 script 命令里出现的、存在于流程目录中的文件（比如 `node scripts/render.mjs` 里的 `scripts/render.mjs`）。`workflow` 且 `engine` 为 `flowgit` 时，还包含子流程的 `flow.json`，以及那份子流程里同样算法算出来的提示词和脚本文件。`mcp` 阶段还包含 `mcpServers` 里对应服务器的配置（不含 `env` 的值）、`tool` 和 `args`。所以改一句提示词、改了子流程、或者改了 MCP 工具的参数，这个阶段和它下游的阶段都会变成 `stale`。
 
-`inputHash` fingerprints the upstream artifacts' sha256, the flow inputs, and the executor config. The executor config covers the executor definition itself, an llm stage's prompt file, and any file in the flow directory named in a script command (e.g. `scripts/render.mjs` in `node scripts/render.mjs`). A `workflow` with `engine: "flowgit"` also includes the sub-flow's `flow.json` and, by the same hash, the prompt and script files that sub-flow names. So changing one line of a prompt, or changing the sub-flow, marks that stage and everything downstream as `stale`.
+`inputHash` fingerprints the upstream artifacts' sha256, the flow inputs, and the executor config. The executor config covers the executor definition itself, an llm stage's prompt file, and any file in the flow directory named in a script command (e.g. `scripts/render.mjs` in `node scripts/render.mjs`). A `workflow` with `engine: "flowgit"` also includes the sub-flow's `flow.json` and, by the same hash, the prompt and script files that sub-flow names. An `mcp` stage also includes that server's `mcpServers` entry with the env values removed, plus `tool` and `args`. So changing one line of a prompt, changing the sub-flow, or changing an MCP tool's arguments marks that stage and everything downstream as `stale`.
 
 ### 对比版本 / Diffing versions
 
@@ -427,7 +474,7 @@ For each output the stage declares:
 ## 以后的版本 / Planned
 
 - v0.2：剪辑阶段输出 OpenTimelineIO（`.otio`）；`flowgit pack` 打包分享。`workflow` 的其他引擎（ComfyUI、n8n）仍是预留。
-- 之后：`mcp` 执行器，以及把整条流程暴露成 MCP 服务供别人调用。
+- 之后：把整条流程暴露成 MCP 服务供别人调用。
 
 - v0.2: the edit stage emits OpenTimelineIO (`.otio`); `flowgit pack` for sharing. Other `workflow` engines (ComfyUI, n8n) stay reserved.
-- Later: the `mcp` executor, and exposing a whole flow as an MCP service others can call.
+- Later: exposing a whole flow as an MCP service others can call.

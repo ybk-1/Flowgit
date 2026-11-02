@@ -33,6 +33,7 @@ import {
   globalProvidersFile,
   diffRuns,
   listRuns,
+  listMcpTools,
   loadFlow,
   loadProviders,
   providerKeyState,
@@ -437,7 +438,11 @@ function printActions(flow: Flow, dir: string): void {
   console.log(`${c.yellow("!")} 运行前请看一眼，这个流程会在你的电脑上做这些事 / Before you run it, look at what this flow does on your computer:`);
   const width = Math.max(...actions.map((a) => a.stage.length));
   for (const a of actions) {
-    const env = a.env?.length ? `  · 请求头里带上 / sends in headers: ${a.env.join(", ")}` : "";
+    const env = a.env?.length
+      ? a.kind === "mcp"
+        ? `  · 环境变量 / env: ${a.env.join(", ")}`
+        : `  · 请求头里带上 / sends in headers: ${a.env.join(", ")}`
+      : "";
     console.log(`  ${a.kind.padEnd(8)} ${a.stage.padEnd(width)}  ${a.detail}${env}`);
   }
 }
@@ -1261,6 +1266,54 @@ program
       console.log(`${c.green("✓")} 看板 / board: ${board.url}`);
       console.log(c.dim("绑定 127.0.0.1。可以修改产物，也可以运行、填写输入、看历史、对比和回退。按 Ctrl+C 停止 / bound to 127.0.0.1. Outputs can be edited; you can also run stages, edit inputs, browse history, compare, and restore. Press Ctrl+C to stop"));
       if (opts.open) openBrowser(board.url);
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+function printMcpTools(server: string, tools: { name: string; description?: string; inputSchema: { properties?: Record<string, unknown>; required?: string[] } }[]): void {
+  console.log(`${c.bold(server)} ${c.dim(`${tools.length} 个工具 / tool(s)`)}`);
+  if (!tools.length) {
+    console.log("  这个服务器没有工具 / this server has no tools");
+    return;
+  }
+  for (const tool of tools) {
+    console.log(`\n${c.bold(tool.name)}`);
+    if (tool.description) console.log(`  ${tool.description}`);
+    const props = tool.inputSchema.properties ?? {};
+    const names = Object.keys(props);
+    const required = new Set(tool.inputSchema.required ?? []);
+    if (!names.length) {
+      console.log(c.dim("  无参数 / no parameters"));
+      continue;
+    }
+    console.log(c.dim("  参数 / parameters:"));
+    for (const name of names) {
+      const schema = props[name];
+      const type = schema && typeof schema === "object" && typeof (schema as { type?: unknown }).type === "string" ? (schema as { type: string }).type : "any";
+      const description = schema && typeof schema === "object" && typeof (schema as { description?: unknown }).description === "string" ? (schema as { description: string }).description : "";
+      const need = required.has(name) ? "必填 / required" : "可选 / optional";
+      console.log(`    ${name} (${type}, ${need})${description ? ` — ${description}` : ""}`);
+    }
+  }
+}
+
+const mcpCmd = program.command("mcp").description("查看流程里配置的 MCP 服务器 / inspect the MCP servers configured in this flow");
+
+mcpCmd
+  .command("tools")
+  .description("列出一个 MCP 服务器的工具和参数 / list one MCP server's tools and their parameters")
+  .argument("<server>", "mcpServers 里的名字 / name in mcpServers")
+  .option("--json", "输出 JSON / machine-readable output")
+  .action(async (server: string, opts: { json?: boolean }) => {
+    try {
+      const loaded = loadFlow(dirOf());
+      const tools = await listMcpTools(loaded.dir, loaded.flow.mcpServers, server);
+      if (opts.json) {
+        console.log(JSON.stringify({ server, tools }, null, 2));
+        return;
+      }
+      printMcpTools(server, tools);
     } catch (err) {
       fail(err);
     }

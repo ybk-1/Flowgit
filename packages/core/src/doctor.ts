@@ -5,6 +5,7 @@ import { headerEnvNames } from "./executors/service.js";
 import { DEFAULT_MODEL } from "./executors/llm.js";
 import { isRunnableExecutor } from "./executors/index.js";
 import { loadFlow } from "./load.js";
+import { isHttpServer, isStdioServer, mcpEnvNames } from "./mcp.js";
 import { DEFAULT_PROVIDER, flowKeyEndpoint, flowKeyEndpointNote, providerKeyState, resolveModel, type ResolvedProvider } from "./providers.js";
 import { pickProxy, proxyOff, proxyProblem, proxySourceLabel, showProxy, systemProxy, type ProxyInfo } from "./proxy.js";
 import { MissingInputsError, loadFlowInputs } from "./runs.js";
@@ -204,6 +205,49 @@ function ttsCheck(stageId: string, command: string, env: NodeJS.ProcessEnv): Doc
   };
 }
 
+function mcpChecks(loaded: LoadedFlow, stage: Stage, env: NodeJS.ProcessEnv): DoctorCheck[] {
+  const ex = stage.executor;
+  if (ex.type !== "mcp") return [];
+  const server = loaded.flow.mcpServers?.[ex.server];
+  if (!server) {
+    return [{
+      level: "error",
+      stage: stage.id,
+      message: `MCP 服务器 "${ex.server}" 没有在 mcpServers 里定义 / MCP server "${ex.server}" is not defined in mcpServers`,
+    }];
+  }
+  if (isHttpServer(server)) {
+    return [{ level: "ok", stage: stage.id, message: `远程 MCP / remote MCP ${server.url}` }];
+  }
+  if (!isStdioServer(server)) return [];
+  const command = server.command.includes("/") || server.command.includes("\\")
+    ? pathExistsCheck(stage.id, server.command, loaded.dir)
+    : programCheck(stage.id, server.command, env);
+  const vars = mcpEnvNames(server.env).map((name) =>
+    env[name]
+      ? { level: "ok" as const, stage: stage.id, message: `MCP 环境变量 ${name} 已设置 / MCP env ${name} is set` }
+      : {
+          level: "error" as const,
+          stage: stage.id,
+          message: `MCP 环境变量 ${name} 没有设置 / MCP env ${name} is not set`,
+          hint: `PowerShell：$env:${name}="..."；macOS/Linux：export ${name}=...`,
+        },
+  );
+  return [command, ...vars];
+}
+
+function pathExistsCheck(stage: string, command: string, dir: string): DoctorCheck {
+  const abs = path.isAbsolute(command) ? command : path.resolve(dir, command);
+  return fs.existsSync(abs)
+    ? { level: "ok", stage, message: `找到 / found ${command}` }
+    : {
+        level: "error",
+        stage,
+        message: `找不到 ${command} / ${command} not found`,
+        hint: "确认这个路径是对的 / check that path",
+      };
+}
+
 function stageChecks(loaded: LoadedFlow, stage: Stage, opts: DoctorOptions, env: NodeJS.ProcessEnv, stack: string[] = []): DoctorCheck[] {
   const ex = stage.executor;
   if (!isRunnableExecutor(ex)) {
@@ -241,6 +285,8 @@ function stageChecks(loaded: LoadedFlow, stage: Stage, opts: DoctorOptions, env:
               hint: `PowerShell：$env:${name}="..."；macOS/Linux：export ${name}=...`,
             },
       );
+    case "mcp":
+      return mcpChecks(loaded, stage, env);
     case "agent": {
       if (ex.agent === "custom") {
         const program = ex.command ? commandProgram(ex.command) : undefined;

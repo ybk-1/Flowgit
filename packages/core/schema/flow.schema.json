@@ -81,6 +81,13 @@
         "$ref": "#/$defs/flowInput"
       }
     },
+    "mcpServers": {
+      "type": "object",
+      "description": "Named MCP servers, shaped like Claude Desktop and Cursor. A stdio server has command, args and env; a remote server has url (Streamable HTTP). Every env value must be ${VAR}, read from the environment at run time. A literal secret is rejected.",
+      "additionalProperties": {
+        "$ref": "#/$defs/mcpServer"
+      }
+    },
     "stages": {
       "type": "array",
       "minItems": 1,
@@ -468,9 +475,64 @@
         }
       }
     },
+    "mcpServer": {
+      "description": "One MCP server: either a local stdio process or a Streamable HTTP endpoint.",
+      "oneOf": [
+        {
+          "$ref": "#/$defs/mcpStdioServer"
+        },
+        {
+          "$ref": "#/$defs/mcpHttpServer"
+        }
+      ]
+    },
+    "mcpStdioServer": {
+      "type": "object",
+      "description": "A local MCP server started as a child process. Same shape as Claude Desktop / Cursor stdio servers.",
+      "required": [
+        "command"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Program to start (looked up on PATH), e.g. npx or node."
+        },
+        "args": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Arguments for command."
+        },
+        "env": {
+          "type": "object",
+          "description": "Environment variables for the child. Each value must be ${VAR}; the variable is read from the environment when the stage runs and is never written to a file.",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "mcpHttpServer": {
+      "type": "object",
+      "description": "A remote MCP server reached over Streamable HTTP.",
+      "required": [
+        "url"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "url": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Streamable HTTP endpoint, http or https."
+        }
+      }
+    },
     "executorMcp": {
       "type": "object",
-      "description": "Reserved: call a tool on an MCP server. This is also how a whole flow will later be exposed to others.",
+      "description": "Call one tool on an MCP server named in mcpServers, and write the result to this stage's single output.",
       "required": [
         "type",
         "server",
@@ -482,13 +544,23 @@
           "const": "mcp"
         },
         "server": {
-          "type": "string"
+          "type": "string",
+          "minLength": 1,
+          "description": "Name of an entry in mcpServers."
         },
         "tool": {
-          "type": "string"
+          "type": "string",
+          "minLength": 1,
+          "description": "Tool name on that server."
         },
         "args": {
-          "type": "object"
+          "type": "object",
+          "description": "Arguments passed to the tool. Strings may use {{inputs.key}}, {{upstream.<stageId>}} (relative path of that stage's first output) and {{upstream.<stageId>.content}} (its text)."
+        },
+        "timeoutSec": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Stop the call and kill the stdio child after this many seconds. Default 60."
         }
       }
     }

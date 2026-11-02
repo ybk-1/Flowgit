@@ -77,7 +77,7 @@ export function recordManualEdit(loaded: LoadedFlow, stageId: string, flowInputs
     executor: "manual",
     startedAt: now,
     finishedAt: now,
-    inputHash: inputHash(refs, flowInputs, stageConfigHash(dir, stage)),
+    inputHash: inputHash(refs, flowInputs, stageConfigHash(dir, stage, new Set(), flow)),
     inputs: refs,
     flowInputs,
     outputs,
@@ -132,7 +132,7 @@ export async function runStage(loaded: LoadedFlow, stageId: string, options: Run
 
   const inputs = collectInputs(loaded, stage);
   const refs = inputRefs(dir, flow, stage);
-  const hash = inputHash(refs, flowInputs, stageConfigHash(dir, stage));
+  const hash = inputHash(refs, flowInputs, stageConfigHash(dir, stage, new Set(), flow));
   const n = nextRunNumber(dir, stageId);
   const logLines: string[] = [];
   const startedAt = nowIso();

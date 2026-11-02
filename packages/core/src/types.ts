@@ -105,11 +105,37 @@ export interface ExecutorService {
   timeoutSec?: number;
 }
 
+/** A local MCP server started as a child process. Same shape as Claude Desktop / Cursor. */
+export interface McpStdioServer {
+  command: string;
+  args?: string[];
+  /**
+   * Environment for the child. Each value must be `${VAR}`; the variable is
+   * read from the environment when the stage runs and is never stored in a file.
+   */
+  env?: Record<string, string>;
+}
+
+/** A remote MCP server reached over Streamable HTTP. */
+export interface McpHttpServer {
+  url: string;
+}
+
+export type McpServerConfig = McpStdioServer | McpHttpServer;
+
 export interface ExecutorMcp {
   type: "mcp";
+  /** Name of an entry in `mcpServers`. */
   server: string;
   tool: string;
+  /**
+   * Arguments passed to the tool. Strings may use `{{inputs.key}}`,
+   * `{{upstream.<stageId>}}` (relative path of that stage's first output)
+   * and `{{upstream.<stageId>.content}}` (its text).
+   */
   args?: Record<string, unknown>;
+  /** Stop the call and kill the stdio child after this many seconds. Default 60. */
+  timeoutSec?: number;
 }
 
 export type Executor =
@@ -153,6 +179,11 @@ export interface Flow {
   /** Set when the flow was initialized from a Git URL. */
   forkedFrom?: ForkedFrom;
   inputs?: Record<string, FlowInput>;
+  /**
+   * Named MCP servers. Stdio entries are `{ command, args?, env? }`;
+   * Streamable HTTP entries are `{ url }`. `env` values must be `${VAR}`.
+   */
+  mcpServers?: Record<string, McpServerConfig>;
   stages: Stage[];
 }
 

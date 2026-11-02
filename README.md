@@ -259,6 +259,12 @@ A `service` stage calls an HTTP endpoint. `POST` sends the flow inputs and text 
 { "type": "service", "method": "POST", "url": "https://example.com/hook", "headers": { "Authorization": "Bearer {{env.ECHO_TOKEN}}" } }
 ```
 
+## 接 MCP 工具 / MCP tools
+
+`mcp` 阶段调用一个 MCP 工具。服务器写在 `mcpServers` 里，和 Claude Desktop、Cursor 一样：本机用 `command` / `args` / `env`，远程用 `url`（Streamable HTTP）。`env` 的值必须是 `${变量名}`，密钥不写进 flow.json。`flowgit mcp tools <服务器>` 列出工具和参数，`flowgit doctor` 检查命令在不在 PATH 上、变量有没有设置。说明见 [docs/mcp.md](docs/mcp.md)，可运行的例子是 [`examples/mcp-echo`](examples/mcp-echo)。
+
+An `mcp` stage calls an MCP tool. Servers live in `mcpServers`, the same shape as Claude Desktop and Cursor: `command` / `args` / `env` locally, or `url` (Streamable HTTP) for a remote server. An `env` value must be `${VAR}`; secrets are not written into flow.json. `flowgit mcp tools <server>` lists tools and parameters, and `flowgit doctor` checks that the command is on PATH and the variables are set. See [docs/mcp.md](docs/mcp.md). A runnable example is [`examples/mcp-echo`](examples/mcp-echo).
+
 ## 子流程 / Sub-flows
 
 `workflow` 阶段在 `engine` 为 `flowgit` 时运行另一份 `flow.json`。`params.inputs` 把父流程的输入传进去（字符串里可以写 `{{inputs.名称}}`），`params.copy` 把子流程的产物复制成这个阶段的产物。子流程用自己的 `runs/`。可以嵌套，最多 5 层；绕回去会报错。示例：[`examples/subflow`](examples/subflow)。
