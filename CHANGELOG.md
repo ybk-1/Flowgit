@@ -73,6 +73,11 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 - `support-sop`：客服 SOP，资料（人）→ 汇总（脚本）→ 规程 → 用例 → 检查（模型）→ 打包成 `skill/SKILL.md` 和评测用例。
 - `job-application`：对照职位描述改简历并写求职信。简历和求职信并行，最后脚本检查关键词、篇幅和占位符。
 - `research-report`：把题目拆成子问题、收集资料、写成带引用的报告。脚本检查没被引用的来源、不存在的引用、没被回答的子问题和没有出处的段落。
+- `ecommerce-listing`：电商商品上架（淘宝、拼多多、抖店、亚马逊）。商品资料（人）→ 卖点 → 标题 → 主图和详情页、客服问答（并行）→ 脚本检查标题长度、关键词、常见绝对化用语和占位符。
+- `slides`：PPT 演示稿。大纲 → 每页内容（带 schema）→ 排成网页幻灯片 `slides.html` 和讲稿，浏览器里打印就是一页一张的 PDF → 检查页数和太满的页。
+- `live-selling`：直播带货脚本。商品资料（人）→ 流程表 → 逐段话术和弹幕问答（并行）→ 检查分钟数、价格、绝对化用语。
+- `short-drama`：竖屏短剧剧本。人物 → 分集大纲 → 逐集剧本 → 检查集数、估算时长、结尾悬念和没出场的人物。
+- `lesson-plan`：老师备课。教学目标 → 教案和练习题（并行）→ 生成学生练习单和答案，并检查时间和目标覆盖。
 - `examples/agent-page`：用 agent 做一页介绍网页（只在仓库里）。
 - `short-video` (default): script → storyboard → assets → edit → export. FFmpeg renders a vertical video with zoom, blurred fill, gradient text cards, a title, transitions, background music and voiceover (clips follow the voice); the output language is Chinese or English.
 - `weekly-report`: a starter that turns rough notes (person) into a draft (model) and checks it (script); the [guide](docs/guide.md) builds it step by step.
@@ -80,6 +85,11 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 - `support-sop`: a customer-support SOP, knowledge (person) → collect (script) → SOP → test cases → review (model) → packaged as `skill/SKILL.md` with an eval set.
 - `job-application`: tailor a resume and write a cover letter for a job description. The resume and letter run in parallel, then a script checks keywords, length and placeholders.
 - `research-report`: split a topic into sub-questions, gather sources and write a cited report. A script checks uncited sources, citations of missing files, unanswered sub-questions and paragraphs with no citation.
+- `ecommerce-listing`: a product listing for Taobao, Pinduoduo, Douyin shops or Amazon. Product facts (person) → selling points → titles → main images and detail page, plus customer Q&A (in parallel) → a script checks title length, keywords, common absolute claims and placeholders.
+- `slides`: a slide deck. Outline → slide content (with a schema) → an HTML deck `slides.html` plus speaker notes, which prints to a one-slide-per-page PDF → a check on slide count and dense slides.
+- `live-selling`: a live-selling stream script. Product facts (person) → rundown → segment script and chat Q&A (in parallel) → a check on minutes, price and absolute claims.
+- `short-drama`: a vertical short drama. Characters → episode outline → full scripts → a check on episode count, estimated length, cliffhangers and unused characters.
+- `lesson-plan`: lesson prep for teachers. Objectives → lesson plan and exercises (in parallel) → a student worksheet and answer key, with a check on timing and objective coverage.
 - `examples/agent-page`: a one-page explainer made by an agent (repo only).
 
 ### 项目 / Project

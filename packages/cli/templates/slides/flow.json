@@ -1,0 +1,76 @@
+{
+  "format": "flowgit",
+  "version": "0.1",
+  "id": "slides",
+  "name": "PPT 演示稿",
+  "description": "从一个主题做出一份演示稿：大纲 → 每页内容 → 排版成网页幻灯片（可打印成 PDF）→ 检查。先改大纲再出页，改哪页重跑哪步。 / Make a slide deck from a topic: outline → slide content → an HTML deck you can print to PDF → check. Fix the outline before any slide is written; change a step and re-run only that step.",
+  "language": "zh",
+  "author": { "name": "Flowgit" },
+  "license": "Apache-2.0",
+  "tags": ["slides", "presentation", "starter"],
+  "inputs": {
+    "topic": {
+      "type": "string",
+      "description": "演示主题，例如：我们团队为什么要用流程化工作 / What the talk is about",
+      "required": true
+    },
+    "audience": {
+      "type": "string",
+      "description": "听众 / Who is listening",
+      "default": "公司同事"
+    },
+    "slides": {
+      "type": "number",
+      "default": 8,
+      "description": "大约几页（含封面）/ About how many slides, cover included"
+    },
+    "theme": {
+      "type": "string",
+      "enum": ["light", "dark"],
+      "default": "light",
+      "description": "配色：light 浅色，dark 深色 / Colors: light or dark"
+    },
+    "language": {
+      "type": "string",
+      "enum": ["zh", "en"],
+      "default": "zh",
+      "description": "输出语言：zh 中文，en English / Output language: zh or en"
+    }
+  },
+  "stages": [
+    {
+      "id": "outline",
+      "name": "大纲",
+      "description": "每页一句核心观点，按讲述顺序排好。 / One key message per slide, in speaking order.",
+      "executor": { "type": "llm", "prompt": "prompts/outline.md", "effort": "medium" },
+      "outputs": [{ "type": "text/markdown", "path": "outline.md" }]
+    },
+    {
+      "id": "content",
+      "name": "每页内容",
+      "description": "按大纲写每页的标题、要点和讲稿。 / Write each slide's title, bullets and speaker notes from the outline.",
+      "inputs": ["outline"],
+      "executor": { "type": "llm", "prompt": "prompts/content.md", "effort": "medium" },
+      "outputs": [{ "type": "application/json", "path": "slides.json", "schema": "schemas/slides.schema.json" }]
+    },
+    {
+      "id": "build",
+      "name": "排版",
+      "description": "把 slides.json 排成一个网页幻灯片和一份讲稿。浏览器里按方向键翻页，打印成 PDF 时一页一张。 / Lay out slides.json as an HTML deck plus speaker notes. Arrow keys turn pages; printing to PDF gives one slide per page.",
+      "inputs": ["content"],
+      "executor": { "type": "script", "run": "node scripts/build.mjs" },
+      "outputs": [
+        { "type": "text/html", "path": "slides.html" },
+        { "type": "text/markdown", "path": "notes.md" }
+      ]
+    },
+    {
+      "id": "check",
+      "name": "检查",
+      "description": "页数是否接近目标、每页要点是否太多太长、有没有漏写讲稿。 / Is the slide count near the target, are any slides too dense, is any speaker note missing.",
+      "inputs": ["content"],
+      "executor": { "type": "script", "run": "node scripts/check.mjs" },
+      "outputs": [{ "type": "text/markdown", "path": "check-report.md" }]
+    }
+  ]
+}

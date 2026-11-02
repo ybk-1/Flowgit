@@ -1,0 +1,71 @@
+{
+  "format": "flowgit",
+  "version": "0.1",
+  "id": "lesson-plan",
+  "name": "老师备课",
+  "description": "从一个课题备好一节课：教学目标 → 教案和练习题（并行）→ 生成学生练习单和答案，并检查时间和目标覆盖。 / Prepare a lesson from a topic: objectives → lesson plan and exercises (in parallel) → a student worksheet and answer key, with a check on timing and objective coverage.",
+  "language": "zh",
+  "author": { "name": "Flowgit" },
+  "license": "Apache-2.0",
+  "tags": ["education", "teaching", "starter"],
+  "inputs": {
+    "topic": {
+      "type": "string",
+      "description": "课题，例如：分数的初步认识 / The lesson topic, e.g. introduction to fractions",
+      "required": true
+    },
+    "grade": {
+      "type": "string",
+      "description": "年级或学段 / Grade or level",
+      "default": "小学三年级"
+    },
+    "minutes": {
+      "type": "number",
+      "default": 40,
+      "description": "一节课几分钟 / Lesson length in minutes"
+    },
+    "language": {
+      "type": "string",
+      "enum": ["zh", "en"],
+      "default": "zh",
+      "description": "输出语言：zh 中文，en English / Output language: zh or en"
+    }
+  },
+  "stages": [
+    {
+      "id": "objectives",
+      "name": "教学目标",
+      "description": "3 到 5 个可以检验的教学目标，以及重点和难点。 / 3 to 5 objectives you can check, plus the key point and the hard part.",
+      "executor": { "type": "llm", "prompt": "prompts/objectives.md", "effort": "low" },
+      "outputs": [{ "type": "application/json", "path": "objectives.json" }]
+    },
+    {
+      "id": "plan",
+      "name": "教案",
+      "description": "按环节写教案，每个环节标分钟数和对应的目标。 / Write the plan step by step, each step with its minutes and the objectives it serves.",
+      "inputs": ["objectives"],
+      "executor": { "type": "llm", "prompt": "prompts/plan.md", "effort": "medium" },
+      "outputs": [{ "type": "text/markdown", "path": "lesson-plan.md" }]
+    },
+    {
+      "id": "exercises",
+      "name": "练习题",
+      "description": "从易到难的练习题和答案，每题对应一个目标，和教案并行。 / Exercises from easy to hard with answers, each tied to an objective, in parallel with the plan.",
+      "inputs": ["objectives"],
+      "executor": { "type": "llm", "prompt": "prompts/exercises.md", "effort": "medium" },
+      "outputs": [{ "type": "application/json", "path": "exercises.json" }]
+    },
+    {
+      "id": "worksheet",
+      "name": "练习单",
+      "description": "生成发给学生的练习单（不带答案）和老师用的答案，并检查时间加起来对不对、每个目标有没有讲到、有没有练到。 / Build the student worksheet (no answers) and the teacher's answer key, and check that the minutes add up and every objective is taught and practiced.",
+      "inputs": ["objectives", "plan", "exercises"],
+      "executor": { "type": "script", "run": "node scripts/worksheet.mjs" },
+      "outputs": [
+        { "type": "text/markdown", "path": "worksheet.md" },
+        { "type": "text/markdown", "path": "answer-key.md" },
+        { "type": "text/markdown", "path": "check-report.md" }
+      ]
+    }
+  ]
+}

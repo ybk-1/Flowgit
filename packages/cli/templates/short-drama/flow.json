@@ -1,0 +1,72 @@
+{
+  "format": "flowgit",
+  "version": "0.1",
+  "id": "short-drama",
+  "name": "竖屏短剧剧本",
+  "description": "从一句故事梗概写出竖屏短剧：人物 → 分集大纲 → 逐集剧本 → 检查集数、时长和每集的钩子。 / Write a vertical short drama from a one-line premise: characters → episode outline → full scripts → check episode count, length and each episode's hook.",
+  "language": "zh",
+  "author": { "name": "Flowgit" },
+  "license": "Apache-2.0",
+  "tags": ["video", "drama", "script"],
+  "inputs": {
+    "premise": {
+      "type": "string",
+      "description": "一句话梗概，例如：被裁员的程序员回老家开面馆，前老板来应聘 / One-line premise",
+      "required": true
+    },
+    "genre": {
+      "type": "string",
+      "description": "类型，例如：都市逆袭、甜宠、悬疑 / Genre, e.g. underdog comeback, romance, mystery",
+      "default": "都市逆袭"
+    },
+    "episodes": {
+      "type": "number",
+      "default": 5,
+      "description": "写几集 / How many episodes"
+    },
+    "episodeSeconds": {
+      "type": "number",
+      "default": 60,
+      "description": "每集大约几秒 / About how many seconds per episode"
+    },
+    "language": {
+      "type": "string",
+      "enum": ["zh", "en"],
+      "default": "zh",
+      "description": "输出语言：zh 中文，en English / Output language: zh or en"
+    }
+  },
+  "stages": [
+    {
+      "id": "characters",
+      "name": "人物",
+      "description": "3 到 5 个主要人物：身份、想要什么、藏着什么。 / 3 to 5 main characters: who they are, what they want, what they hide.",
+      "executor": { "type": "llm", "prompt": "prompts/characters.md", "effort": "medium" },
+      "outputs": [{ "type": "application/json", "path": "characters.json" }]
+    },
+    {
+      "id": "outline",
+      "name": "分集大纲",
+      "description": "每集的开头钩子、主要冲突、反转和结尾悬念。 / Each episode's opening hook, conflict, twist and cliffhanger.",
+      "inputs": ["characters"],
+      "executor": { "type": "llm", "prompt": "prompts/outline.md", "effort": "medium" },
+      "outputs": [{ "type": "application/json", "path": "episodes.json" }]
+    },
+    {
+      "id": "script",
+      "name": "剧本",
+      "description": "逐集写场景、动作和台词，竖屏拍摄，节奏要快。 / Write each episode's scenes, action and dialogue, shot vertically, at a fast pace.",
+      "inputs": ["characters", "outline"],
+      "executor": { "type": "llm", "prompt": "prompts/script.md", "effort": "high" },
+      "outputs": [{ "type": "text/markdown", "path": "script.md" }]
+    },
+    {
+      "id": "check",
+      "name": "检查",
+      "description": "集数对不对、按台词估算的时长、哪个人物没出场、哪集没写结尾悬念。 / Is the episode count right, estimated length from dialogue, characters who never appear, episodes without a cliffhanger.",
+      "inputs": ["characters", "outline", "script"],
+      "executor": { "type": "script", "run": "node scripts/check.mjs" },
+      "outputs": [{ "type": "text/markdown", "path": "check-report.md" }]
+    }
+  ]
+}

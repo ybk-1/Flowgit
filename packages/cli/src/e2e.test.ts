@@ -71,12 +71,12 @@ describe("flowgit CLI with the short-video template", () => {
     expect(list.status).toBe(0);
     const templates = JSON.parse(list.stdout) as { id: string; default: boolean; stages: { executor: string }[] }[];
     expect(templates[0]).toMatchObject({ id: "short-video", default: true });
-    expect(templates.map((t) => t.id)).toEqual(expect.arrayContaining(["weekly-report", "article", "support-sop", "job-application", "research-report"]));
+    expect(templates.map((t) => t.id)).toEqual(expect.arrayContaining(["weekly-report", "article", "support-sop", "job-application", "research-report", "ecommerce-listing", "slides", "live-selling", "short-drama", "lesson-plan"]));
     expect(spawnSync(process.execPath, [cli, "templates"], { encoding: "utf8", env: { ...process.env, NO_COLOR: "1" } }).stdout).toMatch(/weekly-report\s+周报（入门示例）\s+随手记 human → 周报草稿 llm → 检查 script/);
 
     const wrong = spawnSync(process.execPath, [cli, "init", path.join(work, "nope"), "-t", "no-such-template"], { encoding: "utf8" });
     expect(wrong.status).toBe(1);
-    expect(wrong.stderr).toContain("bundled templates: short-video, article, job-application, research-report, support-sop, weekly-report");
+    expect(wrong.stderr).toContain("bundled templates: short-video, article, ecommerce-listing, job-application, lesson-plan, live-selling, research-report, short-drama, slides, support-sop, weekly-report");
   });
 
   it("shows a short, quoted path when the new flow is below the current folder", () => {
@@ -698,6 +698,57 @@ describe("research-report template", () => {
     const report = fs.readFileSync(path.join(researchDir, "check-report.md"), "utf8");
     expect(report).toContain("没被引用的来源");
     expect(report).toContain("shelter.md");
+  });
+});
+
+describe("popular templates on demo replies", () => {
+  let root: string;
+
+  beforeAll(() => {
+    if (!fs.existsSync(cli)) throw new Error("Build the CLI first: pnpm -r run build");
+    root = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-popular-"));
+  });
+
+  afterAll(() => {
+    if (root) fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  function runIn(dir: string, args: string[], env: Record<string, string> = {}) {
+    const r = spawnSync(process.execPath, [cli, "-C", dir, ...args], {
+      encoding: "utf8",
+      env: { ...process.env, NO_COLOR: "1", ...env },
+    });
+    return { code: r.status, out: `${r.stdout}${r.stderr}` };
+  }
+
+  // template, required inputs, files the run must produce, text the check report must contain
+  const cases: [string, string[], string[], string][] = [
+    ["ecommerce-listing", ["product=便携榨汁杯"], ["points.json", "titles.json", "detail.md", "faq.md", "check-report.md"], "绝对化用语"],
+    ["slides", ["topic=把工作变成流程"], ["slides.json", "slides.html", "notes.md", "check-report.md"], "共 7 页"],
+    ["live-selling", ["product=便携榨汁杯", "price=直播间 99 元"], ["rundown.json", "script.md", "qa.md", "check-report.md"], "提到了价格 99"],
+    ["short-drama", ["premise=面馆逆袭"], ["characters.json", "episodes.json", "script.md", "check-report.md"], "写了 3 集，要求 5 集"],
+    ["lesson-plan", ["topic=分数的初步认识"], ["objectives.json", "lesson-plan.md", "exercises.json", "worksheet.md", "answer-key.md", "check-report.md"], "共 40 分钟"],
+  ];
+
+  it.each(cases)("%s runs end to end", (template, inputs, files, expected) => {
+    const dir = path.join(root, template);
+    const init = spawnSync(process.execPath, [cli, "init", dir, "-t", template], { encoding: "utf8" });
+    expect(init.status, `${init.stdout}${init.stderr}`).toBe(0);
+    expect(runIn(dir, ["inputs", "set", ...inputs]).code).toBe(0);
+    const ran = runIn(dir, ["run", "all"], { FLOWGIT_LLM_MOCK_DIR: path.join(dir, "demo-replies") });
+    expect(ran.code, ran.out).toBe(0);
+    for (const file of files) expect(fs.existsSync(path.join(dir, file)), file).toBe(true);
+    expect(fs.readFileSync(path.join(dir, "check-report.md"), "utf8")).toContain(expected);
+  });
+
+  it("slides: the deck is self-contained and the worksheet hides the answers", () => {
+    const html = fs.readFileSync(path.join(root, "slides", "slides.html"), "utf8");
+    expect(html).toContain("把工作变成流程");
+    expect(html).not.toMatch(/<script[^>]+src=|<link[^>]+href="http/);
+    const worksheet = fs.readFileSync(path.join(root, "lesson-plan", "worksheet.md"), "utf8");
+    const key = fs.readFileSync(path.join(root, "lesson-plan", "answer-key.md"), "utf8");
+    expect(key).toContain("分母 5，分子 3");
+    expect(worksheet).not.toContain("分母 5，分子 3");
   });
 });
 

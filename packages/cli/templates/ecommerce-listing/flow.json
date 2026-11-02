@@ -1,0 +1,92 @@
+{
+  "format": "flowgit",
+  "version": "0.1",
+  "id": "ecommerce-listing",
+  "name": "电商商品上架",
+  "description": "从商品资料写出一套上架文案：卖点 → 标题 → 主图和详情页、客服问答（并行）→ 检查。适合淘宝、拼多多、抖店、亚马逊。 / Write a full product listing from your product notes: selling points → titles → main images and detail page, plus customer Q&A (in parallel) → check. For Taobao, Pinduoduo, Douyin shops and Amazon.",
+  "language": "zh",
+  "author": { "name": "Flowgit" },
+  "license": "Apache-2.0",
+  "tags": ["ecommerce", "copywriting", "starter"],
+  "inputs": {
+    "product": {
+      "type": "string",
+      "description": "商品名称，例如：便携榨汁杯 / The product, e.g. a portable blender cup",
+      "required": true
+    },
+    "platform": {
+      "type": "string",
+      "enum": ["taobao", "pinduoduo", "douyin", "amazon"],
+      "default": "taobao",
+      "description": "上架平台：taobao 淘宝/天猫，pinduoduo 拼多多，douyin 抖店，amazon 亚马逊。决定语气和重点 / Where it is sold. Sets tone and emphasis"
+    },
+    "audience": {
+      "type": "string",
+      "description": "目标买家 / Who buys it",
+      "default": "上班族和学生"
+    },
+    "titleMax": {
+      "type": "number",
+      "default": 30,
+      "description": "标题最多几个字（按平台规则填写，淘宝常用 30 个汉字）/ Maximum title length in characters (follow your platform's rule)"
+    },
+    "language": {
+      "type": "string",
+      "enum": ["zh", "en"],
+      "default": "zh",
+      "description": "输出语言：zh 中文，en English / Output language: zh or en"
+    }
+  },
+  "stages": [
+    {
+      "id": "materials",
+      "name": "商品资料",
+      "description": "写下商品的真实参数、材质、包装和售后。后面的文案只能用这里的事实。 / Write down the real specs, materials, package contents and after-sales terms. Every later line of copy must come from these facts.",
+      "executor": {
+        "type": "human",
+        "instructions": "把 materials/product.md 换成你的商品资料：参数、材质、包装清单、售后、和同类商品比的优点。示例是虚构的榨汁杯。 / Replace materials/product.md with your product's facts: specs, materials, what is in the box, after-sales terms, and how it beats similar products. The sample is a fictional blender cup."
+      },
+      "outputs": [{ "type": "text/markdown", "path": "materials/product.md" }]
+    },
+    {
+      "id": "points",
+      "name": "卖点",
+      "description": "从资料里提炼 3 到 6 个卖点，每个都写明依据，并列出买家会搜的关键词。 / Pull 3 to 6 selling points from the facts, each with its evidence, plus the keywords buyers search for.",
+      "inputs": ["materials"],
+      "executor": { "type": "llm", "prompt": "prompts/points.md", "effort": "low" },
+      "outputs": [{ "type": "application/json", "path": "points.json" }]
+    },
+    {
+      "id": "titles",
+      "name": "标题",
+      "description": "写 3 个候选标题，带上关键词，不超过字数上限。 / Write 3 candidate titles that carry the keywords and stay within the length limit.",
+      "inputs": ["points"],
+      "executor": { "type": "llm", "prompt": "prompts/titles.md", "effort": "low" },
+      "outputs": [{ "type": "application/json", "path": "titles.json" }]
+    },
+    {
+      "id": "detail",
+      "name": "主图和详情页",
+      "description": "5 张主图的文案和画面，再加详情页的每一屏。 / Copy and visuals for 5 main images, then each screen of the detail page.",
+      "inputs": ["materials", "points", "titles"],
+      "executor": { "type": "llm", "prompt": "prompts/detail.md", "effort": "medium" },
+      "outputs": [{ "type": "text/markdown", "path": "detail.md" }]
+    },
+    {
+      "id": "faq",
+      "name": "客服问答",
+      "description": "买家最常问的问题和回答，和详情页并行。不知道的不编。 / The questions buyers ask most, with answers, in parallel with the detail page. Nothing invented.",
+      "inputs": ["materials", "points"],
+      "executor": { "type": "llm", "prompt": "prompts/faq.md", "effort": "low" },
+      "outputs": [{ "type": "text/markdown", "path": "faq.md" }]
+    },
+    {
+      "id": "check",
+      "name": "检查",
+      "description": "检查标题长度、关键词、广告法常见违禁词和占位符。 / Check title length, keywords, absolute claims that ad rules commonly ban, and placeholders.",
+      "inputs": ["points", "titles", "detail", "faq"],
+      "executor": { "type": "script", "run": "node scripts/check.mjs" },
+      "outputs": [{ "type": "text/markdown", "path": "check-report.md" }]
+    }
+  ]
+}

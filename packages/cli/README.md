@@ -29,6 +29,11 @@ flowgit log                       # 整个流程的历史和 token 合计 / the 
 | `support-sop` | 客服 SOP：资料 → 汇总 → 规程 → 用例 → 检查 → 打包成 Skill | Customer-support SOP: knowledge → collect → SOP → cases → review → packaged as a Skill |
 | `job-application` | 求职材料：材料 → 分析 → 简历和求职信并行 → 检查 | Job application: materials → analysis → resume and letter in parallel → check |
 | `research-report` | 调研报告：子问题 → 资料 → 提纲 → 带引用的报告 → 检查出处 | Research report: questions → sources → outline → cited report → citation check |
+| `ecommerce-listing` | 电商商品上架：商品资料 → 卖点 → 标题 → 主图和详情页、客服问答并行 → 检查 | E-commerce listing: product facts → selling points → titles → detail page and Q&A in parallel → check |
+| `slides` | PPT 演示稿：大纲 → 每页内容 → 网页幻灯片（可打印成 PDF）→ 检查 | Slide deck: outline → slide content → HTML deck (prints to PDF) → check |
+| `live-selling` | 直播带货脚本：商品资料 → 流程表 → 话术和弹幕问答并行 → 检查 | Live-selling script: product facts → rundown → script and chat Q&A in parallel → check |
+| `short-drama` | 竖屏短剧剧本：人物 → 分集大纲 → 逐集剧本 → 检查 | Vertical short drama: characters → episode outline → scripts → check |
+| `lesson-plan` | 老师备课：教学目标 → 教案和练习题并行 → 练习单和答案 | Lesson prep: objectives → plan and exercises in parallel → worksheet and answer key |
 
 ```bash
 flowgit templates                 # 列出模板和它们的阶段 / list templates and their stages

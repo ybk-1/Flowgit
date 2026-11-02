@@ -1,0 +1,83 @@
+{
+  "format": "flowgit",
+  "version": "0.1",
+  "id": "live-selling",
+  "name": "直播带货脚本",
+  "description": "从商品资料写出一场直播的脚本：流程表 → 逐段话术和弹幕问答（并行）→ 检查时长和违禁词。 / Write a live-selling stream script from your product notes: rundown → segment-by-segment script and chat Q&A (in parallel) → check timing and banned words.",
+  "language": "zh",
+  "author": { "name": "Flowgit" },
+  "license": "Apache-2.0",
+  "tags": ["ecommerce", "livestream", "script"],
+  "inputs": {
+    "product": {
+      "type": "string",
+      "description": "商品名称 / The product",
+      "required": true
+    },
+    "price": {
+      "type": "string",
+      "description": "直播价和优惠，例如：直播间 99 元，前 100 单送杯套 / Stream price and offer",
+      "default": ""
+    },
+    "minutes": {
+      "type": "number",
+      "default": 10,
+      "description": "这个商品讲几分钟 / Minutes for this product"
+    },
+    "host": {
+      "type": "string",
+      "description": "主播风格，例如：亲切的邻家姐姐、专业测评 / The host's style",
+      "default": "亲切、节奏快"
+    },
+    "language": {
+      "type": "string",
+      "enum": ["zh", "en"],
+      "default": "zh",
+      "description": "输出语言：zh 中文，en English / Output language: zh or en"
+    }
+  },
+  "stages": [
+    {
+      "id": "materials",
+      "name": "商品资料",
+      "description": "商品的真实参数和售后。话术里每个说法都要在这里找得到。 / The product's real specs and after-sales terms. Every claim in the script must be found here.",
+      "executor": {
+        "type": "human",
+        "instructions": "把 materials/product.md 换成你的商品资料。示例是虚构的榨汁杯。 / Replace materials/product.md with your product's facts. The sample is a fictional blender cup."
+      },
+      "outputs": [{ "type": "text/markdown", "path": "materials/product.md" }]
+    },
+    {
+      "id": "rundown",
+      "name": "流程表",
+      "description": "把时间分成几段：开场留人、痛点、演示、价格、逼单、返场，每段有分钟数和目标。 / Split the time into segments (hook, pain point, demo, price, close, recap), each with minutes and a goal.",
+      "inputs": ["materials"],
+      "executor": { "type": "llm", "prompt": "prompts/rundown.md", "effort": "low" },
+      "outputs": [{ "type": "application/json", "path": "rundown.json" }]
+    },
+    {
+      "id": "script",
+      "name": "话术",
+      "description": "按流程表逐段写主播要说的话、要做的动作和要引导的互动。 / Write what the host says, does and asks the chat to do, segment by segment.",
+      "inputs": ["materials", "rundown"],
+      "executor": { "type": "llm", "prompt": "prompts/script.md", "effort": "medium" },
+      "outputs": [{ "type": "text/markdown", "path": "script.md" }]
+    },
+    {
+      "id": "qa",
+      "name": "弹幕问答",
+      "description": "观众最常在弹幕里问的问题和一句话回答，和话术并行。 / The questions viewers ask most in chat, with one-line answers, in parallel with the script.",
+      "inputs": ["materials"],
+      "executor": { "type": "llm", "prompt": "prompts/qa.md", "effort": "low" },
+      "outputs": [{ "type": "text/markdown", "path": "qa.md" }]
+    },
+    {
+      "id": "check",
+      "name": "检查",
+      "description": "分钟数加起来对不对、每段话术有没有写、价格有没有说、绝对化用语和占位符。 / Do the minutes add up, is every segment written, is the price mentioned, any absolute claims or placeholders.",
+      "inputs": ["rundown", "script", "qa"],
+      "executor": { "type": "script", "run": "node scripts/check.mjs" },
+      "outputs": [{ "type": "text/markdown", "path": "check-report.md" }]
+    }
+  ]
+}
