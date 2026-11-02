@@ -376,7 +376,7 @@
     },
     "executorService": {
       "type": "object",
-      "description": "Reserved for v0.2: call an HTTP service.",
+      "description": "Call an HTTP service. Header values may use {{env.NAME}}; the key is read from the environment and never written to a file.",
       "required": [
         "type",
         "url"
@@ -387,13 +387,25 @@
           "const": "service"
         },
         "url": {
-          "type": "string"
+          "type": "string",
+          "minLength": 1
         },
         "method": {
           "enum": [
             "GET",
             "POST"
           ]
+        },
+        "headers": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "timeoutSec": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Abort the request after this many seconds. Default 60. Same field name as script and agent timeouts."
         }
       }
     },

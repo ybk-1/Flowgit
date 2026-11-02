@@ -125,7 +125,7 @@ export function validateFlow(data: unknown, opts: ValidateOptions = {}): Validat
       if (ex.command && ex.agent !== "custom") {
         issues.push({ level: "warning", path: `${base}/executor/command`, message: `command 只在 agent 为 "custom" 时使用，这里会被忽略 / command is only used when agent is "custom"; it is ignored here` });
       }
-    } else if (ex.type === "workflow" || ex.type === "service" || ex.type === "mcp") {
+    } else if (ex.type === "workflow" || ex.type === "mcp") {
       issues.push({ level: "warning", path: `${base}/executor`, message: `执行器 "${ex.type}" 在 v0.1 里只是预留，还不能运行 / executor "${ex.type}" is reserved in spec v0.1 and cannot run yet` });
     }
   });

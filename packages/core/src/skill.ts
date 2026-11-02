@@ -26,7 +26,7 @@ function executorLine(ex: Executor): string {
     case "workflow":
       return `运行外部工作流 (${ex.engine})：\`${ex.file}\`（v0.1 尚未实现）`;
     case "service":
-      return `调用服务 (service)：${ex.url}（v0.1 尚未实现）`;
+      return `调用 HTTP 服务 (service)：\`${ex.method ?? "POST"} ${ex.url}\`${ex.headers ? "。请求头里的 {{env.名称}} 从环境变量读取，密钥不写进文件。" : ""}。`;
     case "mcp":
       return `调用 MCP 工具 ${ex.server}/${ex.tool}（v0.1 尚未实现）`;
   }

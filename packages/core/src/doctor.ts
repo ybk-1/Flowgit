@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { AGENT_ADAPTERS } from "./executors/agent.js";
+import { headerEnvNames } from "./executors/service.js";
 import { DEFAULT_MODEL, ignoredProxyVar } from "./executors/llm.js";
 import { isRunnableExecutor } from "./executors/index.js";
 import { DEFAULT_PROVIDER, providerKeyState, resolveModel } from "./providers.js";
@@ -123,6 +124,17 @@ function stageChecks(loaded: LoadedFlow, stage: Stage, opts: DoctorOptions, env:
       const programs = [commandProgram(ex.run), ...(ex.requires ?? [])].filter((p): p is string => !!p);
       return [...new Set(programs)].map((p) => programCheck(stage.id, p, env));
     }
+    case "service":
+      return headerEnvNames(ex.headers).map((name) =>
+        env[name]
+          ? { level: "ok" as const, stage: stage.id, message: `请求头里的 ${name} 已设置 / header env ${name} is set` }
+          : {
+              level: "error" as const,
+              stage: stage.id,
+              message: `请求头里的环境变量 ${name} 没有设置 / header env ${name} is not set`,
+              hint: `PowerShell：$env:${name}="..."；macOS/Linux：export ${name}=...`,
+            },
+      );
     case "agent": {
       if (ex.agent === "custom") {
         const program = ex.command ? commandProgram(ex.command) : undefined;

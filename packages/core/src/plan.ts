@@ -47,6 +47,8 @@ function runDetail(loaded: LoadedFlow, stage: Stage, opts: PlanOptions, env: Nod
       return { detail: ex.run, callsModel: false };
     case "agent":
       return { detail: `agent ${ex.agent}`, callsModel: false };
+    case "service":
+      return { detail: `${ex.method ?? "POST"} ${ex.url}`, callsModel: false };
     case "human":
       return { detail: "用已经放好的文件 / uses the files already in place", callsModel: false };
     default:
