@@ -200,6 +200,8 @@ export function startBoard(options: StartBoardOptions): Promise<BoardServer> {
     nextEventId: 0,
     history: [],
     clients: new Set(),
+    watchers: [],
+    watching: false,
   };
   const server = http.createServer((req, res) => {
     try {
@@ -225,18 +227,30 @@ export function startBoard(options: StartBoardOptions): Promise<BoardServer> {
       const addr = server.address();
       bound.port = typeof addr === "object" && addr ? addr.port : listenPort;
       ctx.port = bound.port;
+      try {
+        watchFlow(ctx);
+      } catch (err) {
+        void stopWatching(ctx).finally(() => {
+          server.close();
+          server.closeAllConnections();
+          reject(err);
+        });
+        return;
+      }
       const url = `http://127.0.0.1:${bound.port}/`;
       if (options.open) openBrowser(url);
       resolve({
         port: bound.port,
         token,
         url,
-        close: () =>
-          new Promise((done, fail) => {
+        close: async () => {
+          await stopWatching(ctx);
+          await new Promise<void>((done, fail) => {
             server.close((err) => (err ? fail(err) : done()));
             // Drop keep-alive sockets so close() resolves without waiting out the idle timeout.
             server.closeAllConnections();
-          }),
+          });
+        },
       });
     });
   });
@@ -258,6 +272,12 @@ interface HandlerCtx {
   /** Events from the current or most recent run, so a late SSE client can catch up. */
   history: SseFrame[];
   clients: Set<http.ServerResponse>;
+  /** `fs.watch` handles for the flow directory. `close()` shuts them. */
+  watchers: fs.FSWatcher[];
+  /** True while those watchers should emit `flow:changed`. */
+  watching: boolean;
+  /** Debounce timer for filesystem events. Cleared by `close()`. */
+  changeTimer?: ReturnType<typeof setTimeout>;
 }
 
 const JSON_LIMIT = 1_000_000;
@@ -458,6 +478,7 @@ async function putInputs(req: http.IncomingMessage, res: http.ServerResponse, ct
     return;
   }
   saveFlowInputs(loaded.dir, body);
+  publishFlowChanged(ctx);
   sendJson(res, 200, { ok: true, inputs: resolveFlowInputs(loaded.dir, loaded.flow) });
 }
 
@@ -526,6 +547,7 @@ async function postRestore(req: http.IncomingMessage, res: http.ServerResponse, 
   const loaded = loadFlow(ctx.dir);
   try {
     const { run, kept } = restoreStage(loaded, body.stage.trim(), body.n);
+    publishFlowChanged(ctx);
     sendJson(res, 200, { ok: true, stage: run.stage, n: run.n, ...(kept ? { kept: kept.n } : {}) });
   } catch (err) {
     throw coreHttpError(err);
@@ -578,6 +600,7 @@ async function postRun(req: http.IncomingMessage, res: http.ServerResponse, ctx:
     }
   } finally {
     ctx.running = false;
+    publishFlowChanged(ctx);
   }
 }
 
@@ -612,13 +635,146 @@ function publishRunEvent(ctx: HandlerCtx, event: RunEvent): void {
   }
 }
 
-function publish(ctx: HandlerCtx, event: string, data: unknown): void {
+function publish(ctx: HandlerCtx, event: string, data: unknown, remember = true): void {
   const frame: SseFrame = { id: ++ctx.nextEventId, event, data: JSON.stringify(data) };
-  ctx.history.push(frame);
+  // `flow:changed` is a nudge to reload, not part of the run log a late client replays.
+  if (remember) ctx.history.push(frame);
   const text = formatFrame(frame);
   for (const client of [...ctx.clients]) {
     if (!writeSse(client, text)) ctx.clients.delete(client);
   }
+}
+
+/** Filesystem events are merged so a save's temp file and rename become one update. */
+const WATCH_DEBOUNCE_MS = 300;
+
+function publishFlowChanged(ctx: HandlerCtx): void {
+  publish(ctx, "flow:changed", {}, false);
+}
+
+function scheduleFlowChanged(ctx: HandlerCtx): void {
+  if (!ctx.watching) return;
+  if (ctx.changeTimer) clearTimeout(ctx.changeTimer);
+  ctx.changeTimer = setTimeout(() => {
+    ctx.changeTimer = undefined;
+    if (!ctx.watching) return;
+    publishFlowChanged(ctx);
+  }, WATCH_DEBOUNCE_MS);
+}
+
+/**
+ * Watch the flow directory. `recursive: true` is used where Node supports it
+ * (Windows, macOS, Linux). Otherwise watch the flow directory and the parent
+ * of each stage output.
+ */
+function watchFlow(ctx: HandlerCtx): void {
+  ctx.watching = true;
+  try {
+    ctx.watchers.push(listenDir(ctx, ctx.dir, true));
+    return;
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code !== "ERR_FEATURE_UNAVAILABLE_ON_PLATFORM") throw err;
+  }
+  const seen = new Set<string>();
+  let rootReal: string;
+  try {
+    rootReal = fs.realpathSync(ctx.dir);
+  } catch {
+    return;
+  }
+  for (const dir of [path.resolve(ctx.dir), ...outputParentDirs(ctx.dir)]) {
+    let real: string;
+    try {
+      if (!fs.statSync(dir).isDirectory()) continue;
+      real = fs.realpathSync(dir);
+    } catch {
+      continue;
+    }
+    if (seen.has(real) || outside(rootReal, real)) continue;
+    seen.add(real);
+    try {
+      ctx.watchers.push(listenDir(ctx, real, false));
+    } catch {
+      // A directory that cannot be watched is skipped; explicit pushes still run.
+    }
+  }
+}
+
+function listenDir(ctx: HandlerCtx, dir: string, recursive: boolean): fs.FSWatcher {
+  const watcher = fs.watch(dir, { recursive }, (_event, filename) => {
+    onFlowWatch(ctx, dir, filename);
+  });
+  watcher.on("error", () => {
+    // Keep the board up. Saves, uploads, runs, restores and input writes still push.
+  });
+  return watcher;
+}
+
+function onFlowWatch(ctx: HandlerCtx, watchedDir: string, filename: string | Buffer | null): void {
+  if (!ctx.watching || isIgnoredWatch(ctx.dir, watchedDir, filename)) return;
+  scheduleFlowChanged(ctx);
+}
+
+/** Temp files, and anything under `runs/`, `node_modules/` or `.git/`. A nameless event is ignored so those trees cannot leak through. */
+function isIgnoredWatch(flowDir: string, watchedDir: string, filename: string | Buffer | null): boolean {
+  if (filename == null) return true;
+  const raw = filename.toString();
+  if (!raw) return true;
+  const abs = path.isAbsolute(raw) ? raw : path.resolve(watchedDir, raw);
+  const rel = path.relative(path.resolve(flowDir), abs);
+  if (rel === "" || rel === ".") return false;
+  if (rel === ".." || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel)) return true;
+  return ignoredRelative(rel.split(path.sep).join("/"));
+}
+
+function ignoredRelative(rel: string): boolean {
+  const parts = rel.split("/").filter((part) => part.length > 0 && part !== ".");
+  if (parts.length === 0) return false;
+  const top = parts[0];
+  if (top === "runs" || top === "node_modules" || top === ".git") return true;
+  if (parts.some((part) => part === "node_modules" || part === ".git")) return true;
+  const base = parts[parts.length - 1] ?? "";
+  return base.startsWith(".flowgit-tmp-");
+}
+
+function outputParentDirs(dir: string): string[] {
+  let flow: Flow;
+  try {
+    flow = loadFlow(dir).flow;
+  } catch {
+    return [];
+  }
+  const root = path.resolve(dir);
+  const parents: string[] = [];
+  for (const stage of flow.stages) {
+    for (const output of stage.outputs) {
+      const rel = outputRel(output);
+      if (pathProblem(rel)) continue;
+      const parent = path.resolve(root, path.posix.dirname(rel));
+      if (outside(root, parent)) continue;
+      parents.push(parent);
+    }
+  }
+  return parents;
+}
+
+async function stopWatching(ctx: HandlerCtx): Promise<void> {
+  ctx.watching = false;
+  if (ctx.changeTimer) {
+    clearTimeout(ctx.changeTimer);
+    ctx.changeTimer = undefined;
+  }
+  const watchers = ctx.watchers.splice(0, ctx.watchers.length);
+  await Promise.all(
+    watchers.map(async (watcher) => {
+      try {
+        await watcher.close();
+      } catch {
+        // already closed
+      }
+    }),
+  );
 }
 
 function formatFrame(frame: SseFrame): string {
@@ -840,6 +996,7 @@ async function putFlowFile(req: http.IncomingMessage, res: http.ServerResponse, 
       }
     }
     await replaceFile(tmp, target.abs);
+    publishFlowChanged(ctx);
     sendJson(res, 200, { ok: true, path: target.rel });
   } catch (err) {
     await fs.promises.rm(tmp, { force: true });
@@ -901,6 +1058,7 @@ async function uploadFlowFile(req: http.IncomingMessage, res: http.ServerRespons
   try {
     await streamToFile(req, tmp);
     await replaceFile(tmp, dest);
+    publishFlowChanged(ctx);
     sendJson(res, 200, { ok: true, path: `${located.rel}/${name}` });
   } catch (err) {
     await fs.promises.rm(tmp, { force: true });

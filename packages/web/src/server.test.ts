@@ -370,6 +370,10 @@ describe("read-only board", () => {
     expect(app.body).toContain("provider/model");
     expect(app.body).toContain("必填 required");
     expect(app.body).toContain("/api/events?token=");
+    expect(app.body).toContain('type === "flow:changed"');
+    expect(app.body).toContain("实时更新已断开，改为每 3 秒刷新 / live updates lost, refreshing every 3 seconds");
+    expect(app.body).toContain("setInterval(refresh, 3000)");
+    expect(page.body).toContain("实时更新 / live updates");
   });
 });
 
@@ -494,7 +498,7 @@ describe("run and inputs on the board", () => {
       const end = await live.waitFor("run:end");
       const done = live.events.filter((event) => event.event === "stage:done").map((event) => JSON.parse(event.data).stage);
       expect(done).toEqual(["script", "storyboard"]);
-      expect(live.events.at(-1)?.event).toBe("run:end");
+      expect(live.events.filter((event) => event.event !== "flow:changed").at(-1)?.event).toBe("run:end");
       const ended = JSON.parse(end.data) as { ok: boolean; waiting?: { stage: string; missing: string[]; instructions?: string } };
       expect(ended.ok).toBe(true);
       expect(ended.waiting?.stage).toBe("assets");
@@ -729,4 +733,74 @@ describe("history, diff, and restore on the board", () => {
       fs.rmSync(work, { recursive: true, force: true });
     }
   }, 30_000);
+});
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function handlesNamed(name: string): number {
+  const get = (process as unknown as { _getActiveHandles?: () => Array<{ constructor?: { name?: string } }> })._getActiveHandles;
+  if (!get) return 0;
+  return get().filter((handle) => handle?.constructor?.name === name).length;
+}
+
+describe("live board updates", () => {
+  it("pushes flow:changed when an output changes, and nothing for node_modules", async () => {
+    const work = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-web-live-"));
+    fs.writeFileSync(
+      path.join(work, "flow.json"),
+      JSON.stringify(
+        {
+          format: "flowgit",
+          version: "0.1",
+          name: "live",
+          stages: [
+            {
+              id: "write",
+              name: "写",
+              executor: { type: "human" },
+              outputs: [{ type: "text/plain", path: "note.txt" }],
+            },
+          ],
+        },
+        null,
+        2,
+      ),
+    );
+    fs.writeFileSync(path.join(work, "note.txt"), "one\n");
+    const watchersBefore = handlesNamed("FSWatcher");
+    const board = await startBoard({ dir: work, port: 0, open: false });
+    let watchersDuring = 0;
+    let live: Awaited<ReturnType<typeof openEvents>> | undefined;
+    try {
+      watchersDuring = handlesNamed("FSWatcher");
+      expect(watchersDuring).toBeGreaterThan(watchersBefore);
+      live = await openEvents(board.port, board.token);
+      // A watch can emit once as it starts. Wait that out, then change the output.
+      await delay(400);
+      const cursor = live.events.length;
+      fs.writeFileSync(path.join(work, "note.txt"), "two\n");
+      const changed = await live.waitFor("flow:changed", 2000, cursor);
+      expect(JSON.parse(changed.data)).toEqual({});
+      // Absorb a second debounce from the same write before the ignore check.
+      await delay(700);
+      const seen = live.events.length;
+      fs.mkdirSync(path.join(work, "node_modules", "pkg"), { recursive: true });
+      fs.writeFileSync(path.join(work, "node_modules", "pkg", "index.js"), "module.exports = 1;\n");
+      fs.mkdirSync(path.join(work, "runs", "write"), { recursive: true });
+      fs.writeFileSync(path.join(work, "runs", "write", "note.json"), "{}\n");
+      fs.mkdirSync(path.join(work, ".git"), { recursive: true });
+      fs.writeFileSync(path.join(work, ".git", "config"), "[core]\n");
+      fs.writeFileSync(path.join(work, ".flowgit-tmp-abc"), "tmp");
+      await delay(500);
+      expect(live.events.slice(seen).filter((event) => event.event === "flow:changed")).toEqual([]);
+    } finally {
+      live?.close();
+      await board.close();
+      fs.rmSync(work, { recursive: true, force: true });
+    }
+    await delay(50);
+    expect(handlesNamed("FSWatcher")).toBeLessThan(watchersDuring);
+  }, 20_000);
 });
