@@ -4,7 +4,9 @@
 
 What changed in each version. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/). `@flowgit/core`, `@flowgit/web` and `flowgit` share one version number.
 
-## [0.1.0] - 未发布 / Unreleased
+## [未发布 / Unreleased]
+
+## [0.1.0] - 2026-11-02
 
 第一个版本。/ The first release.
 
@@ -145,4 +147,5 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 - CI on Linux and Windows, including the render test, a pack-and-install smoke test, and the README's PowerShell quick start run as written.
 - A release workflow using npm Trusted Publishing; see [docs/releasing.md](docs/releasing.md).
 
-[0.1.0]: https://github.com/cgold9820-dotcom/Flowgit/commits/main
+[未发布 / Unreleased]: https://github.com/cgold9820-dotcom/Flowgit/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/cgold9820-dotcom/Flowgit/releases/tag/v0.1.0
