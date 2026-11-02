@@ -22,6 +22,7 @@ Open-source tool for turning any process into a visual, staged, versioned flow (
 - `docs/spec.md`：给人看的规范，改 schema 时一起改。
 - `docs/guide.md`：入门教程，照着做出自带的 `weekly-report` 模板（`packages/cli/templates/weekly-report`）。里面贴了真实的命令行输出，改了命令行输出或格式时要跟着改。
 - `examples/`：只在仓库里的示例流程。它们和 `packages/cli/templates/` 里的模板都由 `packages/core/src/examples.test.ts` 校验。发布流程见 `docs/releasing.md`。
+- `site/`：官网落地页（`index.html`，静态页面，中英双语）。#121 会把它和模板画廊、文档合成整个站，部署到 flowgit.dev。
 - `CHANGELOG.md`：每个版本的更新记录。用户能感觉到的改动，在最上面的“未发布 / Unreleased”版本下加一行，中英双语。
 
 - `packages/core` (`@flowgit/core`): the flow.json schema (a flow may also be a `flow.md`, converted to and from flow.json by `src/flowmd.ts`; `schema/flow.schema.json` is the source of truth; `src/types.ts` mirrors it), validation, run history under `runs/<stage>/<n>/`, and stage executors (`human`, `llm`, `script`, `agent`, `service` run; `workflow` runs a sub-flow when `engine` is `flowgit`, and other engines stay reserved; `mcp` stays reserved).
@@ -30,6 +31,7 @@ Open-source tool for turning any process into a visual, staged, versioned flow (
 - `docs/spec.md`: the human-readable spec. Change it together with the schema.
 - `docs/guide.md`: the starter tutorial; it builds the bundled `weekly-report` template (`packages/cli/templates/weekly-report`). It quotes real CLI output, so update it when CLI output or the format changes.
 - `examples/`: repo-only example flows. They and the templates in `packages/cli/templates/` are validated by `packages/core/src/examples.test.ts`. Releasing is in `docs/releasing.md`.
+- `site/`: the website landing page (`index.html`, a static bilingual page). #121 combines it with the template gallery and the docs into the whole site, deployed to flowgit.dev.
 - `CHANGELOG.md`: what changed in each version. For a user-visible change, add a bilingual line under the top "Unreleased" version.
 
 ## 命令 / Commands
