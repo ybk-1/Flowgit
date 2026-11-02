@@ -104,6 +104,14 @@ function renderCard(stage) {
     version.textContent = "还没有版本 / no runs yet";
   }
   card.append(version, el("p", "runs", `${stage.runs ?? 0} 个版本 / ${stage.runs ?? 0} run(s)`));
+  const history = document.createElement("button");
+  history.type = "button";
+  history.className = "history";
+  history.textContent = "历史 History";
+  history.addEventListener("click", () => {
+    void openHistory(stage);
+  });
+  card.append(history);
 
   // A human stage whose upstream is ready is waiting on the person: show what to do, and the upload button.
   if (stage.executor === "human" && stage.state !== "waiting-upstream") {
@@ -230,17 +238,351 @@ async function startRun(stage, model) {
 function closePanel() {
   panelEl.hidden = true;
   document.body.classList.remove("panel-open");
-  if (currentBlob) {
-    URL.revokeObjectURL(currentBlob);
-    currentBlob = null;
+  releaseBlob();
+}
+
+function makeBack(options) {
+  if (!options || typeof options.onBack !== "function") return null;
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "back";
+  button.textContent = options.backLabel || "返回 Back";
+  button.addEventListener("click", () => options.onBack());
+  return button;
+}
+
+function showPanel(nodes, options) {
+  panelBody.replaceChildren();
+  const back = makeBack(options);
+  if (back) panelBody.append(back);
+  for (const node of nodes) panelBody.append(node);
+}
+
+function historyOptions(stage) {
+  return {
+    readOnly: true,
+    onBack: () => {
+      void openHistory(stage);
+    },
+    backLabel: "返回历史 Back to history",
+  };
+}
+
+function executorLabel(run) {
+  if (run.executor === "manual") return "手动修改 manual edit";
+  return run.executor || "";
+}
+
+function resultLabel(run) {
+  if (run.status === "ok") return "成功 ok";
+  if (run.status === "error") return "失败 error";
+  return run.status || "";
+}
+
+/** model for llm, the command for script, the agent name for agent. */
+function runDetail(run) {
+  const params = run.params || {};
+  if (run.executor === "llm") {
+    const model = params.model == null ? "" : String(params.model);
+    if (!model) return "";
+    const provider = params.provider == null ? "" : String(params.provider);
+    return provider && provider !== "anthropic" ? `${provider}/${model}` : model;
+  }
+  if (run.executor === "script") return params.run == null ? "" : String(params.run);
+  if (run.executor === "agent") return params.agent == null ? "" : String(params.agent);
+  return "";
+}
+
+function errorLine(run) {
+  if (run.status !== "error" || run.error == null) return "";
+  return String(run.error).split("\n")[0].trim();
+}
+
+function snapshotPath(stageId, n, outputPath) {
+  return `runs/${stageId}/${n}/outputs/${String(outputPath).replace(/\/+$/, "")}`;
+}
+
+function releaseBlob() {
+  if (!currentBlob) return;
+  URL.revokeObjectURL(currentBlob);
+  currentBlob = null;
+}
+
+async function openHistory(stage, note) {
+  releaseBlob();
+  panelEl.hidden = false;
+  document.body.classList.add("panel-open");
+  panelTitle.textContent = `${stage.name || stage.id || ""} · 历史 History`;
+  panelBody.replaceChildren(el("p", null, "加载中 / loading…"));
+  let res;
+  try {
+    res = await fetch(`/api/runs?stage=${encodeURIComponent(stage.id)}`, { headers: headers(), cache: "no-store" });
+  } catch {
+    panelBody.replaceChildren(el("p", "panel-error", "无法打开历史 / could not open history"));
+    return;
+  }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    panelBody.replaceChildren(el("p", "panel-error", data.error || `无法打开历史 / could not open history (${res.status})`));
+    return;
+  }
+  renderHistory(stage, Array.isArray(data.runs) ? data.runs : [], note);
+}
+
+function renderHistory(stage, runs, note) {
+  panelTitle.textContent = `${stage.name || stage.id || ""} · 历史 History`;
+  const nodes = [];
+  if (note) nodes.push(el("p", "save-ok", note));
+  nodes.push(el("p", "history-hint", "点一个版本看当时的产物。 / Click a version to see what it produced."));
+  nodes.push(renderCompare(stage, runs));
+  if (!runs.length) {
+    nodes.push(el("p", null, "还没有版本 / no runs yet"));
+    showPanel(nodes);
+    return;
+  }
+  const list = el("ul", "history-list");
+  for (const run of runs.slice().reverse()) list.append(renderVersion(stage, run));
+  nodes.push(list);
+  showPanel(nodes);
+}
+
+function renderCompare(stage, runs) {
+  const form = el("form", "compare");
+  const fromLabel = el("label");
+  fromLabel.append(el("span", null, "版本 A / version A"));
+  const from = document.createElement("select");
+  from.name = "a";
+  const toLabel = el("label");
+  toLabel.append(el("span", null, "版本 B / version B"));
+  const to = document.createElement("select");
+  to.name = "b";
+  const current = document.createElement("option");
+  current.value = "";
+  current.textContent = "当前文件 current";
+  to.append(current);
+  const ordered = runs.slice().reverse();
+  for (const run of ordered) {
+    const label = `v${run.n}`;
+    const left = document.createElement("option");
+    left.value = String(run.n);
+    left.textContent = label;
+    from.append(left);
+    const right = document.createElement("option");
+    right.value = String(run.n);
+    right.textContent = label;
+    to.append(right);
+  }
+  if (ordered[1]) {
+    from.value = String(ordered[1].n);
+    to.value = String(ordered[0].n);
+  } else if (ordered[0]) {
+    from.value = String(ordered[0].n);
+    to.value = "";
+  }
+  const status = el("p", "compare-status");
+  status.hidden = true;
+  const go = document.createElement("button");
+  go.type = "submit";
+  go.textContent = "对比 Compare";
+  go.disabled = runs.length === 0;
+  fromLabel.append(from);
+  toLabel.append(to);
+  form.append(fromLabel, toLabel, go, status);
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    if (!from.value) {
+      status.hidden = false;
+      status.textContent = "先选一个版本 / pick a version first";
+      return;
+    }
+    if (to.value && from.value === to.value) {
+      status.hidden = false;
+      status.textContent = "选两个不同的版本，或一个版本和当前文件。 / Pick two different versions, or one version and the current files.";
+      return;
+    }
+    void openDiff(stage, from.value, to.value);
+  });
+  return form;
+}
+
+function renderVersion(stage, run) {
+  const item = document.createElement("li");
+  item.className = "history-item";
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "version";
+  button.append(el("span", "version-head", `v${run.n} · ${resultLabel(run)} · ${formatTime(run.finishedAt)} · ${executorLabel(run)}`));
+  const detail = runDetail(run);
+  if (detail) button.append(el("span", "version-detail", detail));
+  const failure = errorLine(run);
+  if (failure) button.append(el("span", "version-error", `错误 / error: ${failure}`));
+  button.addEventListener("click", () => {
+    void openVersion(stage, run);
+  });
+  item.append(button);
+  if (run.status === "ok") {
+    const restore = document.createElement("button");
+    restore.type = "button";
+    restore.className = "restore";
+    restore.textContent = "回退到这个版本 Restore";
+    restore.addEventListener("click", () => {
+      void restoreVersion(stage, run.n, restore);
+    });
+    item.append(restore);
+  }
+  return item;
+}
+
+async function openVersion(stage, run) {
+  const outputs = stage.outputs || [];
+  if (outputs.length === 1) {
+    await openSnapshot(stage, run, outputs[0]);
+    return;
+  }
+  panelTitle.textContent = `v${run.n} · ${stage.name || stage.id || ""}`;
+  const nodes = [];
+  if (!outputs.length) nodes.push(el("p", null, "这个阶段没有产物 / this stage has no outputs"));
+  else {
+    const list = el("ul", "file-list");
+    for (const output of outputs) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = output.directory ? `${output.path}/` : output.path;
+      button.addEventListener("click", () => {
+        void openSnapshot(stage, run, output);
+      });
+      const li = document.createElement("li");
+      li.append(button);
+      list.append(li);
+    }
+    nodes.push(list);
+  }
+  showPanel(nodes, historyOptions(stage));
+}
+
+async function openSnapshot(stage, run, output) {
+  const rel = snapshotPath(stage.id, run.n, output.path);
+  await openOutput(
+    { path: rel, directory: Boolean(output.directory), text: Boolean(output.text), type: output.type },
+    stage,
+    { ...historyOptions(stage), title: `v${run.n} · ${output.path}` },
+  );
+}
+
+async function openDiff(stage, a, b) {
+  releaseBlob();
+  panelEl.hidden = false;
+  document.body.classList.add("panel-open");
+  panelTitle.textContent = `${stage.name || stage.id || ""} · 对比 Compare`;
+  panelBody.replaceChildren(el("p", null, "加载中 / loading…"));
+  const params = new URLSearchParams({ stage: stage.id, a: String(a) });
+  if (b) params.set("b", String(b));
+  let res;
+  try {
+    res = await fetch(`/api/diff?${params}`, { headers: headers(), cache: "no-store" });
+  } catch {
+    showPanel([el("p", "panel-error", "无法对比 / could not compare")], historyOptions(stage));
+    return;
+  }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    showPanel([el("p", "panel-error", data.error || `无法对比 / could not compare (${res.status})`)], historyOptions(stage));
+    return;
+  }
+  renderDiff(stage, data);
+}
+
+function renderDiff(stage, diff) {
+  panelTitle.textContent = `${stage.name || stage.id || ""} · 对比 Compare`;
+  const right = diff.b == null ? "当前文件 current" : `v${diff.b}`;
+  const nodes = [el("p", "diff-summary", `v${diff.a} → ${right}`)];
+  for (const output of diff.outputs || []) nodes.push(renderOutputDiff(output));
+  if (!(diff.outputs || []).length) nodes.push(el("p", null, "没有产物 / no outputs"));
+  showPanel(nodes, historyOptions(stage));
+}
+
+function renderOutputDiff(output) {
+  const box = el("section", "diff-file");
+  box.append(el("h3", "diff-path", output.path || ""));
+  if (output.kind === "text") {
+    if (output.same || !output.diff) box.append(el("p", "diff-same", "相同 / same"));
+    else box.append(renderUnified(output.diff));
+    return box;
+  }
+  if (output.kind === "binary") {
+    box.append(el("p", output.same ? "diff-same" : "diff-changed", output.same ? "二进制相同 / binary same" : "二进制不同 / binary differs"));
+    return box;
+  }
+  if (output.kind === "dir") {
+    if (output.same) box.append(el("p", "diff-same", "文件夹相同 / directory same"));
+    else {
+      if (output.added && output.added.length) box.append(fileLines("新增 / added", output.added, "diff-add"));
+      if (output.removed && output.removed.length) box.append(fileLines("删除 / removed", output.removed, "diff-del"));
+      if (output.changed && output.changed.length) box.append(fileLines("改动 / changed", output.changed, "diff-changed"));
+    }
+    return box;
+  }
+  box.append(el("p", null, "无法显示这个差异 / could not show this diff"));
+  return box;
+}
+
+function fileLines(title, files, className) {
+  const block = el("div", "diff-block");
+  block.append(el("span", "diff-line", title));
+  for (const file of files) block.append(el("span", `diff-line ${className}`, file));
+  return block;
+}
+
+function renderUnified(patch) {
+  const block = el("div", "diff-block");
+  let sawMinus = false;
+  let sawPlus = false;
+  for (const line of String(patch).split("\n")) {
+    let className = "diff-line";
+    if (!sawMinus && line.startsWith("--- ")) sawMinus = true;
+    else if (!sawPlus && line.startsWith("+++ ")) sawPlus = true;
+    else if (line.startsWith("+")) className += " diff-add";
+    else if (line.startsWith("-")) className += " diff-del";
+    block.append(el("span", className, line.length ? line : " "));
+  }
+  return block;
+}
+
+async function restoreVersion(stage, n, button) {
+  const confirmed = window.confirm(
+    `确定回退到 v${n}？当前产物会被这个版本替换，下游阶段会变成需重跑。\nRestore v${n}? Current outputs will be replaced by this version, and downstream stages will show as stale.`,
+  );
+  if (!confirmed) return;
+  if (button) button.disabled = true;
+  try {
+    const res = await fetch("/api/restore", {
+      method: "POST",
+      headers: { ...headers(), "Content-Type": "application/json" },
+      body: JSON.stringify({ stage: stage.id, n }),
+      cache: "no-store",
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      await openHistory(stage);
+      panelBody.prepend(el("p", "panel-error", data.error || `没有回退 / not restored (${res.status})`));
+      return;
+    }
+    await refreshNow();
+    const kept = typeof data.kept === "number" ? ` · 你的手动修改已存为 v${data.kept} / your manual edit was saved as v${data.kept}` : "";
+    await openHistory(stage, `已回退到 v${n} / restored v${n}${kept}`);
+  } catch {
+    panelBody.prepend(el("p", "panel-error", "没有回退 / not restored"));
+  } finally {
+    if (button) button.disabled = false;
   }
 }
 
-async function openOutput(output, stage) {
+async function openOutput(output, stage, options) {
   const rel = output.path;
+  const readOnly = Boolean(options && options.readOnly);
   panelEl.hidden = false;
   document.body.classList.add("panel-open");
-  panelTitle.textContent = rel;
+  panelTitle.textContent = (options && options.title) || rel;
   panelBody.replaceChildren(el("p", null, "加载中 / loading…"));
   if (currentBlob) {
     URL.revokeObjectURL(currentBlob);
@@ -250,24 +592,24 @@ async function openOutput(output, stage) {
   try {
     res = await fetch(`/api/file?path=${encodeURIComponent(rel)}`, { headers: headers(), cache: "no-store" });
   } catch {
-    panelBody.replaceChildren(el("p", "panel-error", "无法打开 / could not open"));
+    showPanel([el("p", "panel-error", "无法打开 / could not open")], options);
     return;
   }
   if (!res.ok) {
-    if (res.status === 404 && output.directory && stage && stage.executor === "human") {
-      renderFileList(rel, [], stage);
+    if (res.status === 404 && output.directory && stage && stage.executor === "human" && !readOnly) {
+      renderFileList(rel, [], stage, options);
       return;
     }
     const message = res.status === 404 ? "找不到这个产物 / output not found" : `无法打开 / could not open (${res.status})`;
-    panelBody.replaceChildren(el("p", "panel-error", message));
+    showPanel([el("p", "panel-error", message)], options);
     return;
   }
   if (res.headers.get("X-Flowgit-Kind") === "directory") {
     const data = await res.json();
-    renderFileList(rel, Array.isArray(data.files) ? data.files : [], stage);
+    renderFileList(rel, Array.isArray(data.files) ? data.files : [], readOnly ? null : stage, options);
     return;
   }
-  if (output.text) {
+  if (output.text && !readOnly) {
     renderEditor(rel, await res.text());
     return;
   }
@@ -279,7 +621,7 @@ async function openOutput(output, stage) {
     if (media.tagName === "VIDEO") media.controls = true;
     else media.alt = rel;
     media.src = currentBlob;
-    panelBody.replaceChildren(media);
+    showPanel([media], options);
     return;
   }
   const text = await res.text();
@@ -293,7 +635,7 @@ async function openOutput(output, stage) {
   } else {
     pre.textContent = text;
   }
-  panelBody.replaceChildren(pre);
+  showPanel([pre], options);
 }
 
 function renderEditor(rel, text) {
@@ -344,8 +686,10 @@ async function saveText(rel, text, button, status) {
   }
 }
 
-function renderFileList(dir, files, stage) {
+function renderFileList(dir, files, stage, options) {
   panelBody.replaceChildren();
+  const back = makeBack(options);
+  if (back) panelBody.append(back);
   if (stage && stage.executor === "human" && stage.instructions) {
     panelBody.append(el("p", "instructions", stage.instructions));
   }
@@ -360,7 +704,8 @@ function renderFileList(dir, files, stage) {
     button.type = "button";
     button.textContent = file;
     const child = `${dir.replace(/\/+$/, "")}/${file}`;
-    button.addEventListener("click", () => openOutput({ path: child, directory: false, text: false }, stage));
+    const childOptions = options ? { ...options, title: undefined } : undefined;
+    button.addEventListener("click", () => openOutput({ path: child, directory: false, text: false }, stage, childOptions));
     const item = document.createElement("li");
     item.append(button);
     list.append(item);
@@ -582,6 +927,15 @@ function connectEvents() {
       onStreamEvent(type, data);
     });
   }
+}
+
+async function refreshNow() {
+  const start = Date.now();
+  while (refreshing && Date.now() - start < 4000) {
+    await new Promise((resolve) => setTimeout(resolve, 40));
+  }
+  lastJson = "";
+  await refresh();
 }
 
 async function refresh() {

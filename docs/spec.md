@@ -271,6 +271,10 @@ Each run of a stage:
 4. Checks every declared output was written and copies them to `runs/<stage>/<n>/outputs/`.
 5. Writes `runs/<stage>/<n>/run.json`. Failed runs are recorded too (`status: "error"`).
 
+回退（`flowgit restore <stage> <n>`，或看板上的"回退"）把 `runs/<stage>/<n>/outputs/` 复制回原位。当前产物如果和任何一个已保存的版本都不一样，说明是手改的，会先存成一个 `manual` 版本再回退。
+
+Restoring (`flowgit restore <stage> <n>`, or "Restore" on the board) copies `runs/<stage>/<n>/outputs/` back in place. If the current outputs match no saved version, they are a hand edit and are saved as a `manual` version before the restore.
+
 `run.json` 的主要字段：`stage`、`n`、`status`、`executor`、`startedAt`、`finishedAt`、`inputHash`、`inputs`（上游产物和它们的 sha256）、`flowInputs`、`outputs`（路径、类型、sha256、大小）、`params`（provider、模型、用量、命令等）、`log`、`error`。
 
 Main `run.json` fields: `stage`, `n`, `status`, `executor`, `startedAt`, `finishedAt`, `inputHash`, `inputs` (upstream artifacts and their sha256), `flowInputs`, `outputs` (path, type, sha256, size), `params` (provider, model, usage, command, ...), `log`, `error`.
@@ -300,7 +304,7 @@ Main `run.json` fields: `stage`, `n`, `status`, `executor`, `startedAt`, `finish
 - 二进制：只报告相同或不同，用 sha256 比较，不输出逐行差异。
 - 文件夹：列出新增、删除和内容变了的文件（相对该文件夹的路径）。
 
-`@flowgit/core` 导出 `diffRuns(dir, flow, stageId, a, b?)`，和 `listRuns`、`restoreRun` 一样从包的入口导出。以后看板上的历史对比会调用它。`b` 省略时，返回值里的 `b` 是 `null`，表示当前文件。
+`@flowgit/core` 导出 `diffRuns(dir, flow, stageId, a, b?)`，和 `listRuns`、`restoreStage` 一样从包的入口导出。看板的历史直接调用这三个函数：`GET /api/runs?stage=` 是 `listRuns`，`GET /api/diff?stage=&a=&b=` 是 `diffRuns`，`POST /api/restore` 的 JSON 正文 `{ "stage", "n" }` 是 `restoreStage`（先保存手改，再调用 `restoreRun`；运行中返回 409）。省略 `b` 时和当前文件比。这三个接口和别的 `/api/*` 一样要带请求头 `X-Flowgit-Token`。`b` 省略时，返回值里的 `b` 是 `null`，表示当前文件。
 
 `flowgit diff <stage> <a> [b] [--json]` compares `runs/<stage>/<a>/outputs/` with `runs/<stage>/<b>/outputs/`. Omit `b` to compare version `a` with the files currently in the flow directory. A missing version is an error, Chinese first.
 
@@ -310,7 +314,7 @@ For each output the stage declares:
 - Binary: same or different only, compared by sha256, with no line diff.
 - Directory: lists of added, removed and changed files (paths relative to that directory).
 
-`@flowgit/core` exports `diffRuns(dir, flow, stageId, a, b?)` from the package entry, the same way it exports `listRuns` and `restoreRun`. The board's history view will call it later. When `b` is omitted, the result's `b` is `null`, meaning the current files.
+`@flowgit/core` exports `diffRuns(dir, flow, stageId, a, b?)` from the package entry, the same way it exports `listRuns` and `restoreStage`. The board's history calls these three functions directly: `GET /api/runs?stage=` is `listRuns`, `GET /api/diff?stage=&a=&b=` is `diffRuns`, and `POST /api/restore` with JSON `{ "stage", "n" }` is `restoreStage` (keeps a hand edit, then calls `restoreRun`; 409 during a run). Omit `b` to compare with the current files. Those routes require the `X-Flowgit-Token` header, like every other `/api/*` route. When `b` is omitted, the result's `b` is `null`, meaning the current files.
 
 ## 导出为 Skill / Export as a Skill
 

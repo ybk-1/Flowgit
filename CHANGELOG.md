@@ -12,10 +12,10 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 
 - `flow.json` 规范 v0.1：流程输入（可带 `enum`）、阶段、产物和执行器，见 [docs/spec.md](docs/spec.md)。
 - 每次运行都存成一个版本：`runs/<阶段>/<n>/` 里有产物快照和 `run.json`，可以随时回退。
-- 是否需要重跑由上游产物、流程输入和执行器配置（包括提示词文件和脚本文件）的哈希决定，并向下游传递；手动改过的产物在重跑前会先存成 `manual` 版本，不会被覆盖。
+- 是否需要重跑由上游产物、流程输入和执行器配置（包括提示词文件和脚本文件）的哈希决定，并向下游传递；手动改过的产物在重跑或回退前会先存成 `manual` 版本，不会被覆盖。
 - `flow.json` spec v0.1: flow inputs (optionally with an `enum`), stages, outputs and executors; see [docs/spec.md](docs/spec.md).
 - Every run is kept as a version: `runs/<stage>/<n>/` holds an output snapshot and `run.json`, and you can roll back at any time.
-- Whether a stage needs a re-run comes from a hash of upstream artifacts, flow inputs and executor config (including prompt and script files), and it propagates downstream. A hand edit is saved as a `manual` run before any re-run, so it is never overwritten.
+- Whether a stage needs a re-run comes from a hash of upstream artifacts, flow inputs and executor config (including prompt and script files), and it propagates downstream. A hand edit is saved as a `manual` run before any re-run or restore, so it is never overwritten.
 
 ### 执行器 / Executors
 
@@ -38,7 +38,7 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 - `graph` 把流程画成 Mermaid 流程图，贴进 GitHub 或 Obsidian 就能看到；加 `--status` 按状态上色，`-o/--out` 直接写成 UTF-8 文件（`.md` 自动包上代码块）。
 - `log` 不写阶段时按时间列出整个流程的所有版本，并合计用掉的 token。
 - `diff` 对比同一个阶段的两个版本，或者某个版本和现在的文件：文本和 JSON 显示按行的改动，二进制只比较是否相同，文件夹列出新增、删除和改动的文件。
-- `board` 在浏览器打开本机看板（新包 `@flowgit/web`）：每个阶段一张卡，显示状态、最新版本和产物，点产物在侧栏预览文本、JSON、图片、视频和目录，每 3 秒刷新。文本产物可以直接修改保存（JSON 先检查格式），人工阶段的文件夹可以上传文件；改过的产物下次运行前会先存成一个版本。可以填写流程输入，运行单个阶段或全部阶段，日志实时显示；同时只跑一个，运行中不能保存产物。只监听 `127.0.0.1`，接口要令牌并检查 `Host`。
+- `board` 在浏览器打开本机看板（新包 `@flowgit/web`）：每个阶段一张卡，显示状态、最新版本和产物，点产物在侧栏预览文本、JSON、图片、视频和目录，每 3 秒刷新。文本产物可以直接修改保存（JSON 先检查格式），人工阶段的文件夹可以上传文件；改过的产物下次运行前会先存成一个版本。可以填写流程输入，运行单个阶段或全部阶段，日志实时显示；同时只跑一个，运行中不能保存产物。每张卡可以看历史版本、对比两个版本（或和当前文件比）并回退。只监听 `127.0.0.1`，接口要令牌并检查 `Host`。
 - `run all --dry-run` 预演：每个阶段会跳过、运行还是停下等你，最多调用几次模型，什么都不运行。`doctor` 通过后和导出的 `SKILL.md` 里都会提到它。
 - `inputs set` 保存前就检查名字和值（数字、`true`/`false`、可选值），写错了不会存进去。
 - 提示、报错和 `--help` 都是中英双语（包括输错命令、少写参数这类报错，会提示“是不是想输入 …”），并针对余额不足、限流、连不上（包括代理）给出具体建议。
@@ -48,7 +48,7 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 - `graph` draws the flow as a Mermaid diagram that GitHub and Obsidian render; `--status` colors it by state, and `-o/--out` writes a UTF-8 file (a `.md` file gets the code block).
 - `log` without a stage lists every version of the whole flow by time and adds up the tokens used.
 - `diff` compares two versions of a stage, or a version with the current files: line changes for text and JSON, same-or-different for binaries, and added, removed and changed files for folders.
-- `board` opens a local board in the browser (new package `@flowgit/web`): one card per stage with its state, latest version and outputs; click an output to preview text, JSON, images, video or a folder in a side panel; refreshes every 3 seconds. Text outputs can be edited and saved (JSON is checked first), and files can be uploaded into a human stage's folder; an edited output is saved as a version before the next run. Flow inputs can be filled in, and one stage or the whole flow can be run with a live log; one run at a time, and outputs cannot be saved while it runs. It listens on `127.0.0.1` only, and its API needs a token and checks `Host`.
+- `board` opens a local board in the browser (new package `@flowgit/web`): one card per stage with its state, latest version and outputs; click an output to preview text, JSON, images, video or a folder in a side panel; refreshes every 3 seconds. Text outputs can be edited and saved (JSON is checked first), and files can be uploaded into a human stage's folder; an edited output is saved as a version before the next run. Flow inputs can be filled in, and one stage or the whole flow can be run with a live log; one run at a time, and outputs cannot be saved while it runs. Each card can list its versions, compare two of them (or one with the current files) and restore one. It listens on `127.0.0.1` only, and its API needs a token and checks `Host`.
 - `run all --dry-run` shows whether each stage would be skipped, run or stop for you, and at most how many model calls it would make, without running anything. `doctor` points to it when nothing blocks, and so does the exported `SKILL.md`.
 - `inputs set` checks names and values (numbers, `true`/`false`, allowed values) before saving, so a typo is never stored.
 - Messages, errors and `--help` are bilingual (including typos in commands and missing arguments, with a “did you mean …”), with specific advice for an empty balance, rate limits and connection problems (including proxies).

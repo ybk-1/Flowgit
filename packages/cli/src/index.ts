@@ -27,7 +27,7 @@ import {
   resolveFlowInputs,
   renderSkillMd,
   resolveFlowDir,
-  restoreRun,
+  restoreStage,
   runAll,
   runStage,
   saveFlowInputs,
@@ -585,7 +585,8 @@ program
     try {
       const loaded = loadFlow(dirOf());
       if (!/^\d+$/.test(n)) throw new Error(`版本号要写数字，例如 flowgit restore ${stageId} 2 / the version is a number, e.g. flowgit restore ${stageId} 2`);
-      const run = restoreRun(loaded.dir, loaded.flow, stageId, Number(n));
+      const { run, kept } = restoreStage(loaded, stageId, Number(n));
+      if (kept) console.log(c.dim(`  你的手动修改已存为 / your manual edit was saved as v${kept.n}`));
       console.log(`${c.green("✓")} 已回退到 / restored ${stageId} v${run.n}: ${run.outputs.map((o) => o.path).join(", ")}`);
       console.log(c.dim("  下游阶段会显示为需重跑 / downstream stages will show as stale"));
     } catch (err) {
@@ -729,7 +730,7 @@ program
 
 program
   .command("board")
-  .description("在浏览器打开本地看板，可查看、修改、运行和填写输入 / open a local board in the browser to view, edit, run, and fill in inputs")
+  .description("在浏览器打开本地看板，可查看、修改、运行、填写输入、看历史、对比和回退 / open a local board in the browser to view, edit, run, fill in inputs, browse history, compare, and restore")
   .option("--port <port>", "端口，只绑定 127.0.0.1 / port, bound to 127.0.0.1 only", "4747")
   .option("--no-open", "不打开浏览器 / do not open a browser")
   .action(async (opts: { port: string; open: boolean }) => {
@@ -741,7 +742,7 @@ program
       const dir = loadFlow(dirOf()).dir; // fail early, with the usual hint, when there is no flow.json
       const board = await startBoard({ dir, port, open: false });
       console.log(`${c.green("✓")} 看板 / board: ${board.url}`);
-      console.log(c.dim("绑定 127.0.0.1。可以修改产物，也可以运行和填写输入。按 Ctrl+C 停止 / bound to 127.0.0.1. Outputs can be edited; you can also run stages and edit inputs. Press Ctrl+C to stop"));
+      console.log(c.dim("绑定 127.0.0.1。可以修改产物，也可以运行、填写输入、看历史、对比和回退。按 Ctrl+C 停止 / bound to 127.0.0.1. Outputs can be edited; you can also run stages, edit inputs, browse history, compare, and restore. Press Ctrl+C to stop"));
       if (opts.open) openBrowser(board.url);
     } catch (err) {
       fail(err);

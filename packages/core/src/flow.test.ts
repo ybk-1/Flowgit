@@ -16,6 +16,7 @@ import {
   renderTemplate,
   resolveFlowInputs,
   restoreRun,
+  restoreStage,
   runAll,
   runStage,
   stageStatus,
@@ -255,6 +256,20 @@ describe("running a flow", () => {
     restoreRun(loaded.dir, loaded.flow, "storyboard", 1);
     expect(JSON.parse(fs.readFileSync(path.join(dir, "storyboard.json"), "utf8")).shots).toHaveLength(1);
     expect(listRuns(dir, "storyboard").map((r) => r.n)).toEqual([1, 2, 3, 4]);
+
+    // restoreStage keeps a hand edit as a manual version first
+    fs.writeFileSync(path.join(dir, "storyboard.json"), '{"shots":["hand"]}');
+    const restored = restoreStage(loaded, "storyboard", 2);
+    expect(restored.run.n).toBe(2);
+    expect(restored.kept?.n).toBe(5);
+    expect(restored.kept?.executor).toBe("manual");
+    expect(fs.readFileSync(path.join(dir, "runs/storyboard/5/outputs/storyboard.json"), "utf8")).toBe('{"shots":["hand"]}');
+    // outputs that equal a saved version (here v2, just restored) are not recorded again
+    expect(restoreStage(loaded, "storyboard", 1).kept).toBeUndefined();
+    // a bad version records nothing
+    fs.writeFileSync(path.join(dir, "storyboard.json"), "{}");
+    expect(() => restoreStage(loaded, "storyboard", 9)).toThrow(/v9/);
+    expect(listRuns(dir, "storyboard").map((r) => r.n)).toEqual([1, 2, 3, 4, 5]);
   });
 
   it("stops at a human stage, accepts --from, and runs scripts", async () => {

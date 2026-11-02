@@ -12,10 +12,13 @@ import {
   inputHash,
   inputRefs,
   latestOkRun,
+  listRuns,
   loadFlowInputs,
   nextRunNumber,
   outputAbs,
   outputsEdited,
+  resolveFlowInputs,
+  restoreRun,
   snapshotOutputs,
   stageConfigHash,
   stageStatus,
@@ -80,6 +83,25 @@ export function recordManualEdit(loaded: LoadedFlow, stageId: string, flowInputs
   };
   writeRunRecord(dir, record);
   return record;
+}
+
+/**
+ * Put the outputs of version `n` back in place, like restoreRun, without losing
+ * a hand edit: outputs that match no saved version are first recorded as a
+ * `manual` version (`kept`). Outputs that equal some version, such as an earlier
+ * restore, are not recorded again.
+ */
+export function restoreStage(loaded: LoadedFlow, stageId: string, n: number): { run: RunRecord; kept?: RunRecord } {
+  const { dir, flow } = loaded;
+  const stage = requireStage(flow, stageId);
+  const okRuns = listRuns(dir, stageId).filter((r) => r.status === "ok");
+  let kept: RunRecord | undefined;
+  // Only once the target is known to be restorable; restoreRun reports a bad n.
+  if (okRuns.some((r) => r.n === n) && okRuns.length && okRuns.every((r) => outputsEdited(dir, stage, r))) {
+    kept = recordManualEdit(loaded, stageId, resolveFlowInputs(dir, flow));
+  }
+  const run = restoreRun(dir, flow, stageId, n);
+  return kept ? { run, kept } : { run };
 }
 
 /**
