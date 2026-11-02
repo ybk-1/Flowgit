@@ -75,14 +75,14 @@ describe("flowgit CLI with the short-video template", () => {
     expect(list.status).toBe(0);
     const templates = JSON.parse(list.stdout) as { id: string; default: boolean; stages: { executor: string }[] }[];
     expect(templates[0]).toMatchObject({ id: "short-video", default: true });
-    expect(templates.map((t) => t.id)).toEqual(expect.arrayContaining(["weekly-report", "article", "support-sop", "job-application", "research-report", "ecommerce-listing", "slides", "live-selling", "short-drama", "lesson-plan", "novel-serial", "business-plan", "event-plan", "hiring", "travel-guide", "online-course", "landing-page", "social-posts"]));
+    expect(templates.map((t) => t.id)).toEqual(expect.arrayContaining(["weekly-report", "article", "support-sop", "job-application", "research-report", "ecommerce-listing", "slides", "live-selling", "short-drama", "lesson-plan", "novel-serial", "business-plan", "event-plan", "hiring", "travel-guide", "online-course", "landing-page", "social-posts", "data-report"]));
     const listed = spawnSync(process.execPath, [cli, "templates"], { encoding: "utf8", env: { ...process.env, NO_COLOR: "1" } });
     expect(listed.stdout).toMatch(/weekly-report\s+周报（入门示例）\s+随手记 human → 周报草稿 llm → 检查 script/);
     expect(listed.stdout).toMatch(/landing-page\s+落地页\s+简报 human → 结构 llm → 文案 llm → 照片 human → 生成 script → 检查 script/);
 
     const wrong = spawnSync(process.execPath, [cli, "init", path.join(work, "nope"), "-t", "no-such-template"], { encoding: "utf8" });
     expect(wrong.status).toBe(1);
-    expect(wrong.stderr).toContain("bundled templates: short-video, article, business-plan, ecommerce-listing, event-plan, hiring, job-application, landing-page, lesson-plan, live-selling, novel-serial, online-course, research-report, short-drama, slides, social-posts, support-sop, travel-guide, weekly-report");
+    expect(wrong.stderr).toContain("bundled templates: short-video, article, business-plan, data-report, ecommerce-listing, event-plan, hiring, job-application, landing-page, lesson-plan, live-selling, novel-serial, online-course, research-report, short-drama, slides, social-posts, support-sop, travel-guide, weekly-report");
   });
 
   it("shows a short, quoted path when the new flow is below the current folder", () => {
@@ -1098,6 +1098,175 @@ describe("social-posts template", () => {
     expect(exported).toContain("Desk lamp still on");
     expect(exported).toContain("## Weibo");
     expect(exported).toContain("## X");
+  });
+});
+
+describe("data-report template", () => {
+  let root: string;
+
+  function runIn(dir: string, args: string[], env: Record<string, string> = {}) {
+    const r = spawnSync(process.execPath, [cli, "-C", dir, ...args], {
+      encoding: "utf8",
+      env: { ...process.env, NO_COLOR: "1", ...env },
+    });
+    return { code: r.status, out: `${r.stdout}${r.stderr}` };
+  }
+
+  beforeAll(() => {
+    if (!fs.existsSync(cli)) throw new Error("Build the CLI first: pnpm -r run build");
+    root = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-data-report-"));
+  });
+
+  afterAll(() => {
+    if (root) fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  function init(dir: string, inputs: string[]) {
+    const created = spawnSync(process.execPath, [cli, "init", dir, "-t", "data-report"], { encoding: "utf8" });
+    expect(created.status, `${created.stdout}${created.stderr}`).toBe(0);
+    expect(runIn(dir, ["inputs", "set", ...inputs]).code).toBe(0);
+  }
+
+  it("runs in Chinese on the canned replies and the check matches", () => {
+    const dir = path.join(root, "zh");
+    init(dir, ["question=哪个类目和地区的销售额最高，下一步该补货还是促销？"]);
+    const ran = runIn(dir, ["run", "all"], { FLOWGIT_LLM_MOCK_DIR: path.join(dir, "demo-replies", "zh") });
+    expect(ran.code, ran.out).toBe(0);
+    for (const file of ["profile.json", "charts.json", "aggregates.json", "analysis.md", "report.md", "report.html", "check-report.md", "charts/category-amount.svg"]) {
+      expect(fs.existsSync(path.join(dir, file)), file).toBe(true);
+    }
+    const profile = JSON.parse(fs.readFileSync(path.join(dir, "profile.json"), "utf8")) as { rowCount: number; columns: { name: string; missing: number; mean: number; median: number }[] };
+    expect(profile.rowCount).toBe(208);
+    const amount = profile.columns.find((col) => col.name === "amount");
+    expect(amount).toMatchObject({ missing: 3, mean: 623.53, median: 543 });
+    const aggregates = JSON.parse(fs.readFileSync(path.join(dir, "aggregates.json"), "utf8")) as { charts: { id: string; points: { x: string; y: number }[] }[] };
+    expect(aggregates.charts.map((chart) => chart.id)).toEqual(["category-amount", "category-quantity", "region-amount", "weekly-amount", "category-median", "east-category"]);
+    expect(aggregates.charts[0]?.points[0]).toEqual({ x: "茶饮", y: 52860 });
+    const check = fs.readFileSync(path.join(dir, "check-report.md"), "utf8");
+    expect(check).toContain("## 对不上的数字\n\n没有。");
+    expect(check).toContain("## 没被引用的图\n\n没有。");
+    expect(check).toContain("## 开头不是结论\n\n没有。");
+    const html = fs.readFileSync(path.join(dir, "report.html"), "utf8");
+    expect(html).toContain("<svg");
+    expect(html).toContain("prefers-color-scheme: dark");
+    expect(html).toContain("哪个类目和地区的销售额最高");
+    expect(html).not.toMatch(/<script[^>]+src=|<link[^>]+href="http/);
+    const svg = fs.readFileSync(path.join(dir, "charts", "category-amount.svg"), "utf8");
+    expect(svg).toContain("52860");
+    expect(svg).toContain("prefers-color-scheme: dark");
+
+    fs.appendFileSync(path.join(dir, "analysis.md"), "\n多出来的数 999999。\n");
+    const warned = runIn(dir, ["run", "report"]);
+    expect(warned.code, warned.out).toBe(0);
+    const again = fs.readFileSync(path.join(dir, "check-report.md"), "utf8");
+    expect(again).toContain("- 999999");
+    expect(again).not.toContain("## 对不上的数字\n\n没有。");
+
+    fs.writeFileSync(path.join(dir, "analysis.md"), "\n");
+    const broken = runIn(dir, ["run", "report"]);
+    expect(broken.code).toBe(1);
+    expect(broken.out).toContain("analysis.md 是空的");
+  });
+
+  it("runs in English on the canned replies and the check matches", () => {
+    const dir = path.join(root, "en");
+    init(dir, [
+      "question=Which category and region brought in the most revenue, and should we restock or run a discount?",
+      "audience=regional sales managers",
+      "language=en",
+    ]);
+    const ran = runIn(dir, ["run", "all"], { FLOWGIT_LLM_MOCK_DIR: path.join(dir, "demo-replies", "en") });
+    expect(ran.code, ran.out).toBe(0);
+    const check = fs.readFileSync(path.join(dir, "check-report.md"), "utf8");
+    expect(check).toContain("## Numbers that do not match\n\nNone.");
+    expect(check).toContain("## Charts the analysis never cites\n\nNone.");
+    expect(check).toContain("## Answer is not first\n\nNone.");
+    const report = fs.readFileSync(path.join(dir, "report.md"), "utf8");
+    expect(report).toContain("52860");
+    expect(report).toContain("For: regional sales managers");
+    const html = fs.readFileSync(path.join(dir, "report.html"), "utf8");
+    expect(html).toContain('lang="en"');
+    expect(html).toContain("<svg");
+    expect(html).not.toMatch(/<script[^>]+src=|<link[^>]+href="http/);
+  });
+
+  it("reads any CSV: another file name, Chinese headers, GBK bytes from Excel", () => {
+    const dir = path.join(root, "any");
+    init(dir, ["question=哪个门店的金额最高？", "audience=店长"]);
+    fs.rmSync(path.join(dir, "data", "sales.csv"));
+    // GBK bytes, as Excel on Chinese Windows saves a CSV by default.
+    const gbk: Record<string, number[]> = { 日: [0xc8, 0xd5], 期: [0xc6, 0xda], 门: [0xc3, 0xc5], 店: [0xb5, 0xea], 金: [0xbd, 0xf0], 额: [0xb6, 0xee], 东: [0xb6, 0xab], 西: [0xce, 0xf7], 区: [0xc7, 0xf8] };
+    const toGbk = (text: string) => Buffer.from([...text].flatMap((ch) => gbk[ch] ?? [...Buffer.from(ch)]));
+    const table = ["日期,门店,金额", "2025-01-06,东区,120", "2025-01-06,西区,80", "2025-01-13,东区,150", "2025-01-13,西区,", "2025-01-20,东区,90", "2025-01-20,西区,110", ""].join("\r\n");
+    fs.writeFileSync(path.join(dir, "data", "stores.csv"), toGbk(table));
+
+    const mock = path.join(root, "any-mock");
+    fs.mkdirSync(mock, { recursive: true });
+    const chart = (id: string, type: string, x: string, agg: string, filter: string, title: string) => ({ id, type, x, y: "金额", agg, filter, title });
+    fs.writeFileSync(
+      path.join(mock, "plan.json"),
+      JSON.stringify({
+        charts: [
+          chart("store-sum", "bar", "门店", "sum", "", "比较各门店的金额合计。"),
+          chart("big-orders", "bar", "门店", "sum", "金额>=100", "只看金额不低于 100 的单，比较各门店的合计。"),
+          chart("weekly", "line", "日期", "sum", "", "看每周金额合计的变化。"),
+          chart("store-median", "table", "门店", "median", "", "列出各门店金额的中位数。"),
+        ],
+      }),
+    );
+    fs.writeFileSync(
+      path.join(mock, "analysis.md"),
+      [
+        "东区的金额合计是 360，高于西区的 190，先看东区。",
+        "",
+        "## 发生了什么",
+        "",
+        "- 按门店合计，东区是 360，西区是 190，见 charts/store-sum.svg。",
+        "- 只看金额不低于 100 的单，东区是 270，西区是 110，见 charts/big-orders.svg。",
+        "- 每周合计见 charts/weekly.svg，2025-01-13 是 150。",
+        "- 中位数见 charts/store-median.svg，东区是 120，西区是 95。金额列缺失 1 个。",
+        "",
+        "## 可能的原因",
+        "",
+        "猜测：东区客流更多，没有检验过。",
+        "",
+        "## 建议",
+        "",
+        "店长先看东区的备货。",
+        "",
+      ].join("\n"),
+    );
+    const ran = runIn(dir, ["run", "all"], { FLOWGIT_LLM_MOCK_DIR: mock });
+    expect(ran.code, ran.out).toBe(0);
+    const profile = JSON.parse(fs.readFileSync(path.join(dir, "profile.json"), "utf8")) as { source: string; rowCount: number; dateRange: unknown; columns: { name: string; type: string }[] };
+    expect(profile).toMatchObject({ source: "data/stores.csv", rowCount: 6, dateRange: { min: "2025-01-06", max: "2025-01-20" } });
+    expect(profile.columns.map((col) => [col.name, col.type])).toEqual([["日期", "date"], ["门店", "string"], ["金额", "number"]]);
+    const aggregates = JSON.parse(fs.readFileSync(path.join(dir, "aggregates.json"), "utf8")) as { charts: { id: string; skippedRows: number; points: { x: string; y: number }[] }[] };
+    const byId = Object.fromEntries(aggregates.charts.map((c) => [c.id, c]));
+    expect(byId["store-sum"]?.points).toEqual([{ x: "东区", y: 360 }, { x: "西区", y: 190 }]);
+    expect(byId["store-sum"]?.skippedRows).toBe(1);
+    expect(byId["big-orders"]?.points).toEqual([{ x: "东区", y: 270 }, { x: "西区", y: 110 }]);
+    expect(byId["weekly"]?.points.map((p) => p.x)).toEqual(["2025-01-06", "2025-01-13", "2025-01-20"]);
+    expect(byId["store-median"]?.points).toEqual([{ x: "东区", y: 120 }, { x: "西区", y: 95 }]);
+    const check = fs.readFileSync(path.join(dir, "check-report.md"), "utf8");
+    expect(check).toContain("## 对不上的数字\n\n没有。");
+    expect(check).toContain("## 没被引用的图\n\n没有。");
+    expect(fs.readFileSync(path.join(dir, "report.md"), "utf8")).toContain("数据来自 data/stores.csv，共 6 行。");
+    const svg = fs.readFileSync(path.join(dir, "charts", "store-median.svg"), "utf8");
+    expect(svg).toMatch(/<svg [^>]*width="\d+" height="\d+"/);
+
+    // Two CSVs: the profile stops and names both.
+    fs.writeFileSync(path.join(dir, "data", "extra.csv"), "a,b\n1,2\n");
+    const two = runIn(dir, ["run", "profile"]);
+    expect(two.code).toBe(1);
+    expect(two.out).toContain("只留下要分析的那一个");
+    fs.rmSync(path.join(dir, "data", "extra.csv"));
+
+    // A sum over a text column is a spec error that says how to fix it.
+    fs.writeFileSync(path.join(dir, "charts.json"), JSON.stringify({ charts: [{ ...chart("bad", "bar", "日期", "sum", "", "错的。"), y: "门店" }] }));
+    const bad = runIn(dir, ["run", "charts"]);
+    expect(bad.code).toBe(1);
+    expect(bad.out).toContain("里没有数字");
   });
 });
 

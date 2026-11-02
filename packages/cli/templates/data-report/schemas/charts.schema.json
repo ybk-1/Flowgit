@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Chart spec",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["charts"],
+  "properties": {
+    "charts": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "type", "x", "y", "agg", "filter", "title"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,40}$" },
+          "type": { "enum": ["bar", "line", "table"] },
+          "x": { "type": "string", "minLength": 1 },
+          "y": { "type": "string", "minLength": 1 },
+          "agg": { "enum": ["sum", "mean", "count", "median"] },
+          "filter": { "type": "string" },
+          "title": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}

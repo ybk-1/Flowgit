@@ -23,7 +23,9 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 ### 模板和示例 / Templates and examples
 
 - `social-posts`：多平台帖子。3 到 5 个角度（人挑选）→ 按小红书、微博、X、抖音、LinkedIn、微信朋友圈已公布的长度和话题规则写帖 → 检查绝对化用语、医疗用语、导流痕迹和占位符（只提醒）→ 导出 `posts.md`。规则会变，发出去之前要再核对。
+- `data-report`：数据报告。表格（人，任何带表头的 CSV，中文表头和 Excel 默认的 GBK 编码也行；示例是虚构的销售表）→ 列画像（类型、缺失、唯一值、最小/最大/平均/中位数、日期范围）→ 模型只写柱状、折线或表格的规格，不写代码 → 脚本汇总并手写浅色深色都能看的 SVG → 结论在前、每条发现都引用图 → 合成报告，分析里对不上画像或汇总的数字只警告、不拦截。
 - `social-posts`: posts for several platforms. 3 to 5 angles (a person picks) → posts written to the published length and hashtag rules of Xiaohongshu, Weibo, X, Douyin, LinkedIn and WeChat Moments → checks for absolute claims, medical claims, diversion traces and placeholders (warnings only) → export to `posts.md`. Rules change; check them again before posting.
+- `data-report`: a data report. A table (person; any CSV with a header row, including Chinese headers and the GBK files Excel saves by default; the sample is fictional sales) → a column profile (type, missing, distinct, min/max/mean/median, date range) → the model writes a bar, line or table spec and no code → a script aggregates and draws SVG that stays readable in light and dark → the answer comes first and each finding cites a chart → the report is assembled, and a number in the analysis that is in neither the profile nor the aggregates only warns, it does not block.
 
 ## [0.1.0] - 2026-11-02
 
