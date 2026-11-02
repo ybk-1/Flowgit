@@ -265,6 +265,12 @@ A `service` stage calls an HTTP endpoint. `POST` sends the flow inputs and text 
 
 An `mcp` stage calls an MCP tool. Servers live in `mcpServers`, the same shape as Claude Desktop and Cursor: `command` / `args` / `env` locally, or `url` (Streamable HTTP) for a remote server. An `env` value must be `${VAR}`; secrets are not written into flow.json. `flowgit mcp tools <server>` lists tools and parameters, and `flowgit doctor` checks that the command is on PATH and the variables are set. See [docs/mcp.md](docs/mcp.md). A runnable example is [`examples/mcp-echo`](examples/mcp-echo).
 
+## 自己的执行器 / Your own executor
+
+`plugin` 阶段运行流程目录里的一个插件。包名只从这份流程的 `node_modules` 解析，不会自动安装；`./plugins/echo` 这种路径必须留在流程目录内。插件默认导出 `{ flowgitPlugin: 1, name, executor: { run(ctx) } }`，不要 import Flowgit 的内部模块。`flowgit plugins` 和 `flowgit doctor` 列出解析到的路径、版本，以及没找到的。说明见 [docs/plugins.md](docs/plugins.md)，例子是 [`examples/plugin-echo`](examples/plugin-echo)。
+
+A `plugin` stage runs a plugin from the flow directory. A package name resolves only from that flow's `node_modules` and is never auto-installed; a path like `./plugins/echo` must stay inside the flow directory. The default export is `{ flowgitPlugin: 1, name, executor: { run(ctx) } }`, and the plugin does not import Flowgit internals. `flowgit plugins` and `flowgit doctor` list the resolved path, the version, and anything missing. See [docs/plugins.md](docs/plugins.md). The example is [`examples/plugin-echo`](examples/plugin-echo).
+
 ## 子流程 / Sub-flows
 
 `workflow` 阶段在 `engine` 为 `flowgit` 时运行另一份 `flow.json`。`params.inputs` 把父流程的输入传进去（字符串里可以写 `{{inputs.名称}}`），`params.copy` 把子流程的产物复制成这个阶段的产物。子流程用自己的 `runs/`。可以嵌套，最多 5 层；绕回去会报错。示例：[`examples/subflow`](examples/subflow)。

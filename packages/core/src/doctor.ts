@@ -6,6 +6,7 @@ import { DEFAULT_MODEL } from "./executors/llm.js";
 import { isRunnableExecutor } from "./executors/index.js";
 import { loadFlow } from "./load.js";
 import { isHttpServer, isStdioServer, mcpEnvNames } from "./mcp.js";
+import { inspectPlugin } from "./plugins.js";
 import { DEFAULT_PROVIDER, flowKeyEndpoint, flowKeyEndpointNote, providerKeyState, resolveModel, type ResolvedProvider } from "./providers.js";
 import { pickProxy, proxyOff, proxyProblem, proxySourceLabel, showProxy, systemProxy, type ProxyInfo } from "./proxy.js";
 import { MissingInputsError, loadFlowInputs } from "./runs.js";
@@ -205,6 +206,20 @@ function ttsCheck(stageId: string, command: string, env: NodeJS.ProcessEnv): Doc
   };
 }
 
+function pluginChecks(loaded: LoadedFlow, stage: Stage): DoctorCheck[] {
+  const ex = stage.executor;
+  if (ex.type !== "plugin") return [];
+  const report = inspectPlugin(loaded.dir, ex.plugin);
+  return [
+    {
+      level: report.missing ? "error" : "ok",
+      stage: stage.id,
+      message: report.message,
+      ...(report.hint ? { hint: report.hint } : {}),
+    },
+  ];
+}
+
 function mcpChecks(loaded: LoadedFlow, stage: Stage, env: NodeJS.ProcessEnv): DoctorCheck[] {
   const ex = stage.executor;
   if (ex.type !== "mcp") return [];
@@ -287,6 +302,8 @@ function stageChecks(loaded: LoadedFlow, stage: Stage, opts: DoctorOptions, env:
       );
     case "mcp":
       return mcpChecks(loaded, stage, env);
+    case "plugin":
+      return pluginChecks(loaded, stage);
     case "agent": {
       if (ex.agent === "custom") {
         const program = ex.command ? commandProgram(ex.command) : undefined;
@@ -311,8 +328,8 @@ function stageChecks(loaded: LoadedFlow, stage: Stage, opts: DoctorOptions, env:
 
 /**
  * Check whether this machine can run a flow: Node version, flow inputs, model keys
- * (or canned replies), proxy settings, and the programs that script and agent
- * stages start. A short-video voice stage with no FLOWGIT_TTS_API_KEY is a
+ * (or canned replies), proxy settings, the programs that script and agent
+ * stages start, and whether each plugin resolves. A short-video voice stage with no FLOWGIT_TTS_API_KEY is a
  * warning, not an error. Makes no network calls and runs nothing.
  */
 export function doctor(loaded: LoadedFlow, opts: DoctorOptions = {}): DoctorCheck[] {

@@ -121,6 +121,7 @@ Stages must not form a cycle. Run order follows `inputs`; ties keep the order in
 | `workflow` | `engine` 为 `flowgit` 时能 / yes when `engine` is `flowgit` | `engine`, `file`, `params?` | 运行另一个流程。`flowgit` 跑一条 Flowgit 子流程；ComfyUI、n8n 等其他引擎仍是预留。见下面的「子流程」 | Runs another flow. `flowgit` runs a Flowgit sub-flow; other engines such as ComfyUI and n8n stay reserved. See "Sub-flows" below |
 | `service` | 能 / yes | `url`, `method?`, `headers?`, `timeoutSec?` | 调用 HTTP 服务。只允许 `http` 和 `https`。`POST` 发送 `{ inputs, upstream }`（只带 1 MB 以内的文本产物），`GET` 把流程输入放进查询参数。`headers` 的值可以写 `{{env.变量名}}`，运行时从环境变量读取，这是传密钥的唯一方式，密钥不写进文件。`timeoutSec` 默认 60。跳转只跟同一个源（最多 5 次）；要跳到别的源时直接失败，免得请求头里的密钥被带过去。非 2xx、返回的 JSON 不合法、或引用的环境变量没设置，都记为失败。`url`、`method` 和 `headers` 的写法（不是取到的值）算进配置哈希 | Calls an HTTP service. Only `http` and `https`. `POST` sends `{ inputs, upstream }` (text outputs up to 1 MB), `GET` puts flow inputs in the query string. Header values may contain `{{env.NAME}}`, read from the environment at run time; this is the only way to pass a key, and keys are never written to a file. `timeoutSec` defaults to 60. Redirects are followed within the same origin only (up to 5); a redirect to another origin fails the run so a key in the headers is never sent there. A non-2xx response, invalid JSON, or an unset env var fails the run. `url`, `method` and the `headers` as written (not the resolved values) count in the config hash |
 | `mcp` | 能 / yes | `server`, `tool`, `args?`, `timeoutSec?` | 调用 `mcpServers` 里的一个工具，把结果写进唯一的产物。见下面的「MCP 执行器」 | Calls one tool on a server named in `mcpServers` and writes the result to the stage's single output. See "The MCP executor" below |
+| `plugin` | 能 / yes | `plugin`, `config?`, `timeoutSec?` | 加载流程目录里的一个插件，由它写出产物。包名只从该目录的 `node_modules` 解析；`./` 路径必须留在流程目录内。见下面的「插件执行器」 | Loads a plugin from the flow directory and lets it write the outputs. A package name resolves only from that directory's `node_modules`; a `./` path must stay inside the flow directory. See "The plugin executor" below |
 
 ### MCP 执行器 / The MCP executor
 
@@ -167,6 +168,37 @@ An `mcp` stage calls one MCP tool. Servers live in the top-level `mcpServers` ob
 - The staleness hash includes that server's `mcpServers` entry with env values removed (the variable names stay), plus `tool` and `args`. Changing args or the command marks the stage `stale`; changing a secret's value does not.
 - `flowgit doctor` checks that a stdio `command` is on PATH and that every `${VAR}` is set. `flowgit mcp tools <server>` lists tools and parameters. `init`, and a flow copied from somewhere else, lists the command or URL that would be started.
 - Runnable example: [`examples/mcp-echo`](../examples/mcp-echo) (a local fake server, no network). The longer write-up is [docs/mcp.md](mcp.md).
+
+### 插件执行器 / The plugin executor
+
+`plugin` 阶段在本进程里加载一个插件，调用它的 `executor.run`。插件自己写出产物。完整契约、`PluginContext` 和一份能跑的最小插件见 [docs/plugins.md](plugins.md)。
+
+A `plugin` stage loads a plugin in this process and calls its `executor.run`. The plugin writes the outputs. The full contract, `PluginContext`, and a runnable minimal plugin are in [docs/plugins.md](plugins.md).
+
+```json
+{
+  "type": "plugin",
+  "plugin": "./plugins/echo",
+  "config": { "prefix": "echo: " },
+  "timeoutSec": 30
+}
+```
+
+- `plugin` 是包名，或 `./` 开头的相对路径。包名只用 `createRequire(<流程目录>/package.json)` 从该目录的 `node_modules` 解析，不查上级目录、不查全局、也不自动安装。找不到就失败，并提示在流程目录运行 `npm install <包名>`。`./` 路径必须留在流程目录内；`../outside` 在校验时失败。
+- 默认导出 `{ flowgitPlugin: 1, name, executor: { run(ctx) } }`。`ctx` 是 `@flowgit/core` 导出的 `PluginContext`：`flowDir`、`stage`、`config`、`inputs`、`upstream`（相对路径和一个 `read`）、`writeOutput(rel, data)`、`log(line)`、`signal`（`AbortSignal`）。`flowgitPlugin` 不是 `1` 就失败，请升级 Flowgit 或这个插件。插件不要 import Flowgit 的内部模块。
+- `writeOutput` 只能写这个阶段声明的产物（目录产物可以写里面的文件）。`upstream.read` 只能读上游产物。
+- `timeoutSec` 到点就中止 `signal`，这次运行记为失败。不写表示不限时。
+- 是否需要重跑的哈希包含 `config`。包插件还包含其 `package.json` 的 `version`；文件夹插件改为该目录（或那一个文件）的哈希。
+- `flowgit doctor` 和 `flowgit plugins` 列出用到的插件、解析到的路径和版本，以及没找到的。`init` 和从别处复制来的流程会列出插件名字和解析位置。
+- 可运行的例子：[`examples/plugin-echo`](../examples/plugin-echo)（纯 JavaScript，无依赖）。
+
+- `plugin` is a package name or a relative path starting with `./`. A package name is resolved only from that directory's `node_modules` via `createRequire(<flowDir>/package.json)`: no parent directories, no global lookup, and no auto-install. A missing package fails and hints to run `npm install <name>` in the flow directory. A `./` path must stay inside the flow directory; `../outside` fails validation.
+- The default export is `{ flowgitPlugin: 1, name, executor: { run(ctx) } }`. `ctx` is the `PluginContext` exported by `@flowgit/core`: `flowDir`, `stage`, `config`, `inputs`, `upstream` (relative paths and a `read`), `writeOutput(rel, data)`, `log(line)`, and `signal` (`AbortSignal`). Any `flowgitPlugin` other than `1` fails and asks you to upgrade Flowgit or the plugin. Plugins must not import Flowgit internals.
+- `writeOutput` can only write this stage's declared outputs (a directory output accepts a file inside it). `upstream.read` can only read upstream outputs.
+- `timeoutSec` aborts `signal` and fails the run. Unset means no limit.
+- The staleness hash includes `config`. A package plugin also includes the `version` in its `package.json`; a folder plugin hashes that directory (or that one file) instead.
+- `flowgit doctor` and `flowgit plugins` list the plugins in use, the resolved path and version, and any that are missing. `init`, and a flow copied from somewhere else, lists plugin names and where they resolve.
+- Runnable example: [`examples/plugin-echo`](../examples/plugin-echo) (plain JavaScript, no dependencies).
 
 ### 子流程 / Sub-flows
 
@@ -281,9 +313,9 @@ Note: Zhipu's GLM Coding Plan quota only applies inside the tools Zhipu lists ([
 
 Proxies: when `flowgit run` and `flowgit board` call models and services, they go through a proxy: `HTTPS_PROXY` or `HTTP_PROXY` first (and `ALL_PROXY`, which Node itself doesn't read), otherwise the Windows or macOS system proxy. Local addresses (`localhost`, `127.0.0.1`, `::1`) skip the proxy unless you set `NO_PROXY` yourself. Node can only use http proxies, not `socks5://`. Node 24.14+ switches in-process; Node 22.21+ starts the command once more with `NODE_USE_ENV_PROXY=1`, and script and agent stages still see your own environment. Set `FLOWGIT_PROXY=off` to turn this off. When a request can't connect, the error says which proxy it went through.
 
-`timeoutSec`（可选，整数，至少为 1）只写在 `script` 和 `agent` 上。不写表示不限时。到了这个秒数，Flowgit 停掉整棵进程树，而不是只停掉外壳：macOS 和 Linux 上命令单独成一个进程组，先对进程组发 `SIGTERM`，5 秒后还在就发 `SIGKILL`；Windows 上用 `taskkill /pid <pid> /T /F`。这次运行记为失败，错误是 `超时（N 秒），已停止 / Timed out after Ns and was stopped`。父进程如果收到 `SIGINT`、`SIGTERM` 或 `SIGHUP`，也会把同一个信号转给这个进程组再退出。`timeoutSec` 属于执行器配置，改了它，这个阶段和下游都会变成 `stale`。
+`timeoutSec`（可选，整数，至少为 1）在 `script` 和 `agent` 上的行为如下。不写表示不限时。`service`、`mcp` 和 `plugin` 各自的超时见上面的执行器说明。到了这个秒数，Flowgit 停掉整棵进程树，而不是只停掉外壳：macOS 和 Linux 上命令单独成一个进程组，先对进程组发 `SIGTERM`，5 秒后还在就发 `SIGKILL`；Windows 上用 `taskkill /pid <pid> /T /F`。这次运行记为失败，错误是 `超时（N 秒），已停止 / Timed out after Ns and was stopped`。父进程如果收到 `SIGINT`、`SIGTERM` 或 `SIGHUP`，也会把同一个信号转给这个进程组再退出。`timeoutSec` 属于执行器配置，改了它，这个阶段和下游都会变成 `stale`。
 
-`timeoutSec` (optional integer, minimum 1) belongs only on `script` and `agent`. Unset means no limit. When it elapses, Flowgit stops the whole process tree, not just the shell: on macOS and Linux the command runs in its own process group and gets `SIGTERM`, then `SIGKILL` if it is still alive after 5 seconds; on Windows, `taskkill /pid <pid> /T /F`. The run is recorded as failed with `超时（N 秒），已停止 / Timed out after Ns and was stopped`. If the parent receives `SIGINT`, `SIGTERM`, or `SIGHUP`, it forwards that signal to the process group and then exits. `timeoutSec` is part of the executor config, so changing it marks this stage and everything downstream `stale`.
+`timeoutSec` (optional integer, minimum 1) behaves as follows on `script` and `agent`. Unset means no limit. `service`, `mcp` and `plugin` document their own timeouts above. When it elapses, Flowgit stops the whole process tree, not just the shell: on macOS and Linux the command runs in its own process group and gets `SIGTERM`, then `SIGKILL` if it is still alive after 5 seconds; on Windows, `taskkill /pid <pid> /T /F`. The run is recorded as failed with `超时（N 秒），已停止 / Timed out after Ns and was stopped`. If the parent receives `SIGINT`, `SIGTERM`, or `SIGHUP`, it forwards that signal to the process group and then exits. `timeoutSec` is part of the executor config, so changing it marks this stage and everything downstream `stale`.
 
 script 和 agent 阶段运行时可以读到这些环境变量 / Environment variables for script and agent stages:
 
@@ -439,9 +471,9 @@ Main `run.json` fields: `stage`, `n`, `status`, `executor`, `startedAt`, `finish
 | `edited` | 产物被手动改过：和任何一个成功的版本都不一样（回退到旧版本不算） | Outputs were edited by hand: they match no successful run (restoring an older version does not count) |
 | `error` | 最新一次运行失败 | The latest run failed |
 
-`inputHash` 是"上游产物的 sha256 + 流程输入 + 执行器配置"的指纹。执行器配置包括执行器定义本身、llm 的提示词文件，以及 script 命令里出现的、存在于流程目录中的文件（比如 `node scripts/render.mjs` 里的 `scripts/render.mjs`）。`workflow` 且 `engine` 为 `flowgit` 时，还包含子流程的 `flow.json`，以及那份子流程里同样算法算出来的提示词和脚本文件。`mcp` 阶段还包含 `mcpServers` 里对应服务器的配置（不含 `env` 的值）、`tool` 和 `args`。所以改一句提示词、改了子流程、或者改了 MCP 工具的参数，这个阶段和它下游的阶段都会变成 `stale`。
+`inputHash` 是"上游产物的 sha256 + 流程输入 + 执行器配置"的指纹。执行器配置包括执行器定义本身、llm 的提示词文件，以及 script 命令里出现的、存在于流程目录中的文件（比如 `node scripts/render.mjs` 里的 `scripts/render.mjs`）。`workflow` 且 `engine` 为 `flowgit` 时，还包含子流程的 `flow.json`，以及那份子流程里同样算法算出来的提示词和脚本文件。`mcp` 阶段还包含 `mcpServers` 里对应服务器的配置（不含 `env` 的值）、`tool` 和 `args`。`plugin` 阶段还包含 `config`，以及包的 `package.json` 版本（文件夹插件则是其中文件的哈希）。所以改一句提示词、改了子流程、改了 MCP 工具的参数，或者改了插件的 `config` 或文件，这个阶段和它下游的阶段都会变成 `stale`。
 
-`inputHash` fingerprints the upstream artifacts' sha256, the flow inputs, and the executor config. The executor config covers the executor definition itself, an llm stage's prompt file, and any file in the flow directory named in a script command (e.g. `scripts/render.mjs` in `node scripts/render.mjs`). A `workflow` with `engine: "flowgit"` also includes the sub-flow's `flow.json` and, by the same hash, the prompt and script files that sub-flow names. An `mcp` stage also includes that server's `mcpServers` entry with the env values removed, plus `tool` and `args`. So changing one line of a prompt, changing the sub-flow, or changing an MCP tool's arguments marks that stage and everything downstream as `stale`.
+`inputHash` fingerprints the upstream artifacts' sha256, the flow inputs, and the executor config. The executor config covers the executor definition itself, an llm stage's prompt file, and any file in the flow directory named in a script command (e.g. `scripts/render.mjs` in `node scripts/render.mjs`). A `workflow` with `engine: "flowgit"` also includes the sub-flow's `flow.json` and, by the same hash, the prompt and script files that sub-flow names. An `mcp` stage also includes that server's `mcpServers` entry with the env values removed, plus `tool` and `args`. A `plugin` stage also includes `config` and the package's `package.json` version (a hash of its files, for a folder plugin). So changing one line of a prompt, changing the sub-flow, changing an MCP tool's arguments, or changing a plugin's `config` or files marks that stage and everything downstream as `stale`.
 
 ### 对比版本 / Diffing versions
 

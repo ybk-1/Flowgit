@@ -34,6 +34,7 @@ import {
   diffRuns,
   listRuns,
   listMcpTools,
+  listPlugins,
   loadFlow,
   loadProviders,
   providerKeyState,
@@ -431,7 +432,7 @@ function convertFlowFile(dir: string, to: FlowFormat): { from: string; to: strin
   return { from: path.basename(from), to: path.basename(target) };
 }
 
-/** For a flow copied from somewhere else: the commands it runs, the agents it starts and the services it calls. */
+/** For a flow copied from somewhere else: the commands it runs, the agents it starts, the services it calls and the plugins it loads. */
 function printActions(flow: Flow, dir: string): void {
   const actions = flowActions(flow, dir);
   if (!actions.length) return;
@@ -1148,7 +1149,7 @@ program
 
 program
   .command("doctor")
-  .description("检查这台电脑能不能跑这个流程：Node、流程输入、密钥、要用的命令和 agent / check this machine can run the flow: Node, inputs, keys, programs and agents")
+  .description("检查这台电脑能不能跑这个流程：Node、流程输入、密钥、要用的命令、agent 和插件 / check this machine can run the flow: Node, inputs, keys, programs, agents and plugins")
   .option("--input <key=value>", "临时覆盖流程输入，可重复 / flow input override (repeatable)", collect)
   .option("--model <model>", "按这个模型检查 llm 阶段，同 run --model / check llm stages against this model, as with run --model")
   .option("--json", "输出 JSON / machine-readable output")
@@ -1297,6 +1298,39 @@ function printMcpTools(server: string, tools: { name: string; description?: stri
     }
   }
 }
+
+program
+  .command("plugins")
+  .description("列出这个流程用到的插件、解析到的路径和版本 / list the plugins this flow uses, with the resolved path and version")
+  .option("--json", "输出 JSON / machine-readable output")
+  .action((opts: { json?: boolean }) => {
+    try {
+      const loaded = loadFlow(dirOf());
+      const plugins = listPlugins(loaded);
+      const missing = plugins.some((plugin) => plugin.missing);
+      if (opts.json) {
+        console.log(JSON.stringify({ plugins }, null, 2));
+        if (missing) process.exitCode = 1;
+        return;
+      }
+      if (!plugins.length) {
+        console.log("这个流程没有插件阶段 / this flow has no plugin stages");
+        return;
+      }
+      console.log(`${c.bold(loaded.flow.name)} ${c.dim("· 插件 / plugins")}\n`);
+      for (const plugin of plugins) {
+        const mark = plugin.missing ? c.red("✗") : c.green("✓");
+        console.log(`  ${mark} ${plugin.stage}: ${plugin.message}`);
+        if (plugin.hint) console.log(c.dim(`      ${plugin.hint}`));
+      }
+      if (missing) {
+        console.log(`\n${c.red("✗")} 有插件没找到 / a plugin was not found`);
+        process.exitCode = 1;
+      }
+    } catch (err) {
+      fail(err);
+    }
+  });
 
 const mcpCmd = program.command("mcp").description("查看流程里配置的 MCP 服务器 / inspect the MCP servers configured in this flow");
 

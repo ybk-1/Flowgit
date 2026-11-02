@@ -31,6 +31,8 @@ function executorLine(ex: Executor): string {
       return `调用 HTTP 服务 (service)：\`${ex.method ?? "POST"} ${ex.url}\`${ex.headers ? "。请求头里的 {{env.名称}} 从环境变量读取，密钥不写进文件。" : ""}。`;
     case "mcp":
       return `调用 MCP 工具 \`${ex.tool}\`（服务器 \`${ex.server}\`）/ call MCP tool \`${ex.tool}\` on server \`${ex.server}\`。`;
+    case "plugin":
+      return `运行插件 \`${ex.plugin}\` / run plugin \`${ex.plugin}\`。`;
   }
 }
 

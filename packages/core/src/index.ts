@@ -17,6 +17,7 @@ export * from "./files.js";
 export * from "./edit.js";
 export * from "./privacy.js";
 export * from "./actions.js";
+export * from "./plugins.js";
 // proxyHint and ignoredProxyVar already come through ./executors/index.js.
 export {
   LOCAL_NO_PROXY,

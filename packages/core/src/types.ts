@@ -138,6 +138,20 @@ export interface ExecutorMcp {
   timeoutSec?: number;
 }
 
+/**
+ * A custom executor loaded from the flow directory.
+ * `plugin` is a package name, resolved only from this flow's `node_modules`,
+ * or a `./` path that stays inside the flow directory.
+ */
+export interface ExecutorPlugin {
+  type: "plugin";
+  plugin: string;
+  /** JSON object passed to the plugin as `ctx.config`. Counts toward staleness. */
+  config?: Record<string, unknown>;
+  /** Abort the plugin's `signal` after this many seconds. Unset means no limit. */
+  timeoutSec?: number;
+}
+
 export type Executor =
   | ExecutorHuman
   | ExecutorLlm
@@ -145,7 +159,8 @@ export type Executor =
   | ExecutorAgent
   | ExecutorWorkflow
   | ExecutorService
-  | ExecutorMcp;
+  | ExecutorMcp
+  | ExecutorPlugin;
 
 export type ExecutorType = Executor["type"];
 
