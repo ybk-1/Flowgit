@@ -91,6 +91,15 @@ function usageLine(label: string, t: { input: number; output: number; calls: num
   return `${label}: ${t.input} 输入 input + ${t.output} 输出 output tokens（${t.calls} 次模型调用 / model calls）`;
 }
 
+/** Add a run's model usage to the run-all total; a schema repair makes it two calls. */
+function addUsage(params: Record<string, unknown> | undefined): void {
+  const tokens = usageTokens(params?.usage as Record<string, unknown> | undefined);
+  if (!tokens) return;
+  used.input += tokens.input;
+  used.output += tokens.output;
+  used.calls += Array.isArray(params?.llmCalls) ? params.llmCalls.length : 1;
+}
+
 function printUsageTotal(gap = false): void {
   if (used.calls < 2) return;
   console.log(c.dim(`${gap ? "\n" : ""}${usageLine("用量合计 / total usage", used)}`));
@@ -109,16 +118,13 @@ function printEvent(e: RunEvent): void {
       break;
     case "stage:done": {
       console.log(`${c.green("✓")} ${e.stage.name} ${c.dim(`→ runs/${e.stage.id}/${e.n}/`)}`);
-      const tokens = usageTokens(e.record.params?.usage as Record<string, unknown> | undefined);
-      if (tokens) {
-        used.input += tokens.input;
-        used.output += tokens.output;
-        used.calls += 1;
-      }
+      addUsage(e.record.params);
       break;
     }
     case "stage:error":
       console.log(`${c.red("✗")} ${e.stage.name} ${c.dim(`(${e.stage.id})`)}`);
+      // a failed stage can still have paid for model calls (e.g. a schema repair that didn't pass)
+      addUsage(e.record?.params);
       break;
   }
 }
@@ -908,7 +914,7 @@ function tokenNote(usage: unknown): string {
 /** The details column of `flowgit log`: model, command, agent, or what a person provided. */
 function runDetail(r: RunRecord): string {
   const p = r.params ?? {};
-  if (r.status === "error") return c.red((r.error ?? "").split("\n")[0].slice(0, 80));
+  if (r.status === "error") return `${c.red((r.error ?? "").split("\n")[0].slice(0, 80))}${tokenNote(p.usage)}`;
   const took = p.durationMs ? ` · ${Math.round(Number(p.durationMs) / 1000)}s` : "";
   if (r.executor === "llm") return `${p.provider && p.provider !== "anthropic" ? `${p.provider}/` : ""}${p.model ?? ""}${took}${tokenNote(p.usage)}`;
   if (r.executor === "script") return String(p.run ?? "");
@@ -938,7 +944,7 @@ function logAll(loaded: LoadedFlow): void {
     if (t) {
       total.input += t.input;
       total.output += t.output;
-      total.calls += 1;
+      total.calls += Array.isArray(r.params?.llmCalls) ? r.params.llmCalls.length : 1;
     }
   }
   console.log(table(rows));

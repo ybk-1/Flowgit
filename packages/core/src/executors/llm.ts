@@ -378,16 +378,24 @@ export const llmExecutor: StageExecutor = {
         }
         write(repaired);
         const again = schemaProblems(loaded.dir, stage);
-        if (again.length) throw schemaFailure(again);
+        if (again.length) {
+          // Both calls were paid for: keep their usage on the error run too.
+          logUsage();
+          throw Object.assign(schemaFailure(again), { params: params() });
+        }
         ctx.log(`已按 schema 修好 / repaired to match the schema`);
       }
     }
-    const tokens = usageTokens(res.usage);
-    if (tokens) ctx.log(`用量 / usage: ${tokens.input} 输入 input + ${tokens.output} 输出 output tokens`);
-    const repairTokens = usageTokens(repair?.usage);
-    if (repairTokens) ctx.log(`修复用量 / repair usage: ${repairTokens.input} 输入 input + ${repairTokens.output} 输出 output tokens`);
-    return {
-      params: {
+    logUsage();
+    return { params: params() };
+    function logUsage(): void {
+      const tokens = usageTokens(res.usage);
+      if (tokens) ctx.log(`用量 / usage: ${tokens.input} 输入 input + ${tokens.output} 输出 output tokens`);
+      const repairTokens = usageTokens(repair?.usage);
+      if (repairTokens) ctx.log(`修复用量 / repair usage: ${repairTokens.input} 输入 input + ${repairTokens.output} 输出 output tokens`);
+    }
+    function params(): Record<string, unknown> {
+      return {
         provider: provider.id,
         protocol: provider.protocol,
         model: repair?.model ?? res.model,
@@ -402,7 +410,7 @@ export const llmExecutor: StageExecutor = {
         ...(repair ? { repairUsage: repair.usage ?? null } : {}),
         llmCalls: repair ? [res.usage ?? null, repair.usage ?? null] : [res.usage ?? null],
         durationMs: ms,
-      },
-    };
+      };
+    }
   },
 };

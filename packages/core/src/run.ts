@@ -174,6 +174,8 @@ export async function runStage(loaded: LoadedFlow, stageId: string, options: Run
   } catch (err) {
     const error = err as Error;
     if (error instanceof HumanInputNeededError) throw error;
+    // An executor can attach params (e.g. model usage) to the error it throws.
+    const params = (error as Error & { params?: Record<string, unknown> }).params;
     const record: RunRecord = {
       stage: stageId,
       n,
@@ -185,11 +187,12 @@ export async function runStage(loaded: LoadedFlow, stageId: string, options: Run
       inputs: refs,
       flowInputs,
       outputs: [],
+      ...(params ? { params } : {}),
       log: truncate(logLines.join("\n"), 20_000),
       error: error.message,
     };
     writeRunRecord(dir, record);
-    emit({ type: "stage:error", stage, error });
+    emit({ type: "stage:error", stage, error, record });
     throw error;
   }
 }

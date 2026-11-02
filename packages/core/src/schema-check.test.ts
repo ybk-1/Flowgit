@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { listRuns, loadFlow, runStage, stageStatus, validateFlow, type Flow, type LlmComplete } from "./index.js";
+import { listRuns, loadFlow, runStage, stageStatus, validateFlow, type Flow, type LlmComplete, type RunEvent } from "./index.js";
 
 const dirs: string[] = [];
 
@@ -131,6 +131,39 @@ describe("JSON output schemas", () => {
       { input_tokens: 10, output_tokens: 5 },
       { input_tokens: 3, output_tokens: 2 },
     ]);
+  });
+
+  it("keeps both calls' usage on the error run when the repair still fails", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-schema-repair-fail-"));
+    dirs.push(dir);
+    const flow: Flow = {
+      format: "flowgit",
+      version: "0.1",
+      name: "repair-fail",
+      stages: [
+        {
+          id: "make",
+          name: "Make",
+          executor: { type: "llm", prompt: "prompts/make.md" },
+          outputs: [{ type: "application/json", path: "out.json", schema: "schemas/out.schema.json" }],
+        },
+      ],
+    };
+    write(dir, "flow.json", JSON.stringify(flow));
+    write(dir, "schemas/out.schema.json", schema);
+    write(dir, "prompts/make.md", "Write JSON.");
+    const llm: LlmComplete = async (req) =>
+      req.repair
+        ? { text: '{"n":"still no"}', model: "fake", usage: { input_tokens: 3, output_tokens: 2 } }
+        : { text: '{"n":"no"}', model: "fake", usage: { input_tokens: 10, output_tokens: 5 } };
+    const errors: RunEvent[] = [];
+    await expect(runStage(loadFlow(dir), "make", { llm, onEvent: (e) => e.type === "stage:error" && errors.push(e) })).rejects.toThrow(/JSON Schema/);
+    const record = listRuns(dir, "make").at(-1);
+    expect(record?.status).toBe("error");
+    expect(record?.params?.usage).toEqual({ input_tokens: 13, output_tokens: 7 });
+    expect(record?.params?.llmCalls).toHaveLength(2);
+    expect(record?.log).toContain("修复用量 / repair usage: 3 输入 input + 2 输出 output tokens");
+    expect(errors[0]).toMatchObject({ type: "stage:error", record: { params: { usage: { input_tokens: 13, output_tokens: 7 } } } });
   });
 
   it("checks draft-07 schemas too, and rejects drafts it can't check", async () => {

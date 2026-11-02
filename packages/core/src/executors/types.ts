@@ -62,7 +62,7 @@ export type RunEvent =
   | { type: "stage:skip"; stage: Stage; reason: string }
   | { type: "stage:log"; stage: Stage; line: string }
   | { type: "stage:done"; stage: Stage; n: number; record: RunRecord }
-  | { type: "stage:error"; stage: Stage; error: Error };
+  | { type: "stage:error"; stage: Stage; error: Error; record?: RunRecord };
 
 export interface ExecContext {
   loaded: LoadedFlow;
