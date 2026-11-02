@@ -374,6 +374,10 @@ Before a restore, if `report.md` holds a new edit that matches no version, Flowg
 flowgit board                    # 加 --no-open 不自动打开浏览器 / add --no-open to skip opening a browser
 ```
 
+它会打印一个结尾是 `?token=…` 的链接并自动打开。用 `--no-open` 时，把这个链接复制到浏览器；每次启动链接都不一样。
+
+It prints a link ending in `?token=…` and opens it. With `--no-open`, copy that link into your browser; it changes every time the board starts.
+
 每个版本的文件快照在 `runs/<阶段>/<版本>/outputs/`，运行记录（用了哪个模型、花了多少 token、读了哪些上游文件）在同一个文件夹的 `run.json` 里。
 
 Each version's file snapshot is in `runs/<stage>/<n>/outputs/`, and the run record (which model, how many tokens, which upstream files) is in `run.json` in the same folder.

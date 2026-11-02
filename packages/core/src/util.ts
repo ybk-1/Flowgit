@@ -92,6 +92,37 @@ export function isSafeRelative(rel: string): boolean {
   return !parts.includes("..");
 }
 
+/**
+ * True unless `abs` exists and, once symlinks are followed, ends up outside `dir`.
+ * A downloaded flow can hold a link such as prompt.md → ~/.ssh/id_rsa; this is how readers notice.
+ */
+export function staysInside(dir: string, abs: string): boolean {
+  let root: string;
+  let real: string;
+  try {
+    root = fs.realpathSync(dir);
+    real = fs.realpathSync(abs);
+  } catch {
+    return true; // missing: there is nothing to read
+  }
+  const rel = path.relative(root, real);
+  return rel !== ".." && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel);
+}
+
+/** Bilingual error for a file the flow names that links outside the flow directory. */
+export function linkOutsideError(rel: string): Error {
+  return new Error(
+    `${rel} 是指向流程目录外面的链接，为了安全没有读取；把文件复制进流程目录再试 / ${rel} is a link to a file outside the flow directory, so it was not read; copy the file into the flow directory instead`,
+  );
+}
+
+/** Read a text file named by the flow (a prompt), refusing a link that leads outside the flow directory. */
+export function readFlowText(dir: string, rel: string): string {
+  const abs = path.join(dir, rel);
+  if (!staysInside(dir, abs)) throw linkOutsideError(rel);
+  return fs.readFileSync(abs, "utf8");
+}
+
 export function nowIso(): string {
   return new Date().toISOString();
 }

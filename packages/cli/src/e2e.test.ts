@@ -479,6 +479,9 @@ describe("flowgit init from a directory or a Git URL", () => {
     const copied = run(["init", dest, "-t", source]);
     expect(copied.code, copied.out).toBe(0);
     expect(copied.out).toContain("跳过的产物 / skipped outputs: notes.md");
+    // a flow from somewhere else says what it will run before anyone runs it
+    expect(copied.out).toContain("Before you run it, look at what this flow does on your computer:");
+    expect(copied.out).toMatch(/script\s+check\s+node scripts\/check-report\.mjs/);
     expect(fs.existsSync(path.join(dest, "prompts", "draft.md"))).toBe(true);
     expect(fs.existsSync(path.join(dest, "notes.md"))).toBe(false);
     expect(fs.existsSync(path.join(dest, "runs"))).toBe(false);

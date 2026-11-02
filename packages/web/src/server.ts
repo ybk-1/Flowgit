@@ -45,6 +45,25 @@ const CSP = [
   "frame-ancestors 'none'",
 ].join("; ");
 
+/** What the bare address shows: no token, just where to find the link. */
+const LOCKED_PAGE = `<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Flowgit 看板 / Board</title>
+<link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+<main>
+<h1>Flowgit 看板 / Board</h1>
+<p>请打开 <code>flowgit board</code> 在命令行里显示的链接，它的结尾是 <code>?token=…</code>。看板每次启动都会换一个新链接。</p>
+<p>Open the link that <code>flowgit board</code> printed in your terminal; it ends with <code>?token=…</code>. The link changes every time the board starts.</p>
+</main>
+</body>
+</html>
+`;
+
 const STATIC: Record<string, { file: string; type: string }> = {
   "/": { file: "index.html", type: "text/html; charset=utf-8" },
   "/index.html": { file: "index.html", type: "text/html; charset=utf-8" },
@@ -129,6 +148,7 @@ export interface BoardServer {
   port: number;
   /** Secret required in X-Flowgit-Token for every /api/* request. */
   token: string;
+  /** The board's address with `?token=`: the page only hands the token to a browser that opens this link. */
   url: string;
   close: () => Promise<void>;
 }
@@ -225,7 +245,7 @@ export function startBoard(options: StartBoardOptions): Promise<BoardServer> {
       const addr = server.address();
       bound.port = typeof addr === "object" && addr ? addr.port : listenPort;
       ctx.port = bound.port;
-      const url = `http://127.0.0.1:${bound.port}/`;
+      const url = `http://127.0.0.1:${bound.port}/?token=${token}`;
       if (options.open) openBrowser(url);
       resolve({
         port: bound.port,
@@ -354,6 +374,17 @@ function handle(req: http.IncomingMessage, res: http.ServerResponse, ctx: Handle
     send(res, 404, "找不到 / not found", { "Content-Type": "text/plain; charset=utf-8" });
     return;
   }
+  // The page carries the token, so it only goes to a browser that has the link with ?token=.
+  // Anyone else who can reach 127.0.0.1 (another account on this machine, another program) gets no token.
+  if (asset.file === "index.html" && !tokenMatches(url.searchParams.get("token") ?? undefined, ctx.token)) {
+    const body = LOCKED_PAGE;
+    if (req.method === "HEAD") {
+      send(res, 401, "", { "Content-Type": "text/html; charset=utf-8", "Content-Length": String(Buffer.byteLength(body)) });
+      return;
+    }
+    send(res, 401, body, { "Content-Type": "text/html; charset=utf-8" });
+    return;
+  }
   const file = path.join(publicDir, asset.file);
   let body: Buffer | string = fs.readFileSync(file);
   if (asset.file === "index.html") {
@@ -441,7 +472,7 @@ async function putInputs(req: http.IncomingMessage, res: http.ServerResponse, ct
   const body = await readJsonObject(req);
   const loaded = loadFlow(ctx.dir);
   const defs = loaded.flow.inputs ?? {};
-  const unknown = Object.keys(body).filter((key) => !defs[key]);
+  const unknown = Object.keys(body).filter((key) => !Object.hasOwn(defs, key));
   if (unknown.length) {
     sendJson(res, 400, { error: `没有这个输入 / unknown input(s): ${unknown.join(", ")}` });
     return;

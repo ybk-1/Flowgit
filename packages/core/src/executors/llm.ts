@@ -1,10 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
-import { DEFAULT_PROVIDER, missingKeyMessage, providerKeyState, resolveModel, type ResolvedProvider } from "../providers.js";
+import { DEFAULT_PROVIDER, flowKeyEndpoint, flowKeyEndpointNote, missingKeyMessage, providerKeyState, resolveModel, type ResolvedProvider } from "../providers.js";
 import { proxyHint } from "../proxy.js";
 import type { ExecutorLlm, Flow, Stage } from "../types.js";
 import { schemaFailure, schemaProblems, schemaTexts } from "../schema-check.js";
-import { outputRel, truncate, wantsJson } from "../util.js";
+import { linkOutsideError, outputRel, readFlowText, truncate, wantsJson } from "../util.js";
 import type { ExecContext, ExecResult, InputArtifact, LlmComplete, LlmRequest, LlmResponse, StageExecutor } from "./types.js";
 
 export const DEFAULT_MODEL = "claude-opus-5-5";
@@ -310,8 +310,9 @@ export const llmExecutor: StageExecutor = {
     const { stage, loaded } = ctx;
     const ex = stage.executor as ExecutorLlm;
     const output = stage.outputs[0];
-    const promptFile = path.join(loaded.dir, ex.prompt);
-    const template = fs.readFileSync(promptFile, "utf8");
+    const template = readFlowText(loaded.dir, ex.prompt);
+    const outside = ctx.inputs.find((a) => a.outside);
+    if (outside) throw linkOutsideError(outputRel(outside.output));
     const json = wantsJson(output.type, output.path);
     const spec = ctx.options.model ?? ex.model ?? process.env.FLOWGIT_MODEL ?? DEFAULT_MODEL;
     const { provider, model } = resolveModel(spec, loaded.dir);
@@ -326,6 +327,8 @@ export const llmExecutor: StageExecutor = {
     };
     const label = provider.id === DEFAULT_PROVIDER ? model : `${provider.id}/${model}`;
     ctx.log(`调用 / calling ${label} (${provider.protocol}, prompt ${req.prompt.length} chars)`);
+    const localEndpoint = flowKeyEndpoint(provider, loaded.dir);
+    if (localEndpoint) ctx.log(`注意 / note: ${flowKeyEndpointNote(provider, localEndpoint)}`);
     if (req.effort && !provider.claudeApi) {
       ctx.log(`effort 只对 Anthropic 官方接口有效，这次不发送 / effort only applies to Anthropic's own API; not sent to ${provider.id}`);
     }

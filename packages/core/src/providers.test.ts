@@ -205,6 +205,9 @@ describe("model specs and provider config", () => {
 
   it("names unknown providers and only treats api.anthropic.com as Anthropic's API", () => {
     expect(() => resolveModel("nope/model-1")).toThrow(/Unknown provider "nope"/);
+    // names every object has are not providers
+    expect(() => resolveModel("constructor/model-1")).toThrow(/Unknown provider "constructor"/);
+    expect(() => resolveModel("toString/model-1")).toThrow(/Unknown provider "toString"/);
     expect(resolveModel("claude-opus-5-5").provider).toMatchObject({ baseUrl: "https://api.anthropic.com", claudeApi: true });
     expect(resolveModel("glm/glm-5.3").provider.claudeApi).toBe(false);
     expect(resolveModel("openai/gpt-5").provider).toMatchObject({ baseUrl: "https://api.openai.com/v1", openaiApi: true });

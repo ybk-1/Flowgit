@@ -154,6 +154,8 @@ Every preset's endpoint comes from the vendor's official docs, linked in `packag
 
 本机配置 / Local config：全局文件 `~/.flowgit/providers.json`（设置了 `FLOWGIT_HOME` 时是 `$FLOWGIT_HOME/providers.json`），再由流程目录下 `flowgit.local.json` 的 `providers` 覆盖，逐个字段合并在预设上。/ The global file `~/.flowgit/providers.json` (`$FLOWGIT_HOME/providers.json` when `FLOWGIT_HOME` is set), then the `providers` key of the flow's `flowgit.local.json`, merged field by field over the presets.
 
+流程目录里的 `flowgit.local.json` 改了某个带密钥的 provider 的 `baseUrl` 时，`flowgit doctor` 会警告，运行日志也会写出来：用 `git clone` 下载的文件夹会带着这个文件，可能把你已经在用的密钥指向别的服务器（`flowgit init` 和 `flowgit share` 从不复制它）。/ When the flow directory's `flowgit.local.json` changes the `baseUrl` of a provider that sends a key, `flowgit doctor` warns and the run log says so: a folder downloaded with `git clone` keeps that file, and it could point a key you already use at another server (`flowgit init` and `flowgit share` never copy it).
+
 ```json
 {
   "providers": {

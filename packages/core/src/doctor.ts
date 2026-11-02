@@ -4,7 +4,7 @@ import { AGENT_ADAPTERS } from "./executors/agent.js";
 import { headerEnvNames } from "./executors/service.js";
 import { DEFAULT_MODEL } from "./executors/llm.js";
 import { isRunnableExecutor } from "./executors/index.js";
-import { DEFAULT_PROVIDER, providerKeyState, resolveModel } from "./providers.js";
+import { DEFAULT_PROVIDER, flowKeyEndpoint, flowKeyEndpointNote, providerKeyState, resolveModel, type ResolvedProvider } from "./providers.js";
 import { pickProxy, proxyOff, proxyProblem, proxySourceLabel, showProxy, systemProxy, type ProxyInfo } from "./proxy.js";
 import { MissingInputsError, loadFlowInputs } from "./runs.js";
 import type { LoadedFlow, Stage } from "./types.js";
@@ -85,6 +85,21 @@ function llmChecks(loaded: LoadedFlow, stage: Stage, opts: DoctorOptions, env: N
   }
   const { provider, model } = resolved;
   const label = provider.id === DEFAULT_PROVIDER ? model : `${provider.id}/${model}`;
+  const localEndpoint = flowKeyEndpoint(provider, loaded.dir);
+  const endpoint: DoctorCheck[] = localEndpoint
+    ? [
+        {
+          level: "warn",
+          stage: stage.id,
+          message: flowKeyEndpointNote(provider, localEndpoint),
+          hint: `不是你自己改的就删掉 flowgit.local.json 里的 providers.${provider.id} / if you didn't set it yourself, delete providers.${provider.id} from flowgit.local.json`,
+        },
+      ]
+    : [];
+  return [...endpoint, ...keyChecks(loaded, stage, provider, label, env)];
+}
+
+function keyChecks(loaded: LoadedFlow, stage: Stage, provider: ResolvedProvider, label: string, env: NodeJS.ProcessEnv): DoctorCheck[] {
   const state = providerKeyState(provider, env);
   if (state === "none") {
     return [

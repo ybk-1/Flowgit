@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { AgentName, ExecutorAgent, Flow, Stage } from "../types.js";
-import { outputRel, truncate } from "../util.js";
+import { outputRel, readFlowText, truncate } from "../util.js";
 import { runCommand } from "./command.js";
 import { renderTemplate } from "./llm.js";
 import type { ExecContext, ExecResult, InputArtifact, StageExecutor } from "./types.js";
@@ -195,7 +195,7 @@ export const agentExecutor: StageExecutor = {
     if (ex.agent === "custom" && !ex.command) {
       throw new Error(`agent 为 "custom" 时要写 command / agent "custom" needs a command`);
     }
-    const template = fs.readFileSync(path.join(loaded.dir, ex.prompt), "utf8");
+    const template = readFlowText(loaded.dir, ex.prompt);
     const prompt = buildAgentPrompt(template, loaded.flow, stage, ctx.inputs, ctx.flowInputs);
     const promptRel = agentPromptRel(stage.id);
     const promptFile = path.join(loaded.dir, ...promptRel.split("/"));

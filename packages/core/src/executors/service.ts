@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { ExecutorService } from "../types.js";
-import { isTextType, outputRel, wantsJson } from "../util.js";
+import { isTextType, linkOutsideError, outputRel, wantsJson } from "../util.js";
 import { proxyHint } from "../proxy.js";
 import type { ExecContext, ExecResult, InputArtifact, StageExecutor } from "./types.js";
 
@@ -42,6 +42,7 @@ export function resolveHeaderTemplates(headers: Record<string, string> | undefin
 function upstreamText(inputs: InputArtifact[]): Record<string, Record<string, string>> {
   const upstream: Record<string, Record<string, string>> = {};
   for (const artifact of inputs) {
+    if (artifact.outside) throw linkOutsideError(outputRel(artifact.output));
     if (!artifact.exists || artifact.isDir || !isTextType(artifact.output.type, artifact.output.path)) continue;
     if (fs.statSync(artifact.absPath).size > MAX_UPSTREAM_BYTES) continue;
     const bucket = upstream[artifact.stage] ?? {};

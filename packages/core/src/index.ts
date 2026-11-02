@@ -13,6 +13,7 @@ export * from "./plan.js";
 export * from "./files.js";
 export * from "./edit.js";
 export * from "./privacy.js";
+export * from "./actions.js";
 // proxyHint and ignoredProxyVar already come through ./executors/index.js.
 export {
   LOCAL_NO_PROXY,
@@ -36,4 +37,4 @@ export {
   type ProxySource,
   type ProxySupport,
 } from "./proxy.js";
-export { hashPath, listFiles, isTextType, wantsJson, isDirOutput, outputRel, isSafeRelative, findOnPath } from "./util.js";
+export { hashPath, listFiles, isTextType, wantsJson, isDirOutput, outputRel, isSafeRelative, findOnPath, staysInside, readFlowText } from "./util.js";

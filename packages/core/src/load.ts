@@ -5,7 +5,7 @@ import type { ErrorObject } from "ajv";
 import { findCycle } from "./graph.js";
 import type { Flow, LoadedFlow, ValidationIssue } from "./types.js";
 import { outputSchemaIssues } from "./schema-check.js";
-import { isSafeRelative, outputRel } from "./util.js";
+import { isSafeRelative, linkOutsideError, outputRel, staysInside } from "./util.js";
 
 export const FLOW_FILE = "flow.json";
 
@@ -106,10 +106,12 @@ export function validateFlow(data: unknown, opts: ValidateOptions = {}): Validat
         const abs = path.join(opts.dir, prompt);
         if (!fs.existsSync(abs)) {
           issues.push({ level: "error", path: `${base}/executor/prompt`, message: `找不到提示词文件 / prompt file not found: ${prompt}` });
+        } else if (!staysInside(opts.dir, abs)) {
+          issues.push({ level: "error", path: `${base}/executor/prompt`, message: linkOutsideError(prompt).message });
         } else {
           const tpl = fs.readFileSync(abs, "utf8");
           for (const m of tpl.matchAll(/\{\{\s*inputs\.([A-Za-z0-9_]+)\s*\}\}/g)) {
-            if (!flow.inputs || !(m[1] in flow.inputs)) {
+            if (!flow.inputs || !Object.hasOwn(flow.inputs, m[1])) {
               issues.push({ level: "warning", path: `${base}/executor/prompt`, message: `${prompt} 用了 {{inputs.${m[1]}}}，但 flow.inputs 里没有 "${m[1]}" / ${prompt} uses {{inputs.${m[1]}}} but flow.inputs has no "${m[1]}"` });
             }
           }

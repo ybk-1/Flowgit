@@ -174,11 +174,19 @@ describe("read-only board", () => {
     expect(child.body).toBe("meow");
   });
 
-  it("injects the token into the page and allows localhost", async () => {
-    const page = await httpGet(server.port, "/");
+  it("puts the token in the page only for the link with ?token=, and allows localhost", async () => {
+    expect(server.url).toBe(`http://127.0.0.1:${server.port}/?token=${server.token}`);
+    const page = await httpGet(server.port, `/?token=${server.token}`);
     expect(page.status).toBe(200);
     expect(page.body).toContain(`name="flowgit-token" content="${server.token}"`);
     expect(page.body).not.toContain("__FLOWGIT_TOKEN__");
+    // Another account or program that can reach 127.0.0.1 gets a page without the token.
+    for (const bare of ["/", "/index.html", "/?token=wrong", `/?token=${server.token.slice(1)}`]) {
+      const locked = await httpGet(server.port, bare);
+      expect(locked.status, bare).toBe(401);
+      expect(locked.body).not.toContain(server.token);
+      expect(locked.body).toContain("?token=");
+    }
     const viaLocalhost = await httpGet(server.port, "/api/flow", authed({ Host: `localhost:${server.port}` }));
     expect(viaLocalhost.status).toBe(200);
   });
@@ -354,11 +362,17 @@ describe("read-only board", () => {
     expect(fs.readFileSync(local, "utf8")).toBe(before);
     const unknown = await httpCall(server.port, "PUT", "/api/inputs", JSON.stringify({ nope: "x" }), authed({ "Content-Type": "application/json" }));
     expect(unknown.status).toBe(400);
+    // Names an object already has (constructor, __proto__) are not inputs either.
+    for (const body of ['{"constructor":"x"}', '{"__proto__":{"topic":"x"}}', '{"toString":"x"}']) {
+      const res = await httpCall(server.port, "PUT", "/api/inputs", body, authed({ "Content-Type": "application/json" }));
+      expect(res.status, body).toBe(400);
+      expect(res.body).toContain("unknown input");
+    }
     expect(fs.readFileSync(local, "utf8")).toBe(before);
   });
 
   it("offers run controls, a model field, and the human upload", async () => {
-    const page = await httpGet(server.port, "/");
+    const page = await httpGet(server.port, `/?token=${server.token}`);
     const app = await httpGet(server.port, "/app.js");
     expect(page.body).toContain("全部运行 Run all");
     expect(page.body).toContain("保存输入 Save inputs");

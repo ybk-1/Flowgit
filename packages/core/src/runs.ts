@@ -220,13 +220,20 @@ export function resolveFlowInputs(
   const localFile = path.join(dir, LOCAL_FILE);
   if (fs.existsSync(localFile)) {
     const local = JSON.parse(fs.readFileSync(localFile, "utf8")) as { inputs?: Record<string, unknown> };
-    Object.assign(values, local.inputs ?? {});
+    assignInputs(values, local.inputs);
   }
-  Object.assign(values, overrides);
+  assignInputs(values, overrides);
   for (const [k, def] of Object.entries(defs)) {
-    if (k in values) values[k] = coerceFlowInput(def, values[k]);
+    if (Object.hasOwn(values, k)) values[k] = coerceFlowInput(def, values[k]);
   }
   return values;
+}
+
+/** Copy own keys, except "__proto__", which would swap the target's prototype instead of adding a value. */
+function assignInputs(target: Record<string, unknown>, source: Record<string, unknown> | undefined): void {
+  for (const [key, value] of Object.entries(source ?? {})) {
+    if (key !== "__proto__") target[key] = value;
+  }
 }
 
 /** "30" → 30 for number inputs and "true"/"false" → booleans; anything else is left as it is for the checks to report. */

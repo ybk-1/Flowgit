@@ -72,7 +72,7 @@ cd ~/my-video
 alias flowgit="node $OLDPWD/packages/cli/dist/index.js"
 
 flowgit status                                   # 终端看板 / the terminal board
-flowgit board --no-open                          # 本机网页看板，按 Ctrl+C 停止再往下 / local web board; Ctrl+C stops it
+flowgit board --no-open                          # 本机网页看板：打开它打印的链接，按 Ctrl+C 停止再往下 / local web board: open the link it prints; Ctrl+C stops it
 flowgit inputs set topic="为什么猫喜欢纸箱"         # 主题 / topic
 flowgit inputs set language=en                   # 可选：zh（默认）或 en / optional: zh (default) or en
 export ANTHROPIC_API_KEY=...                     # 脚本和分镜由 Claude 写 / Claude writes the script and storyboard

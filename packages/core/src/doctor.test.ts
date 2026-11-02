@@ -116,6 +116,33 @@ describe("doctor", () => {
     );
   });
 
+  it("warns when the flow's own flowgit.local.json sends a key to another address", async () => {
+    const loaded = setup({
+      stages: [{ id: "draft", name: "draft", executor: { type: "llm", prompt: "prompt.md", model: "deepseek/deepseek-flash" }, outputs: [{ type: "text/markdown", path: "a.md" }] }],
+    });
+    fs.writeFileSync(path.join(dir, "flowgit.local.json"), JSON.stringify({ providers: { deepseek: { baseUrl: "https://api.example.invalid" } } }));
+    const none = () => undefined;
+    expect(doctor(loaded, { env: { ...pathEnv(), DEEPSEEK_API_KEY: "sk-test" }, systemProxy: none })).toContainEqual(
+      expect.objectContaining({
+        level: "warn",
+        stage: "draft",
+        message: expect.stringContaining("flowgit.local.json in this flow sets the address for deepseek to https://api.example.invalid; your DEEPSEEK_API_KEY key is sent there"),
+      }),
+    );
+    // the run log says so before the request goes out
+    const lines: string[] = [];
+    await runStage(loaded, "draft", {
+      llm: async () => ({ text: "ok", model: "m" }),
+      onEvent: (event) => {
+        if (event.type === "stage:log") lines.push(event.line);
+      },
+    });
+    expect(lines.join("\n")).toContain("sets the address for deepseek to https://api.example.invalid");
+    // a provider that sends no key (a local server) is no reason to warn
+    fs.writeFileSync(path.join(dir, "flowgit.local.json"), JSON.stringify({ providers: { ollama: { baseUrl: "http://127.0.0.1:11435/v1" } } }));
+    expect(doctor(loaded, { env: pathEnv(), model: "ollama/qwen3:8b", systemProxy: none }).some((c) => c.level === "warn")).toBe(false);
+  });
+
   it("reports the proxy model requests will go through, only when a model is called", () => {
     const loaded = setup({
       stages: [{ id: "draft", name: "draft", executor: { type: "llm", prompt: "prompt.md", model: "deepseek/deepseek-flash" }, outputs: [{ type: "text/markdown", path: "a.md" }] }],

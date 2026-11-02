@@ -19,6 +19,7 @@ import {
   coerceFlowInput,
   doctor,
   findPrivateData,
+  flowActions,
   flowFiles,
   flowInputProblem,
   flowToMermaid,
@@ -363,6 +364,18 @@ function readSourceFlow(src: string): Flow {
   return data as Flow;
 }
 
+/** For a flow copied from somewhere else: the commands it runs, the agents it starts and the services it calls. */
+function printActions(flow: Flow): void {
+  const actions = flowActions(flow);
+  if (!actions.length) return;
+  console.log(`${c.yellow("!")} 运行前请看一眼，这个流程会在你的电脑上做这些事 / Before you run it, look at what this flow does on your computer:`);
+  const width = Math.max(...actions.map((a) => a.stage.length));
+  for (const a of actions) {
+    const env = a.env?.length ? `  · 请求头里带上 / sends in headers: ${a.env.join(", ")}` : "";
+    console.log(`  ${a.kind.padEnd(7)} ${a.stage.padEnd(width)}  ${a.detail}${env}`);
+  }
+}
+
 // Two lines rather than `cd … && flowgit status`: Windows PowerShell 5.1 has no `&&`.
 function nextStepLine(target: string): string {
   const rel = path.relative(process.cwd(), target);
@@ -443,6 +456,7 @@ program
         console.log(`  来源 / source: ${isGitUrl(opts.template) ? publicGitUrl(opts.template) : opts.template}${opts.path ? ` (${opts.path})` : ""}`);
         console.log(`  复制了 ${rels.length} 个文件 / copied ${rels.length} file(s)`);
         console.log(skipped.length ? `  跳过的产物 / skipped outputs: ${skipped.join(", ")}` : `  没有跳过产物 / no outputs skipped`);
+        printActions(sourceFlow);
         console.log(nextStepLine(target));
       } finally {
         if (cleanup) fs.rmSync(cleanup, { recursive: true, force: true });
@@ -804,7 +818,7 @@ inputs
       const loaded = loadFlow(dirOf());
       const kv = parseKv(pairs);
       const defs = loaded.flow.inputs ?? {};
-      const unknown = Object.keys(kv).filter((k) => !defs[k]);
+      const unknown = Object.keys(kv).filter((k) => !Object.hasOwn(defs, k));
       if (unknown.length) {
         throw new Error(`没有这个输入 / Unknown input(s): ${unknown.join(", ")}\n  可以填的 / known inputs: ${Object.keys(defs).join(", ")}`);
       }

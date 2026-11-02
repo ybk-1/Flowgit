@@ -13,6 +13,8 @@ export interface InputArtifact {
   text?: string;
   /** Relative file list for directories. */
   files?: string[];
+  /** A file output that is a link to somewhere outside the flow directory: its text is not read. */
+  outside?: boolean;
 }
 
 export interface LlmRequest {

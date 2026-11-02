@@ -265,7 +265,7 @@ export function effectiveProvider(p: Provider, env: NodeJS.ProcessEnv = process.
 export function resolveModel(spec: string, dir?: string): { provider: ResolvedProvider; model: string } {
   const { provider: id, model } = parseModelSpec(spec);
   const providers = loadProviders(dir);
-  const p = providers[id];
+  const p = Object.hasOwn(providers, id) ? providers[id] : undefined;
   if (!p) {
     const known = Object.keys(providers).join(", ");
     throw new ProviderConfigError(
@@ -274,6 +274,24 @@ export function resolveModel(spec: string, dir?: string): { provider: ResolvedPr
     );
   }
   return { provider: effectiveProvider(p), model };
+}
+
+/**
+ * The address this flow's own flowgit.local.json gives a provider that sends a key, if it gives one.
+ * A folder downloaded with git clone keeps that file, so it could point a key you already use at
+ * another server; doctor and the run log say so. (flowgit init and share never copy the file.)
+ */
+export function flowKeyEndpoint(p: Provider, dir: string): string | undefined {
+  if (!p.apiKeyEnv) return undefined;
+  const file = providerFiles(dir).flow;
+  if (!file) return undefined;
+  const local = readProvidersFile(file);
+  return Object.hasOwn(local, p.id) ? local[p.id]?.baseUrl : undefined;
+}
+
+/** Bilingual note for flowKeyEndpoint. */
+export function flowKeyEndpointNote(p: Provider, baseUrl: string): string {
+  return `${p.id} 的地址是这个流程的 flowgit.local.json 设的：${baseUrl}，密钥 ${p.apiKeyEnv} 会发到那里 / flowgit.local.json in this flow sets the address for ${p.id} to ${baseUrl}; your ${p.apiKeyEnv} key is sent there`;
 }
 
 /** Whether the provider's key is available. "none" = this provider needs no key. */

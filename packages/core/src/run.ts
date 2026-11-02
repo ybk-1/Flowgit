@@ -25,7 +25,7 @@ import {
   writeRunRecord,
 } from "./runs.js";
 import { schemaFailure, schemaProblems } from "./schema-check.js";
-import { isDirOutput, isTextType, listFiles, nowIso, truncate } from "./util.js";
+import { isDirOutput, isTextType, listFiles, nowIso, staysInside, truncate } from "./util.js";
 
 export class UpstreamNotReadyError extends Error {
   constructor(
@@ -47,6 +47,7 @@ function collectInputs(loaded: LoadedFlow, stage: Stage): InputArtifact[] {
       const isDir = exists && fs.statSync(absPath).isDirectory();
       const a: InputArtifact = { stage: dep, stageName: up.name, output, absPath, exists, isDir };
       if (exists && isDir) a.files = listFiles(absPath);
+      else if (exists && !staysInside(loaded.dir, absPath)) a.outside = true;
       else if (exists && (isDirOutput(output) === false) && isTextType(output.type, output.path)) {
         a.text = fs.readFileSync(absPath, "utf8");
       }

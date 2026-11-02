@@ -49,6 +49,10 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 - `board` 在浏览器打开本机看板（新包 `@flowgit/web`）：每个阶段一张卡，显示状态、最新版本和产物，点产物在侧栏预览文本、JSON、图片、视频和目录，每 3 秒刷新。文本产物可以直接修改保存（JSON 先检查格式），人工阶段的文件夹可以上传文件；改过的产物下次运行前会先存成一个版本。可以填写流程输入，运行单个阶段或全部阶段，日志实时显示；同时只跑一个，运行中不能保存产物。每张卡可以看历史版本、对比两个版本（或和当前文件比）并回退。只监听 `127.0.0.1`，接口要令牌并检查 `Host`。
 - `run all --dry-run` 预演：每个阶段会跳过、运行还是停下等你，最多调用几次模型，什么都不运行。`doctor` 通过后和导出的 `SKILL.md` 里都会提到它。
 - `inputs set` 保存前就检查名字和值（数字、`true`/`false`、可选值），写错了不会存进去。
+- `board` 打印和打开的链接带着令牌（`?token=…`）。直接打开 `http://127.0.0.1:4747/` 只会看到提示、拿不到令牌，所以同一台电脑上的其他账号或程序没法操作你的看板。
+- 从 Git 地址或别的文件夹 `init` 时，会列出这个流程要运行的命令、要启动的 agent 和要调用的服务（以及请求头里带的环境变量），运行前先看一眼。
+- 提示词文件，以及要发给模型或服务的上游产物，如果是指向流程目录外面的链接，就不读取（`validate` 也会报出来），免得下载来的流程把 `~/.ssh` 这类文件发出去。脚本和 agent 阶段不受影响。
+- 流程自己的 `flowgit.local.json` 改了某个带密钥的模型服务的地址时，`doctor` 会警告，运行日志也会写出来，因为密钥会发到那个地址。
 - 提示、报错和 `--help` 都是中英双语（包括输错命令、少写参数这类报错，会提示“是不是想输入 …”），并针对余额不足、限流、连不上（包括代理）给出具体建议。
 - `init`, `templates`, `validate`, `status` (terminal board), `board` (web board), `inputs`, `run`, `log`, `diff`, `restore`, `providers`, `doctor`, `graph`, `export-skill`.
 - `init -t` accepts a Git URL (`git clone --depth 1`, with `--ref` and `--path`). Copying a local directory or a Git URL leaves outputs behind unless `--with-outputs` is set, and a Git source writes `forkedFrom` into the new `flow.json`. If git is not installed, the error says how to install it.
@@ -63,6 +67,10 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 - `board` opens a local board in the browser (new package `@flowgit/web`): one card per stage with its state, latest version and outputs; click an output to preview text, JSON, images, video or a folder in a side panel; refreshes every 3 seconds. Text outputs can be edited and saved (JSON is checked first), and files can be uploaded into a human stage's folder; an edited output is saved as a version before the next run. Flow inputs can be filled in, and one stage or the whole flow can be run with a live log; one run at a time, and outputs cannot be saved while it runs. Each card can list its versions, compare two of them (or one with the current files) and restore one. It listens on `127.0.0.1` only, and its API needs a token and checks `Host`.
 - `run all --dry-run` shows whether each stage would be skipped, run or stop for you, and at most how many model calls it would make, without running anything. `doctor` points to it when nothing blocks, and so does the exported `SKILL.md`.
 - `inputs set` checks names and values (numbers, `true`/`false`, allowed values) before saving, so a typo is never stored.
+- The link `board` prints and opens carries the token (`?token=…`). Opening `http://127.0.0.1:4747/` by itself shows a note and no token, so other accounts or programs on the same computer can't drive your board.
+- `init` from a Git URL or another folder lists the commands the flow runs, the agents it starts and the services it calls (with the environment variables their headers send), so you can look before you run it.
+- A prompt file, or an upstream output on its way to a model or a service, that is a link to a file outside the flow directory is not read (`validate` reports it too), so a downloaded flow can't send files like `~/.ssh` anywhere. Script and agent stages are not affected.
+- When a flow's own `flowgit.local.json` changes the address of a model provider that sends a key, `doctor` warns and the run log says so, because the key goes to that address.
 - Messages, errors and `--help` are bilingual (including typos in commands and missing arguments, with a “did you mean …”), with specific advice for an empty balance, rate limits and connection problems (including proxies).
 
 ### 模板和示例 / Templates and examples
