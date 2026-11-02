@@ -55,4 +55,48 @@ describe("flowFiles", () => {
     expect(withOutputs).toHaveLength(without.length + 2);
     expect(withOutputs.some((f) => f.startsWith("runs/") || f === ".env" || f === "flowgit.local.json")).toBe(false);
   });
+
+  it("leaves out a sub-flow's outputs and runs too, but keeps its flow, prompts and scripts", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-files-"));
+    dirs.push(dir);
+    const flow: Flow = {
+      format: "flowgit",
+      version: "0.1",
+      name: "parent",
+      stages: [
+        {
+          id: "make",
+          name: "Make",
+          executor: { type: "workflow", engine: "flowgit", file: "subflows/brief/flow.json", params: { copy: { "brief.md": "brief.md" } } },
+          outputs: [{ type: "text/markdown", path: "brief.md" }],
+        },
+      ],
+    };
+    const sub: Flow = {
+      format: "flowgit",
+      version: "0.1",
+      name: "brief",
+      stages: [
+        { id: "draft", name: "Draft", executor: { type: "llm", prompt: "prompts/draft.md" }, outputs: [{ type: "text/markdown", path: "brief.md" }] },
+        { id: "check", name: "Check", executor: { type: "script", run: "node scripts/check.mjs" }, outputs: [{ type: "text/plain", path: "check.txt" }] },
+      ],
+    };
+    write(dir, "flow.json", JSON.stringify(flow));
+    write(dir, "brief.md", "copied back");
+    write(dir, "subflows/brief/flow.json", JSON.stringify(sub));
+    write(dir, "subflows/brief/prompts/draft.md", "prompt");
+    write(dir, "subflows/brief/scripts/check.mjs", "// check");
+    write(dir, "subflows/brief/brief.md", "the brief");
+    write(dir, "subflows/brief/check.txt", "ok");
+    write(dir, "subflows/brief/runs/draft/1/run.json", "{}");
+    write(dir, "subflows/brief/flowgit.local.json", "{}");
+
+    const loaded = loadFlow(dir);
+    const without = flowFiles(loaded, { withOutputs: false });
+    expect(without).toEqual(["flow.json", "subflows/brief/flow.json", "subflows/brief/prompts/draft.md", "subflows/brief/scripts/check.mjs"]);
+
+    const withOutputs = flowFiles(loaded, { withOutputs: true });
+    expect(withOutputs).toEqual(expect.arrayContaining([...without, "brief.md", "subflows/brief/brief.md", "subflows/brief/check.txt"]));
+    expect(withOutputs).toHaveLength(without.length + 3);
+  });
 });

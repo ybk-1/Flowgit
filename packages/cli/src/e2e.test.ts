@@ -925,3 +925,75 @@ describe("flowgit share", () => {
     expect(self.out).toContain("can't be the flow directory itself");
   });
 });
+
+describe("examples/subflow", () => {
+  let flowDir: string;
+
+  function run(args: string[], env: Record<string, string> = {}) {
+    const r = spawnSync(process.execPath, [cli, "-C", flowDir, ...args], {
+      encoding: "utf8",
+      env: { ...process.env, NO_COLOR: "1", ...env },
+    });
+    return { code: r.status, out: `${r.stdout}${r.stderr}` };
+  }
+
+  beforeAll(() => {
+    if (!fs.existsSync(cli)) throw new Error("Build the CLI first: pnpm -r run build");
+    const src = path.resolve(here, "../../..", "examples", "subflow");
+    flowDir = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-subflow-"));
+    fs.cpSync(src, flowDir, { recursive: true });
+  });
+
+  afterAll(() => {
+    if (flowDir) fs.rmSync(flowDir, { recursive: true, force: true });
+  });
+
+  it("runs the parent through the sub-flow to the summary, using demo replies", () => {
+    const mock = path.join(flowDir, "subflows", "brief", "demo-replies");
+    expect(run(["inputs", "set", "topic=为什么猫喜欢纸箱"]).code).toBe(0);
+    const waiting = run(["run", "all"], { FLOWGIT_LLM_MOCK_DIR: mock });
+    expect(waiting.code, waiting.out).toBe(2);
+    expect(waiting.out).toContain("waiting for you: topic.md");
+
+    fs.writeFileSync(path.join(flowDir, "topic.md"), "为什么猫喜欢纸箱\n");
+    const done = run(["run", "all"], { FLOWGIT_LLM_MOCK_DIR: mock });
+    expect(done.code, done.out).toBe(0);
+    expect(done.out).toContain("[子流程 / sub-flow make]");
+    expect(fs.readFileSync(path.join(flowDir, "brief.md"), "utf8")).toContain("纸箱");
+    expect(fs.readFileSync(path.join(flowDir, "summary.md"), "utf8")).toContain("为什么猫喜欢纸箱");
+    expect(fs.existsSync(path.join(flowDir, "subflows", "brief", "runs", "draft", "1", "run.json"))).toBe(true);
+    expect(fs.existsSync(path.join(flowDir, "subflows", "brief", "runs", "check", "1", "run.json"))).toBe(true);
+    expect(fs.existsSync(path.join(flowDir, "runs", "make", "1", "run.json"))).toBe(true);
+    // the sub-flow's own runs stay under its directory, not mixed into the parent's draft stage
+    expect(fs.existsSync(path.join(flowDir, "runs", "draft"))).toBe(false);
+
+    const skill = run(["export-skill", "--out", "-"]);
+    expect(skill.code, skill.out).toBe(0);
+    expect(skill.out).toContain("运行子流程 `subflows/brief/flow.json`");
+    expect(skill.out).toContain("run the sub-flow `subflows/brief/flow.json`");
+    const graph = run(["graph"]);
+    expect(graph.code, graph.out).toBe(0);
+    expect(graph.out).toContain("sub-flow");
+
+    // Copying the flow lists what the sub-flow runs too, and leaves out the sub-flow's outputs and runs.
+    const dest = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-subflow-copy-"));
+    try {
+      const r = spawnSync(process.execPath, [cli, "init", path.join(dest, "copy"), "-t", flowDir], {
+        encoding: "utf8",
+        env: { ...process.env, NO_COLOR: "1" },
+      });
+      const out = `${r.stdout}${r.stderr}`;
+      expect(r.status, out).toBe(0);
+      expect(out).toMatch(/workflow\s+make\s+子流程 \/ sub-flow subflows\/brief\/flow\.json/);
+      expect(out).toMatch(/script\s+make\/check\s+node scripts\/check\.mjs/);
+      const copy = path.join(dest, "copy");
+      expect(fs.existsSync(path.join(copy, "subflows", "brief", "flow.json"))).toBe(true);
+      expect(fs.existsSync(path.join(copy, "subflows", "brief", "brief.md"))).toBe(false);
+      expect(fs.existsSync(path.join(copy, "subflows", "brief", "check.txt"))).toBe(false);
+      expect(fs.existsSync(path.join(copy, "subflows", "brief", "runs"))).toBe(false);
+      expect(fs.existsSync(path.join(copy, "brief.md"))).toBe(false);
+    } finally {
+      fs.rmSync(dest, { recursive: true, force: true });
+    }
+  });
+});

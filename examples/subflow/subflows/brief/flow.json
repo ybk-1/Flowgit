@@ -1,0 +1,36 @@
+{
+  "format": "flowgit",
+  "version": "0.1",
+  "id": "brief",
+  "name": "简报",
+  "description": "根据题目写一份短简报，再检查它不是空的。 / Write a short brief for a topic, then check it is not empty.",
+  "language": "zh",
+  "inputs": {
+    "topic": {
+      "type": "string",
+      "description": "简报题目 / Brief topic",
+      "required": true
+    },
+    "language": {
+      "type": "string",
+      "description": "简报语言 / Brief language",
+      "enum": ["zh", "en"],
+      "default": "zh"
+    }
+  },
+  "stages": [
+    {
+      "id": "draft",
+      "name": "起草",
+      "executor": { "type": "llm", "prompt": "prompts/draft.md" },
+      "outputs": [{ "type": "text/markdown", "path": "brief.md" }]
+    },
+    {
+      "id": "check",
+      "name": "检查",
+      "inputs": ["draft"],
+      "executor": { "type": "script", "run": "node scripts/check.mjs" },
+      "outputs": [{ "type": "text/plain", "path": "check.txt" }]
+    }
+  ]
+}

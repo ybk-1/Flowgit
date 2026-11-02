@@ -1,0 +1,51 @@
+{
+  "format": "flowgit",
+  "version": "0.1",
+  "id": "subflow",
+  "name": "子流程示例",
+  "description": "人先写下题目，子流程写成一份简报并检查，父流程再摘成一段摘要。演示 workflow 执行器（engine 为 flowgit）。 / A person writes a topic, a sub-flow drafts a brief and checks it, then the parent summarizes it. Shows the workflow executor with engine flowgit.",
+  "language": "zh",
+  "inputs": {
+    "topic": {
+      "type": "string",
+      "description": "简报的题目 / Topic of the brief",
+      "required": true
+    }
+  },
+  "stages": [
+    {
+      "id": "topic",
+      "name": "题目",
+      "description": "人把题目写进 topic.md。子流程读的是流程输入 topic，这一步只是让人确认。 / A person writes the topic into topic.md. The sub-flow reads the topic input; this step is the confirmation.",
+      "executor": {
+        "type": "human",
+        "instructions": "把题目写进 topic.md，一行就够。 / Write the topic in topic.md. One line is enough."
+      },
+      "outputs": [{ "type": "text/markdown", "path": "topic.md" }]
+    },
+    {
+      "id": "make",
+      "name": "简报",
+      "description": "运行 subflows/brief：模型写简报，脚本检查。只把 brief.md 复制回来。 / Run subflows/brief: the model writes the brief, a script checks it. Only brief.md is copied back.",
+      "inputs": ["topic"],
+      "executor": {
+        "type": "workflow",
+        "engine": "flowgit",
+        "file": "subflows/brief/flow.json",
+        "params": {
+          "inputs": { "topic": "{{inputs.topic}}", "language": "zh" },
+          "copy": { "brief.md": "brief.md" }
+        }
+      },
+      "outputs": [{ "type": "text/markdown", "path": "brief.md" }]
+    },
+    {
+      "id": "summary",
+      "name": "摘要",
+      "description": "从简报里摘出标题，写成 summary.md。 / Take the brief's heading and write summary.md.",
+      "inputs": ["make"],
+      "executor": { "type": "script", "run": "node scripts/summarize.mjs" },
+      "outputs": [{ "type": "text/markdown", "path": "summary.md" }]
+    }
+  ]
+}

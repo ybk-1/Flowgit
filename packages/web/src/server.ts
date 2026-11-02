@@ -10,6 +10,7 @@ import {
   HumanInputNeededError,
   diffRuns,
   flowLog,
+  planModelCalls,
   planRunAll,
   FLOW_FILE,
   FLOW_MD_FILE,
@@ -620,7 +621,7 @@ function servePlan(res: http.ServerResponse, ctx: HandlerCtx, url: URL): void {
       detail: step.detail ?? null,
       callsModel: step.callsModel,
     })),
-    modelCalls: steps.filter((step) => step.callsModel).length,
+    modelCalls: planModelCalls(steps),
   });
 }
 

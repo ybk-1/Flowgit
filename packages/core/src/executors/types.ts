@@ -55,6 +55,11 @@ export interface RunOptions {
   force?: boolean;
   /** Progress callback. */
   onEvent?: (event: RunEvent) => void;
+  /**
+   * Absolute flow.json paths from the outermost flow through the current one.
+   * Set by the workflow executor so a sub-flow can detect a cycle. Internal.
+   */
+  flowStack?: string[];
 }
 
 export type RunEvent =
@@ -82,13 +87,25 @@ export interface StageExecutor {
   run(ctx: ExecContext): Promise<ExecResult>;
 }
 
+/** The human stage inside a sub-flow that a parent workflow stage is waiting on. */
+export interface SubflowWait {
+  id: string;
+  name: string;
+}
+
 export class HumanInputNeededError extends Error {
   constructor(
     public readonly stage: Stage,
     public readonly missing: string[],
     public readonly instructions?: string,
+    /** Set when `stage` is a workflow stage waiting on a human stage in a sub-flow. */
+    public readonly subflowStage?: SubflowWait,
   ) {
-    super(`「${stage.name}」在等你 / Stage "${stage.id}" is waiting for you: ${missing.join(", ")}`);
+    super(
+      subflowStage
+        ? `子流程的阶段「${subflowStage.name}」(${subflowStage.id}) 在等你：${missing.join(", ")} / sub-flow stage "${subflowStage.id}" is waiting for you: ${missing.join(", ")}`
+        : `「${stage.name}」在等你 / Stage "${stage.id}" is waiting for you: ${missing.join(", ")}`,
+    );
     this.name = "HumanInputNeededError";
   }
 }

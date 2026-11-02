@@ -1286,4 +1286,57 @@ describe("plan and usage on the board", () => {
       fs.rmSync(work, { recursive: true, force: true });
     }
   });
+
+  it("counts every llm stage inside a flowgit sub-flow in modelCalls", async () => {
+    const work = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-web-plan-sub-"));
+    const llm = (id: string, out: string, inputs?: string[]) => ({
+      id,
+      name: id,
+      ...(inputs ? { inputs } : {}),
+      executor: { type: "llm", prompt: `prompts/${id}.md` },
+      outputs: [{ type: "text/markdown", path: out }],
+    });
+    const write = (rel: string, data: unknown) => {
+      fs.mkdirSync(path.dirname(path.join(work, rel)), { recursive: true });
+      fs.writeFileSync(path.join(work, rel), typeof data === "string" ? data : `${JSON.stringify(data, null, 2)}\n`);
+    };
+    write("sub/prompts/outline.md", "outline\n");
+    write("sub/prompts/brief.md", "brief\n");
+    write("prompts/polish.md", "polish\n");
+    write("sub/flow.json", { format: "flowgit", version: "0.1", name: "sub", stages: [llm("outline", "outline.md"), llm("brief", "brief.md", ["outline"])] });
+    write("flow.json", {
+      format: "flowgit",
+      version: "0.1",
+      name: "parent",
+      stages: [
+        {
+          id: "make",
+          name: "简报",
+          executor: { type: "workflow", engine: "flowgit", file: "sub/flow.json", params: { copy: { "brief.md": "brief.md" } } },
+          outputs: [{ type: "text/markdown", path: "brief.md" }],
+        },
+        llm("polish", "final.md", ["make"]),
+      ],
+    });
+    const board = await startBoard({ dir: work, port: 0, open: false });
+    const previous = process.env.FLOWGIT_LLM_MOCK_DIR;
+    try {
+      delete process.env.FLOWGIT_LLM_MOCK_DIR;
+      const res = await httpGet(board.port, "/api/plan?model=glm/glm-5.3", { "X-Flowgit-Token": board.token });
+      expect(res.status, res.body).toBe(200);
+      const body = JSON.parse(res.body) as { steps: Array<{ id: string; action: string; detail: string | null; callsModel: boolean }>; modelCalls: number };
+      expect(body.steps.map((step) => [step.id, step.action, step.callsModel])).toEqual([
+        ["make", "run", true],
+        ["polish", "run", true],
+      ]);
+      expect(body.steps[0]?.detail).toContain("sub/flow.json");
+      // two llm stages inside the sub-flow, one after it
+      expect(body.modelCalls).toBe(3);
+    } finally {
+      if (previous === undefined) delete process.env.FLOWGIT_LLM_MOCK_DIR;
+      else process.env.FLOWGIT_LLM_MOCK_DIR = previous;
+      await board.close();
+      fs.rmSync(work, { recursive: true, force: true });
+    }
+  });
 });

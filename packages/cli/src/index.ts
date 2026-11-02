@@ -38,6 +38,7 @@ import {
   providerKeyState,
   loadFlowInputs,
   flowLog,
+  planModelCalls,
   planRunAll,
   resolveFlowInputs,
   renderSkillMd,
@@ -144,9 +145,15 @@ function fail(err: unknown, ctx: { inputFlags?: string[] } = {}): never {
     process.exit(code);
   };
   if (e instanceof HumanInputNeededError) {
-    console.log(`\n${c.yellow("⏸")} 「${e.stage.name}」在等你 / waiting for you: ${e.missing.join(", ")}`);
-    if (e.instructions) console.log(`  ${e.instructions}`);
-    console.log(`  放好文件后运行 / when ready: flowgit run ${e.stage.id}   (或 / or: flowgit run ${e.stage.id} --from <path>)`);
+    if (e.subflowStage) {
+      console.log(`\n${c.yellow("⏸")} ${e.message}`);
+      if (e.instructions) console.log(`  ${e.instructions}`);
+      console.log(`  放好文件后重新运行 / when the file is in place: flowgit run ${e.stage.id}`);
+    } else {
+      console.log(`\n${c.yellow("⏸")} 「${e.stage.name}」在等你 / waiting for you: ${e.missing.join(", ")}`);
+      if (e.instructions) console.log(`  ${e.instructions}`);
+      console.log(`  放好文件后运行 / when ready: flowgit run ${e.stage.id}   (或 / or: flowgit run ${e.stage.id} --from <path>)`);
+    }
     // --input lasts one run, so the command above would stop at "missing flow inputs".
     if (ctx.inputFlags?.length) {
       const pairs = ctx.inputFlags.map((kv) => (/\s/.test(kv) ? `"${kv}"` : kv)).join(" ");
@@ -424,14 +431,14 @@ function convertFlowFile(dir: string, to: FlowFormat): { from: string; to: strin
 }
 
 /** For a flow copied from somewhere else: the commands it runs, the agents it starts and the services it calls. */
-function printActions(flow: Flow): void {
-  const actions = flowActions(flow);
+function printActions(flow: Flow, dir: string): void {
+  const actions = flowActions(flow, dir);
   if (!actions.length) return;
   console.log(`${c.yellow("!")} 运行前请看一眼，这个流程会在你的电脑上做这些事 / Before you run it, look at what this flow does on your computer:`);
   const width = Math.max(...actions.map((a) => a.stage.length));
   for (const a of actions) {
     const env = a.env?.length ? `  · 请求头里带上 / sends in headers: ${a.env.join(", ")}` : "";
-    console.log(`  ${a.kind.padEnd(7)} ${a.stage.padEnd(width)}  ${a.detail}${env}`);
+    console.log(`  ${a.kind.padEnd(8)} ${a.stage.padEnd(width)}  ${a.detail}${env}`);
   }
 }
 
@@ -533,7 +540,7 @@ program
         console.log(`  来源 / source: ${isGitUrl(opts.template) ? publicGitUrl(opts.template) : opts.template}${opts.path ? ` (${opts.path})` : ""}`);
         console.log(`  复制了 ${rels.length} 个文件 / copied ${rels.length} file(s)`);
         console.log(skipped.length ? `  跳过的产物 / skipped outputs: ${skipped.join(", ")}` : `  没有跳过产物 / no outputs skipped`);
-        printActions(sourceFlow);
+        printActions(sourceFlow, src);
         console.log(nextStepLine(target));
       } finally {
         if (cleanup) fs.rmSync(cleanup, { recursive: true, force: true });
@@ -963,7 +970,7 @@ function printPlan(steps: PlanStep[], runCommand: string): void {
   const rows = [[c.dim("#"), c.dim("阶段 stage"), c.dim("会怎样 action"), c.dim("详情 details")]];
   steps.forEach((s, i) => rows.push([String(i + 1), `${s.stage.name} ${c.dim(s.stage.id)}`, PLAN_LABEL[s.action], s.detail ?? ""]));
   console.log(table(rows));
-  const calls = steps.filter((s) => s.callsModel).length;
+  const calls = planModelCalls(steps);
   console.log(
     `\n${
       calls
@@ -988,6 +995,7 @@ function runDetail(r: RunRecord): string {
   if (r.executor === "llm") return `${p.provider && p.provider !== "anthropic" ? `${p.provider}/` : ""}${p.model ?? ""}${took}${tokenNote(p.usage)}`;
   if (r.executor === "script") return String(p.run ?? "");
   if (r.executor === "agent") return `${p.agent ?? ""}${took}`;
+  if (r.executor === "workflow") return String(p.file ?? "");
   return String(p.provided ?? "");
 }
 

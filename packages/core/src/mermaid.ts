@@ -1,4 +1,11 @@
-import type { Flow, StageState, StageStatus } from "./types.js";
+import type { Flow, Stage, StageState, StageStatus } from "./types.js";
+
+/** Shown under the stage name. A Flowgit sub-flow is labeled sub-flow; other engines stay workflow. */
+function executorLabel(stage: Stage): string {
+  const ex = stage.executor;
+  if (ex.type === "workflow" && ex.engine === "flowgit") return "sub-flow";
+  return ex.type;
+}
 
 /** Mermaid entity codes, so a name with quotes or brackets cannot break the diagram. */
 function mermaidText(s: string): string {
@@ -27,7 +34,8 @@ export function flowToMermaid(flow: Flow, statuses?: StageStatus[]): string {
   const lines = ["flowchart LR"];
   for (const s of flow.stages) {
     const st = state.get(s.id);
-    const detail = st ? `${s.executor.type} · ${STATE_STYLE[st].icon} ${st}` : s.executor.type;
+    const label = executorLabel(s);
+    const detail = st ? `${label} · ${STATE_STYLE[st].icon} ${st}` : label;
     lines.push(`  ${node.get(s.id)}["${mermaidText(s.name)}<br/>${detail}"]`);
   }
   for (const s of flow.stages) {
