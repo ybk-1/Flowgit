@@ -9,4 +9,5 @@ export * from "./providers.js";
 export * from "./doctor.js";
 export * from "./mermaid.js";
 export * from "./plan.js";
+export * from "./edit.js";
 export { hashPath, listFiles, isTextType, wantsJson, isDirOutput, outputRel, isSafeRelative, findOnPath } from "./util.js";

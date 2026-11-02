@@ -276,3 +276,63 @@ describe("flowgit CLI with the short-video template", () => {
     expect(bad.out).toContain('Unknown provider "nope"');
   });
 });
+
+describe("flowgit stage add / rm", () => {
+  let reportRoot: string;
+  let reportDir: string;
+
+  function report(args: string[]) {
+    const r = spawnSync(process.execPath, [cli, "-C", reportDir, ...args], {
+      encoding: "utf8",
+      env: { ...process.env, NO_COLOR: "1" },
+    });
+    return { code: r.status, out: `${r.stdout}${r.stderr}` };
+  }
+
+  beforeAll(() => {
+    if (!fs.existsSync(cli)) throw new Error("Build the CLI first: pnpm -r run build");
+    reportRoot = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-stage-"));
+    reportDir = path.join(reportRoot, "weekly");
+  });
+
+  afterAll(() => {
+    if (reportRoot) fs.rmSync(reportRoot, { recursive: true, force: true });
+  });
+
+  it("adds an llm stage to the weekly report and does not overwrite an existing prompt", () => {
+    const init = spawnSync(process.execPath, [cli, "init", reportDir, "-t", "weekly-report"], { encoding: "utf8" });
+    expect(init.status, `${init.stdout}${init.stderr}`).toBe(0);
+
+    const add = report(["stage", "add", "polish", "--type", "llm", "--after", "draft"]);
+    expect(add.code, add.out).toBe(0);
+    expect(add.out).toContain("下一步 / next: flowgit status");
+    const prompt = path.join(reportDir, "prompts", "polish.md");
+    expect(fs.existsSync(prompt)).toBe(true);
+    expect(fs.readFileSync(prompt, "utf8")).toContain("{{inputs.name}}");
+    expect(report(["validate"]).code).toBe(0);
+
+    const saved = JSON.parse(fs.readFileSync(path.join(reportDir, "flow.json"), "utf8")) as {
+      stages: { id: string; inputs?: string[] }[];
+    };
+    expect(saved.stages.map((s) => s.id)).toEqual(["notes", "draft", "polish", "check"]);
+    expect(saved.stages[2]?.inputs).toEqual(["draft"]);
+    expect(Object.keys(saved.stages[0] ?? {})).toEqual(["id", "name", "description", "executor", "outputs"]);
+
+    const refused = report(["stage", "rm", "draft"]);
+    expect(refused.code).toBe(1);
+    expect(refused.out).toContain("polish");
+    expect(refused.out).toContain("check");
+    expect(fs.existsSync(prompt)).toBe(true);
+
+    fs.writeFileSync(prompt, "KEEP\n");
+    const again = report(["stage", "rm", "polish"]);
+    expect(again.code, again.out).toBe(0);
+    expect(again.out).toContain("runs/ 也留着");
+    expect(fs.readFileSync(prompt, "utf8")).toBe("KEEP\n");
+    const readd = report(["stage", "add", "polish", "--type", "llm", "--after", "draft"]);
+    expect(readd.code, readd.out).toBe(0);
+    expect(readd.out).toContain("没有覆盖");
+    expect(fs.readFileSync(prompt, "utf8")).toBe("KEEP\n");
+    expect(report(["validate"]).code).toBe(0);
+  });
+});

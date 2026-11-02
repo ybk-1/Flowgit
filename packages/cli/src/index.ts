@@ -7,6 +7,9 @@ import {
   FLOW_FILE,
   FlowNotFoundError,
   FlowValidationError,
+  addStage,
+  promptSkeleton,
+  removeStage,
   HumanInputNeededError,
   LOCAL_FILE,
   MissingInputsError,
@@ -34,8 +37,12 @@ import {
   statusAll,
   validateFlow,
   usageTokens,
+  type AddableStageType,
+  type AgentName,
   type Flow,
   type LoadedFlow,
+  type Output,
+  type ValidationIssue,
   type PlanAction,
   type PlanStep,
   type RunEvent,
@@ -274,6 +281,155 @@ program
       process.exit(1);
     }
     console.log(`${c.green("✓")} ${FLOW_FILE} 符合规范 / is valid (spec v0.1)${issues.length ? `，${issues.length} 个警告 / ${issues.length} warning(s)` : ""}`);
+  });
+
+const STAGE_TYPES = ["human", "llm", "script", "agent"] as const;
+const AGENT_NAMES = ["claude-code", "codex", "cursor", "gemini", "custom"] as const;
+
+function outputFromPath(p: string): Output {
+  const normalized = p.replace(/\\/g, "/");
+  if (normalized.endsWith("/")) return { type: "dir", path: normalized };
+  const ext = path.extname(normalized).toLowerCase();
+  if (ext === ".md" || ext === ".markdown") return { type: "text/markdown", path: normalized };
+  if (ext === ".json") return { type: "application/json", path: normalized };
+  if (ext === ".txt") return { type: "text/plain", path: normalized };
+  if (ext === ".html" || ext === ".htm") return { type: "text/html", path: normalized };
+  return { type: "application/octet-stream", path: normalized };
+}
+
+function readFlowRaw(dir: string): { file: string; flow: Flow } {
+  const file = path.join(dir, FLOW_FILE);
+  if (!fs.existsSync(file)) fail(new Error(`${dir} 里没有 ${FLOW_FILE} / No ${FLOW_FILE} in ${dir}`));
+  let data: unknown;
+  try {
+    data = JSON.parse(fs.readFileSync(file, "utf8")) as unknown;
+  } catch (err) {
+    fail(new Error(`${file} 不是合法的 JSON / is not valid JSON: ${(err as Error).message}`));
+  }
+  if (!data || typeof data !== "object" || !Array.isArray((data as Flow).stages)) {
+    fail(new Error(`${file} 不是一个流程 / is not a flow`));
+  }
+  return { file, flow: data as Flow };
+}
+
+function writeFlowRaw(file: string, flow: Flow): void {
+  fs.writeFileSync(file, `${JSON.stringify(flow, null, 2)}\n`);
+}
+
+function printFlowIssues(issues: ValidationIssue[]): void {
+  for (const i of issues) {
+    const tag = i.level === "error" ? c.red("错误 error") : c.yellow("警告 warning");
+    console.log(`${tag} ${i.path || "/"}: ${i.message}`);
+  }
+}
+
+const stageCmd = program.command("stage").description("加或删一个阶段 / add or remove a stage");
+
+stageCmd
+  .command("add")
+  .description("加一个阶段 / add a stage")
+  .argument("<id>", "阶段 id（小写字母开头）/ stage id (starts with a lowercase letter)")
+  .requiredOption("--type <type>", "human、llm、script 或 agent / human, llm, script or agent")
+  .option("--name <name>", "显示名称，默认用 id / display name, defaults to the id")
+  .option("--after <stage>", "插在这个阶段后面；不写就加在最后 / insert after this stage; omit to append")
+  .option("--input <stage>", "上游阶段，可重复；不写就用它前面那个 / upstream stage (repeatable); omit to use the stage before it", collect)
+  .option("--output <path>", "产物路径，可重复 / output path (repeatable)", collect)
+  .option("--prompt <file>", "提示词文件（llm、agent）/ prompt file (llm, agent)")
+  .option("--run <command>", "要执行的命令（script）/ command to run (script)")
+  .option("--agent <name>", "agent 名字，默认 cursor / agent name, default cursor")
+  .action((id: string, opts: { type: string; name?: string; after?: string; input?: string[]; output?: string[]; prompt?: string; run?: string; agent?: string }) => {
+    try {
+      if (!STAGE_TYPES.includes(opts.type as AddableStageType)) {
+        fail(new Error(`--type 只能是 human、llm、script、agent，收到 "${opts.type}" / --type must be human, llm, script or agent, got "${opts.type}"`));
+      }
+      if (opts.agent && !AGENT_NAMES.includes(opts.agent as AgentName)) {
+        fail(new Error(`--agent 只能是 ${AGENT_NAMES.join("、")}，收到 "${opts.agent}" / --agent must be one of ${AGENT_NAMES.join(", ")}, got "${opts.agent}"`));
+      }
+      const dir = dirOf();
+      const { file, flow } = readFlowRaw(dir);
+      const type = opts.type as AddableStageType;
+      const next = addStage(flow, {
+        id,
+        type,
+        name: opts.name,
+        after: opts.after,
+        inputs: opts.input,
+        outputs: opts.output?.map(outputFromPath),
+        prompt: opts.prompt,
+        run: opts.run,
+        agent: opts.agent as AgentName | undefined,
+      });
+      const creating = !opts.prompt && (type === "llm" || type === "agent") ? `prompts/${id}.md` : undefined;
+      const promptAbs = creating ? path.join(dir, creating) : undefined;
+      const willCreate = !!creating && !!promptAbs && !fs.existsSync(promptAbs);
+      const issues = validateFlow(next, { dir });
+      const errors = issues.filter((i) => {
+        if (i.level !== "error") return false;
+        return !(willCreate && creating && i.path.endsWith("/executor/prompt") && i.message.includes(creating));
+      });
+      if (errors.length) {
+        printFlowIssues(errors);
+        console.error(`\n${c.red("✗")} 没有改任何文件 / nothing was written`);
+        process.exit(1);
+      }
+      const warnings = issues.filter((i) => i.level === "warning");
+      if (warnings.length) printFlowIssues(warnings);
+      let created: string | undefined;
+      try {
+        if (willCreate && creating && promptAbs) {
+          fs.mkdirSync(path.dirname(promptAbs), { recursive: true });
+          const inputKey = Object.keys(flow.inputs ?? {})[0] ?? "name";
+          fs.writeFileSync(promptAbs, promptSkeleton(id, inputKey), { flag: "wx" });
+          created = promptAbs;
+        }
+        writeFlowRaw(file, next);
+      } catch (err) {
+        if (created) fs.rmSync(created, { force: true });
+        throw err;
+      }
+      const where = opts.after ? `，在 ${opts.after} 之后 / after ${opts.after}` : "，加在最后 / at the end";
+      console.log(`${c.green("✓")} 已添加阶段 / added stage ${id} (${type})${where}`);
+      if (willCreate && creating) console.log(`  已创建提示词 / created prompt ${creating}`);
+      else if (creating) console.log(`  提示词已存在，没有覆盖 / prompt already exists, left it as is: ${creating}`);
+      console.log(`  下一步 / next: flowgit status`);
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+stageCmd
+  .command("rm")
+  .description("删一个阶段（不删文件）/ remove a stage (keeps its files)")
+  .argument("<id>", "阶段 id / stage id")
+  .option("--force", "被别的阶段依赖时，一并去掉那些引用 / also drop references when other stages depend on it")
+  .action((id: string, opts: { force?: boolean }) => {
+    try {
+      const dir = dirOf();
+      const { file, flow } = readFlowRaw(dir);
+      const removed = flow.stages.find((s) => s.id === id);
+      const next = removeStage(flow, id, { force: opts.force });
+      const issues = validateFlow(next, { dir });
+      const errors = issues.filter((i) => i.level === "error");
+      if (errors.length) {
+        printFlowIssues(errors);
+        console.error(`\n${c.red("✗")} 没有改任何文件 / nothing was written`);
+        process.exit(1);
+      }
+      writeFlowRaw(file, next);
+      const kept: string[] = [];
+      for (const out of removed?.outputs ?? []) {
+        const rel = out.path.replace(/\/+$/, "");
+        if (fs.existsSync(path.join(dir, rel))) kept.push(out.path);
+      }
+      const prompt = removed && (removed.executor.type === "llm" || removed.executor.type === "agent") ? removed.executor.prompt : undefined;
+      if (prompt && fs.existsSync(path.join(dir, prompt))) kept.push(prompt);
+      console.log(`${c.green("✓")} 已删除阶段 / removed stage ${id}${opts.force ? "（已去掉其他阶段对它的引用 / references from other stages were dropped）" : ""}`);
+      console.log(`  没有删除任何文件，runs/ 也留着。 / No files were deleted, and runs/ is left in place.`);
+      if (kept.length) console.log(`  还在 / still here: ${kept.join(", ")}`);
+      console.log(`  下一步 / next: flowgit status`);
+    } catch (err) {
+      fail(err);
+    }
   });
 
 program

@@ -136,6 +136,8 @@ CLI messages and errors are bilingual. What a template produces (script, caption
 | `flowgit init [dir] [-t template]` | 从模板新建流程（默认 `short-video`） | Create a flow from a template (default `short-video`) |
 | `flowgit templates [--json]` | 列出自带的模板和它们的阶段 | List the bundled templates and their stages |
 | `flowgit validate` | 按规范检查 `flow.json` | Check `flow.json` against the spec |
+| `flowgit stage add <id> --type <类型>` | 加一个阶段。没写 `--after` 就加在最后，没写 `--input` 就用前一个阶段；llm / agent 会建提示词骨架 | Add a stage. Omit `--after` to append, omit `--input` to use the previous stage; llm / agent gets a prompt skeleton |
+| `flowgit stage rm <id> [--force]` | 删一个阶段，不删文件也不动 `runs/`。还有阶段依赖它时要 `--force` | Remove a stage without deleting files or `runs/`. `--force` when other stages depend on it |
 | `flowgit status [--json]` | 看板：每个阶段的状态、版本、产物和下一步 | The board: each stage's state, version, outputs, and the next step |
 | `flowgit board [--port 4747] [--no-open]` | 在浏览器打开本地只读看板（只监听 127.0.0.1） | Open a local read-only board in the browser (listens on 127.0.0.1 only) |
 | `flowgit inputs` / `flowgit inputs set k=v` | 查看 / 填写流程输入 | Show / set flow inputs |
