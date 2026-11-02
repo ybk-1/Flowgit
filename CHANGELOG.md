@@ -6,6 +6,11 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 
 ## [未发布 / Unreleased]
 
+### 命令行 / CLI
+
+- `flowgit prune` 清理旧版本：每个阶段默认保留最新 5 个，并留下所有手动修改、和当前文件一致的最新版本，以及最近一次成功的运行。`--dry-run` 只列出能腾出的空间；不在终端里必须加 `--yes` 才会删除。删掉的版本号不会再被使用。`runs/` 超过 500 MB 时，`flowgit status` 最后一行会提示可以清理。
+- `flowgit prune` deletes old versions: each stage keeps its newest 5, every manual edit, the newest version matching the current files, and the newest successful run. `--dry-run` only lists how much space that frees; outside a terminal nothing is deleted unless `--yes` is set. Deleted version numbers are never reused. When `runs/` is over 500 MB, the last line of `flowgit status` says so.
+
 ## [0.1.0] - 2026-11-02
 
 第一个版本。/ The first release.

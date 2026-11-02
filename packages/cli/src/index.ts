@@ -33,6 +33,7 @@ import {
   effectiveProvider,
   globalProvidersFile,
   diffRuns,
+  formatByteSize,
   listRuns,
   loadFlow,
   loadProviders,
@@ -40,7 +41,9 @@ import {
   loadFlowInputs,
   flowLog,
   planModelCalls,
+  planPrune,
   planRunAll,
+  prune,
   resolveFlowInputs,
   renderSkillMd,
   resolveFlowDir,
@@ -48,6 +51,8 @@ import {
   restoreStage,
   runAll,
   runStage,
+  runsDirBytes,
+  runsPruneHint,
   saveFlowInputs,
   stageStatus,
   statusAll,
@@ -925,6 +930,8 @@ program
         const hint = nextHint(statuses);
         if (hint) console.log(`\n${hint}`);
       }
+      const runsLine = runsPruneHint(runsDirBytes(loaded.dir));
+      if (runsLine) console.log(`\n${runsLine}`);
     } catch (err) {
       fail(err);
     }
@@ -1175,6 +1182,77 @@ program
       if (kept) console.log(c.dim(`  你的手动修改已存为 / your manual edit was saved as v${kept.n}`));
       console.log(`${c.green("✓")} 已回退到 / restored ${stageId} v${run.n}: ${run.outputs.map((o) => o.path).join(", ")}`);
       console.log(c.dim("  下游阶段会显示为需重跑 / downstream stages will show as stale"));
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+function parseKeep(raw: string): number {
+  if (!/^[1-9]\d*$/.test(raw)) {
+    throw new Error(`--keep 至少是 1，收到 "${raw}" / --keep must be at least 1, got "${raw}"`);
+  }
+  return Number(raw);
+}
+
+/** y or yes. Anything else, including an empty answer, is no. */
+function answeredYes(answer: string): boolean {
+  return /^(y|yes)$/i.test(answer.trim());
+}
+
+async function askOnce(question: string): Promise<string> {
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    return await rl.question(question);
+  } catch {
+    return ""; // input closed (Ctrl+D): treat as no
+  } finally {
+    rl.close();
+  }
+}
+
+function printPrunePlan(plan: { delete: { stage: string; n: number; bytes: number }[]; bytes: number }, dryRun: boolean): void {
+  if (!plan.delete.length) {
+    console.log("没有要删除的版本 / Nothing to delete.");
+    return;
+  }
+  if (dryRun) console.log(c.dim("预演：不会删除任何版本 / dry run: nothing will be deleted\n"));
+  const rows = [[c.dim("阶段 stage"), c.dim("版本 v"), c.dim("大小 size")]];
+  for (const item of plan.delete) rows.push([item.stage, `v${item.n}`, formatByteSize(item.bytes)]);
+  console.log(table(rows));
+  console.log(`\n释放 ${formatByteSize(plan.bytes)} / frees ${formatByteSize(plan.bytes)}`);
+}
+
+program
+  .command("prune")
+  .description("清理旧版本。每个阶段留下最新的几个、所有手动修改、和当前文件一致的版本，以及最近一次成功的运行 / delete old versions, keeping the newest few, every manual edit, the version matching the current files, and the newest success")
+  .option("--keep <n>", "每个阶段保留的最新版本数，至少 1 / newest versions to keep per stage, at least 1", "5")
+  .option("--stage <id>", "只清理这个阶段 / only this stage")
+  .option("--dry-run", "只列出将删除的版本和能腾出的空间，不删除 / list what would be deleted and how much space it frees, without deleting")
+  .option("--yes", "不询问，直接删除 / delete without asking")
+  .action(async (opts: { keep?: string; stage?: string; dryRun?: boolean; yes?: boolean }) => {
+    try {
+      const loaded = loadFlow(dirOf());
+      const keep = parseKeep(opts.keep ?? "5");
+      const stage = opts.stage?.trim() || undefined;
+      const plan = planPrune(loaded.dir, loaded.flow, { keep, stage });
+      printPrunePlan(plan, Boolean(opts.dryRun));
+      if (!plan.delete.length || opts.dryRun) return;
+      if (!opts.yes) {
+        if (!process.stdin.isTTY) {
+          console.log("不在终端里，没有删除。确认删除请加上 --yes / Not a terminal, so nothing was deleted. Add --yes to delete.");
+          process.exitCode = 1;
+          return;
+        }
+        const answer = await askOnce("删除这些版本？/ Delete these versions? [y/N] ");
+        if (!answeredYes(answer)) {
+          console.log("已取消，没有删除 / Cancelled, nothing deleted.");
+          return;
+        }
+      }
+      const deleted = prune(loaded.dir, loaded.flow, { keep, stage });
+      console.log(
+        `${c.green("✓")} 已删除 ${deleted.delete.length} 个版本，释放 ${formatByteSize(deleted.bytes)} / deleted ${deleted.delete.length} version(s), freed ${formatByteSize(deleted.bytes)}`,
+      );
     } catch (err) {
       fail(err);
     }

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import http from "node:http";
 import fs from "node:fs";
@@ -1406,6 +1407,97 @@ describe("plan and usage on the board", () => {
     } finally {
       if (previous === undefined) delete process.env.FLOWGIT_LLM_MOCK_DIR;
       else process.env.FLOWGIT_LLM_MOCK_DIR = previous;
+      await board.close();
+      fs.rmSync(work, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("board history with a gap in version numbers", () => {
+  it("lists, diffs and restores the versions that are still there", async () => {
+    const work = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-web-gap-"));
+    fs.writeFileSync(
+      path.join(work, "flow.json"),
+      JSON.stringify(
+        {
+          format: "flowgit",
+          version: "0.1",
+          name: "gap",
+          stages: [
+            {
+              id: "write",
+              name: "写",
+              executor: { type: "script", run: "node write.cjs" },
+              outputs: [{ type: "text/plain", path: "note.txt" }],
+            },
+          ],
+        },
+        null,
+        2,
+      ),
+    );
+    const writeVersion = (n: number, content: string) => {
+      const base = path.join(work, "runs", "write", String(n));
+      fs.mkdirSync(path.join(base, "outputs"), { recursive: true });
+      fs.writeFileSync(path.join(base, "outputs", "note.txt"), content);
+      fs.writeFileSync(
+        path.join(base, "run.json"),
+        `${JSON.stringify({
+          stage: "write",
+          n,
+          status: "ok",
+          executor: "script",
+          startedAt: "2026-01-01T00:00:00.000Z",
+          finishedAt: `2026-01-01T00:00:0${n}.000Z`,
+          inputHash: "x",
+          inputs: [],
+          flowInputs: {},
+          outputs: [
+            {
+              path: "note.txt",
+              type: "text/plain",
+              sha256: createHash("sha256").update(content).digest("hex"),
+              bytes: Buffer.byteLength(content),
+              isDir: false,
+            },
+          ],
+        })}\n`,
+      );
+    };
+    writeVersion(1, "one\n");
+    writeVersion(2, "two\n");
+    writeVersion(3, "three\n");
+    fs.rmSync(path.join(work, "runs", "write", "2"), { recursive: true, force: true });
+    fs.writeFileSync(path.join(work, "note.txt"), "three\n");
+    const board = await startBoard({ dir: work, port: 0, open: false });
+    const authed = { "X-Flowgit-Token": board.token };
+    try {
+      const listed = JSON.parse((await httpGet(board.port, "/api/runs?stage=write", authed)).body) as {
+        runs: Array<{ n: number }>;
+      };
+      expect(listed.runs.map((run) => run.n)).toEqual([1, 3]);
+
+      const diff = JSON.parse((await httpGet(board.port, "/api/diff?stage=write&a=1&b=3", authed)).body) as {
+        a: number;
+        b: number | null;
+        outputs: Array<{ diff?: string }>;
+      };
+      expect(diff).toMatchObject({ a: 1, b: 3 });
+      expect(diff.outputs[0]?.diff).toContain("one");
+      expect(diff.outputs[0]?.diff).toContain("three");
+
+      const missing = await httpGet(board.port, "/api/diff?stage=write&a=2&b=3", authed);
+      expect(missing.status).toBe(404);
+      expect(missing.body).toContain("没有 v2");
+
+      const restored = await httpCall(board.port, "POST", "/api/restore", JSON.stringify({ stage: "write", n: 1 }), {
+        ...authed,
+        "Content-Type": "application/json",
+      });
+      expect(restored.status, restored.body).toBe(200);
+      expect(fs.readFileSync(path.join(work, "note.txt"), "utf8")).toBe("one\n");
+      expect(fs.existsSync(path.join(work, "runs", "write", "2"))).toBe(false);
+    } finally {
       await board.close();
       fs.rmSync(work, { recursive: true, force: true });
     }
