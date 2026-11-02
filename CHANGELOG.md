@@ -32,6 +32,7 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 
 - `init`、`templates`、`validate`、`status`（终端看板）、`board`（网页看板）、`inputs`、`run`、`log`、`restore`、`providers`、`doctor`、`graph`、`export-skill`。
 - `init -t` 可以是 Git 地址（`git clone --depth 1`，可加 `--ref` 和 `--path`）。从本地目录或 Git 复制时默认不带产物，`--with-outputs` 才带上；Git 来源会把 `forkedFrom` 写进新的 `flow.json`。没有安装 git 时会说明怎么装。
+- `share`：把流程复制成可以分享的副本。先检查密钥（发现就拒绝、什么都不写）、邮箱和本机路径（写完后提醒）。`runs/`、`flowgit.local.json` 和 `.env*` 永远不复制。
 - `doctor` 在运行前检查 Node、流程输入、密钥、代理设置，以及脚本和 agent 要用的命令。
 - `export-skill` 把流程导出成 `SKILL.md`，AI 工具不用界面也能按步骤运行。
 - `graph` 把流程画成 Mermaid 流程图，贴进 GitHub 或 Obsidian 就能看到；加 `--status` 按状态上色，`-o/--out` 直接写成 UTF-8 文件（`.md` 自动包上代码块）。
@@ -42,6 +43,7 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 - 提示、报错和 `--help` 都是中英双语（包括输错命令、少写参数这类报错，会提示“是不是想输入 …”），并针对余额不足、限流、连不上（包括代理）给出具体建议。
 - `init`, `templates`, `validate`, `status` (terminal board), `board` (web board), `inputs`, `run`, `log`, `restore`, `providers`, `doctor`, `graph`, `export-skill`.
 - `init -t` accepts a Git URL (`git clone --depth 1`, with `--ref` and `--path`). Copying a local directory or a Git URL leaves outputs behind unless `--with-outputs` is set, and a Git source writes `forkedFrom` into the new `flow.json`. If git is not installed, the error says how to install it.
+- `share` copies a flow into a directory that is safe to hand to someone else. A secret blocks the write entirely; emails and local paths are listed afterwards. `runs/`, `flowgit.local.json` and `.env*` are never copied.
 - `doctor` checks Node, flow inputs, keys, proxy settings, and the programs script and agent stages use, before a run.
 - `export-skill` exports a flow as a `SKILL.md`, so AI tools can run it step by step without the UI.
 - `graph` draws the flow as a Mermaid diagram that GitHub and Obsidian render; `--status` colors it by state, and `-o/--out` writes a UTF-8 file (a `.md` file gets the code block).

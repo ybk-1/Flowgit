@@ -362,6 +362,18 @@ flowgit init ~/my-report -t path/to/weekly-report
 flowgit init ~/their-flow -t https://github.com/example/their-flow.git --ref main
 ```
 
+### 分享前检查 / Check before you share
+
+`flowgit share <目录>` 用同一套规则挑文件（默认不带产物，`runs/`、`flowgit.local.json`、`.env*` 永远不带），复制之前先扫一遍文本。像密钥的字符串会让命令停下来，一个文件都不写；邮箱和本机用户路径（`C:\Users\…`、`/Users/…`、`/home/…`）只会列出来提醒你看一眼。预览只显示前 4 个字符。
+
+`flowgit share <dir>` picks files the same way (no outputs by default, and never `runs/`, `flowgit.local.json` or `.env*`) and scans the text before copying. A key-like string stops the command and writes nothing; email addresses and local user paths (`C:\Users\…`, `/Users/…`, `/home/…`) are listed so you can look. The preview shows only the first 4 characters.
+
+```bash
+flowgit share ~/weekly-report-public
+# 目录不是空的时 / when the directory is not empty:
+flowgit share ~/weekly-report-public --force
+```
+
 还可以生成一个 `SKILL.md`，让 Claude Code 这类会读 Skill 的工具不用界面也能按阶段跑：
 
 You can also generate a `SKILL.md`, so tools that read Skills, such as Claude Code, can run the flow stage by stage without a UI:

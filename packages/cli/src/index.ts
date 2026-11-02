@@ -15,6 +15,7 @@ import {
   UpstreamNotReadyError,
   coerceFlowInput,
   doctor,
+  findPrivateData,
   flowFiles,
   flowInputProblem,
   flowToMermaid,
@@ -37,6 +38,7 @@ import {
   statusAll,
   validateFlow,
   usageTokens,
+  type Finding,
   type Flow,
   type ForkedFrom,
   type LoadedFlow,
@@ -366,6 +368,60 @@ program
       } finally {
         if (cleanup) fs.rmSync(cleanup, { recursive: true, force: true });
       }
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+const FINDING_LABEL: Record<string, string> = {
+  "sk-key": "sk- 密钥 / sk- key",
+  "aws-key": "AWS 密钥 / AWS key",
+  "github-token": "GitHub 令牌 / GitHub token",
+  "slack-token": "Slack 令牌 / Slack token",
+  "private-key": "私钥 / private key",
+  "secret-assignment": "密钥赋值 / secret assignment",
+  email: "邮箱 / email",
+  "local-path": "本机路径 / local path",
+};
+
+function formatFinding(finding: Finding): string {
+  return `  ${finding.file}:${finding.line}  ${FINDING_LABEL[finding.kind] ?? finding.kind}  ${finding.preview}`;
+}
+
+program
+  .command("share")
+  .description("复制一份可以分享的流程，先检查密钥、邮箱和本机路径 / copy a flow that is safe to share, after checking for keys, emails and local paths")
+  .argument("<dir>", "输出目录 / output directory")
+  .option("--with-outputs", "连产物一起复制 / also copy stage outputs")
+  .option("--force", "输出目录不是空的也写入 / write even if the output directory is not empty")
+  .action((dir: string, opts: { withOutputs?: boolean; force?: boolean }) => {
+    try {
+      const loaded = loadFlow(dirOf());
+      const target = path.resolve(dir);
+      if (fs.existsSync(target) && fs.statSync(target).isDirectory() && fs.readdirSync(target).length > 0 && !opts.force) {
+        fail(new Error(`${target} 不是空目录，加 --force 才会写入 / is not empty, pass --force to write anyway`));
+      }
+      const rels = flowFiles(loaded, { withOutputs: !!opts.withOutputs });
+      const findings = findPrivateData(loaded.dir, rels);
+      const high = findings.filter((f) => f.severity === "high");
+      if (high.length) {
+        console.error(`${c.red("✗")} 发现可能的密钥，没有写入任何文件 / Found possible secrets, nothing was written`);
+        for (const finding of high) console.error(formatFinding(finding));
+        process.exit(1);
+      }
+      const medium = findings.filter((f) => f.severity === "medium");
+      fs.mkdirSync(target, { recursive: true });
+      copyListed(loaded.dir, target, rels);
+      const skipped = opts.withOutputs ? [] : presentOutputs(loaded.dir, loaded.flow);
+      if (medium.length) {
+        console.log(`${c.yellow("!")} 这些内容请你自己看一眼 / Please look at these yourself:`);
+        for (const finding of medium) console.log(formatFinding(finding));
+      }
+      console.log(`${c.green("✓")} 已写到 / wrote ${target}`);
+      console.log(`  复制了 ${rels.length} 个文件 / copied ${rels.length} file(s)`);
+      console.log(`  永远不会复制 / never copied: runs/、flowgit.local.json、.env*`);
+      console.log(skipped.length ? `  跳过的产物 / skipped outputs: ${skipped.join(", ")}` : `  没有跳过产物 / no outputs skipped`);
+      console.log(`  下一步 / next: 在这个目录里 git init，提交后推到 GitHub / in that directory, git init, commit, and push it to GitHub`);
     } catch (err) {
       fail(err);
     }

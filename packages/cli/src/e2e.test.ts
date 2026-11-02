@@ -349,3 +349,58 @@ describe("flowgit init from a directory or a Git URL", () => {
     expect(flow.forkedFrom).toEqual({ source: url, ref: "main", commit });
   });
 });
+
+describe("flowgit share", () => {
+  let root: string;
+  let flowDir: string;
+  let prompt: string;
+  let originalPrompt: string;
+
+  function run(args: string[]) {
+    const r = spawnSync(process.execPath, [cli, "-C", flowDir, ...args], {
+      encoding: "utf8",
+      env: { ...process.env, NO_COLOR: "1" },
+    });
+    return { code: r.status, out: `${r.stdout}${r.stderr}` };
+  }
+
+  beforeAll(() => {
+    if (!fs.existsSync(cli)) throw new Error("Build the CLI first: pnpm -r run build");
+    root = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-share-"));
+    flowDir = path.join(root, "flow");
+    const init = spawnSync(process.execPath, [cli, "init", flowDir, "-t", "weekly-report"], { encoding: "utf8" });
+    expect(init.status, `${init.stdout}${init.stderr}`).toBe(0);
+    prompt = path.join(flowDir, "prompts", "draft.md");
+    originalPrompt = fs.readFileSync(prompt, "utf8");
+    fs.mkdirSync(path.join(flowDir, "runs", "draft", "1"), { recursive: true });
+    fs.writeFileSync(path.join(flowDir, "runs", "draft", "1", "run.json"), "{}\n");
+    fs.writeFileSync(path.join(flowDir, "flowgit.local.json"), "{\"inputs\":{}}\n");
+  });
+
+  afterAll(() => {
+    if (root) fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  it("refuses a fake key and writes an email-only copy without runs or local inputs", () => {
+    const key = "sk-abcdefghijklmnopqrstuvwxyz";
+    fs.writeFileSync(prompt, `${originalPrompt}\nkey ${key}\n`);
+    const blocked = path.join(root, "blocked");
+    const refused = run(["share", blocked]);
+    expect(refused.code).toBe(1);
+    expect(refused.out).toContain("没有写入任何文件");
+    expect(refused.out).toContain("sk-a…");
+    expect(refused.out).not.toContain(key);
+    expect(fs.existsSync(blocked)).toBe(false);
+
+    fs.writeFileSync(prompt, `${originalPrompt}\nmail me at dev@example.com\n`);
+    const shared = path.join(root, "shared");
+    const ok = run(["share", shared]);
+    expect(ok.code, ok.out).toBe(0);
+    expect(ok.out).toContain("dev@…");
+    expect(ok.out).toContain("请你自己看一眼");
+    expect(fs.readFileSync(path.join(shared, "prompts", "draft.md"), "utf8")).toContain("dev@example.com");
+    expect(fs.existsSync(path.join(shared, "runs"))).toBe(false);
+    expect(fs.existsSync(path.join(shared, "flowgit.local.json"))).toBe(false);
+    expect(ok.out).not.toContain("dev@example.com");
+  });
+});
