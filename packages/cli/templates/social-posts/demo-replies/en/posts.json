@@ -1,0 +1,52 @@
+{
+  "posts": [
+    {
+      "platform": "xiaohongshu",
+      "title": "Desk lamp still on",
+      "body": "Saturday night I left the lamp on the corner of the desk and wrote three lines. Nobody was waiting. I put the paper away. South Wind Stationery is a fictional example.",
+      "hashtags": ["DeskCorner", "NightNotes"],
+      "imageIdea": "A wooden desk corner, a warm lamp, pale paper, no logo and no QR code.",
+      "suggestedTime": "Saturday 20:00-21:00 (my guess; change it from your own account data before posting)"
+    },
+    {
+      "platform": "weibo",
+      "title": "",
+      "body": "#DeskCorner# #NightNotes# The lamp is still on the desk. I wrote three lines and stopped.",
+      "hashtags": ["DeskCorner", "NightNotes"],
+      "imageIdea": "A photo from the desk corner, lamp on, three lines visible.",
+      "suggestedTime": "Sunday 11:00-12:00 (my guess; change it from your own account data before posting)"
+    },
+    {
+      "platform": "x",
+      "title": "",
+      "body": "The lamp on the desk is still on. Three lines, then I stop. Not the best lamp, just the one I use.",
+      "hashtags": ["DeskLamp"],
+      "imageIdea": "A close view of the lamp and three handwritten lines.",
+      "suggestedTime": "Saturday 21:00-22:00 (my guess; change it from your own account data before posting)"
+    },
+    {
+      "platform": "douyin",
+      "title": "Desk lamp",
+      "body": "I wrote three lines on Saturday and put the paper away.",
+      "hashtags": ["NightNotes"],
+      "imageIdea": "The cover frame holds on the lamp, with the pen still on the paper.",
+      "suggestedTime": "Saturday 19:30-20:30 (my guess; change it from your own account data before posting)"
+    },
+    {
+      "platform": "linkedin",
+      "title": "Three lines were enough",
+      "body": "On Saturday I left the lamp on the corner of the desk, wrote three lines, and put the paper away. South Wind Stationery is fictional. It only shows how a small evening becomes a post.",
+      "hashtags": ["LetterWriting", "Weekend", "DeskLamp"],
+      "imageIdea": "A photo of a desk corner with a warm lamp and a sheet of paper, not a slide.",
+      "suggestedTime": "Tuesday 08:30-09:00 (my guess; change it from your own account data before posting)"
+    },
+    {
+      "platform": "wechat-moments",
+      "title": "",
+      "body": "Saturday I left the lamp on and wrote three lines. Then I put the paper away.",
+      "hashtags": [],
+      "imageIdea": "One photo of the lamp and the paper.",
+      "suggestedTime": "Saturday 20:30-21:00 (my guess; change it from your own account data before posting)"
+    }
+  ]
+}

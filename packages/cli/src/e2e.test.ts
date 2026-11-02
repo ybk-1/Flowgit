@@ -75,14 +75,14 @@ describe("flowgit CLI with the short-video template", () => {
     expect(list.status).toBe(0);
     const templates = JSON.parse(list.stdout) as { id: string; default: boolean; stages: { executor: string }[] }[];
     expect(templates[0]).toMatchObject({ id: "short-video", default: true });
-    expect(templates.map((t) => t.id)).toEqual(expect.arrayContaining(["weekly-report", "article", "support-sop", "job-application", "research-report", "ecommerce-listing", "slides", "live-selling", "short-drama", "lesson-plan", "novel-serial", "business-plan", "event-plan", "hiring", "travel-guide", "online-course", "landing-page"]));
+    expect(templates.map((t) => t.id)).toEqual(expect.arrayContaining(["weekly-report", "article", "support-sop", "job-application", "research-report", "ecommerce-listing", "slides", "live-selling", "short-drama", "lesson-plan", "novel-serial", "business-plan", "event-plan", "hiring", "travel-guide", "online-course", "landing-page", "social-posts"]));
     const listed = spawnSync(process.execPath, [cli, "templates"], { encoding: "utf8", env: { ...process.env, NO_COLOR: "1" } });
     expect(listed.stdout).toMatch(/weekly-report\s+周报（入门示例）\s+随手记 human → 周报草稿 llm → 检查 script/);
     expect(listed.stdout).toMatch(/landing-page\s+落地页\s+简报 human → 结构 llm → 文案 llm → 照片 human → 生成 script → 检查 script/);
 
     const wrong = spawnSync(process.execPath, [cli, "init", path.join(work, "nope"), "-t", "no-such-template"], { encoding: "utf8" });
     expect(wrong.status).toBe(1);
-    expect(wrong.stderr).toContain("bundled templates: short-video, article, business-plan, ecommerce-listing, event-plan, hiring, job-application, landing-page, lesson-plan, live-selling, novel-serial, online-course, research-report, short-drama, slides, support-sop, travel-guide, weekly-report");
+    expect(wrong.stderr).toContain("bundled templates: short-video, article, business-plan, ecommerce-listing, event-plan, hiring, job-application, landing-page, lesson-plan, live-selling, novel-serial, online-course, research-report, short-drama, slides, social-posts, support-sop, travel-guide, weekly-report");
   });
 
   it("shows a short, quoted path when the new flow is below the current folder", () => {
@@ -1039,6 +1039,65 @@ describe("landing-page template", () => {
     expect(report).toContain("- gone");
     expect(report).not.toContain("没有问题。");
     fs.rmSync(root, { recursive: true, force: true });
+  });
+});
+
+describe("social-posts template", () => {
+  let root: string;
+
+  function runIn(dir: string, args: string[], env: Record<string, string> = {}) {
+    const r = spawnSync(process.execPath, [cli, "-C", dir, ...args], {
+      encoding: "utf8",
+      env: { ...process.env, NO_COLOR: "1", ...env },
+    });
+    return { code: r.status, out: `${r.stdout}${r.stderr}` };
+  }
+
+  beforeAll(() => {
+    if (!fs.existsSync(cli)) throw new Error("Build the CLI first: pnpm -r run build");
+    root = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-social-"));
+  });
+
+  afterAll(() => {
+    if (root) fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  it("runs in Chinese and the check report names the sample warnings", () => {
+    const dir = path.join(root, "zh");
+    const init = spawnSync(process.execPath, [cli, "init", dir, "-t", "social-posts"], { encoding: "utf8" });
+    expect(init.status, `${init.stdout}${init.stderr}`).toBe(0);
+    expect(runIn(dir, ["inputs", "set", "topic=南风文具社的周末写信会", "language=zh"]).code).toBe(0);
+    const ran = runIn(dir, ["run", "all"], { FLOWGIT_LLM_MOCK_DIR: path.join(dir, "demo-replies", "zh") });
+    expect(ran.code, ran.out).toBe(0);
+    const report = fs.readFileSync(path.join(dir, "check-report.md"), "utf8");
+    expect(report).toContain("微博: 最佳");
+    expect(report).toContain("多于 2 个");
+    expect(report).toContain("标题 7/20");
+    expect(report).not.toContain("格式错误");
+    const exported = fs.readFileSync(path.join(dir, "posts.md"), "utf8");
+    expect(exported).toContain("## 小红书");
+    expect(exported).toContain("桌角的灯还亮着");
+    expect(exported).toContain("## 微博");
+    expect(exported).toContain("## X");
+  });
+
+  it("runs in English and the check report names the sample warning", () => {
+    const dir = path.join(root, "en");
+    const init = spawnSync(process.execPath, [cli, "init", dir, "-t", "social-posts"], { encoding: "utf8" });
+    expect(init.status, `${init.stdout}${init.stderr}`).toBe(0);
+    expect(runIn(dir, ["inputs", "set", "topic=a weekend letter at South Wind Stationery", "language=en"]).code).toBe(0);
+    const ran = runIn(dir, ["run", "all"], { FLOWGIT_LLM_MOCK_DIR: path.join(dir, "demo-replies", "en") });
+    expect(ran.code, ran.out).toBe(0);
+    const report = fs.readFileSync(path.join(dir, "check-report.md"), "utf8");
+    expect(report).toContain("X: best");
+    expect(report).toContain("weighted 108/280");
+    expect(report).toContain("title 18/20");
+    expect(report).not.toContain("Format error");
+    const exported = fs.readFileSync(path.join(dir, "posts.md"), "utf8");
+    expect(exported).toContain("## Xiaohongshu");
+    expect(exported).toContain("Desk lamp still on");
+    expect(exported).toContain("## Weibo");
+    expect(exported).toContain("## X");
   });
 });
 

@@ -18,6 +18,11 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 - 看板界面一次只显示一种语言：右上角「中文 / EN」切换，选择记在浏览器里；第一次打开跟着浏览器语言（中文浏览器显示简体中文，其他显示英文）。文案在 `public/i18n.js`，用开源翻译库 [i18next](https://www.i18next.com)；服务器和流程文件里的双语提示（“中文 / English”）也只显示当前语言那一半。
 - The board shows one language at a time: switch with "中文 / EN" at the top right, remembered in the browser; the first visit follows the browser language (Simplified Chinese for a Chinese browser, English otherwise). Strings live in `public/i18n.js` on the open-source [i18next](https://www.i18next.com) library, and bilingual messages from the server and from flow files ("中文 / English") show only the current language's half.
 
+### 模板和示例 / Templates and examples
+
+- `social-posts`：多平台帖子。3 到 5 个角度（人挑选）→ 按小红书、微博、X、抖音、LinkedIn、微信朋友圈已公布的长度和话题规则写帖 → 检查绝对化用语、医疗用语、导流痕迹和占位符（只提醒）→ 导出 `posts.md`。规则会变，发出去之前要再核对。
+- `social-posts`: posts for several platforms. 3 to 5 angles (a person picks) → posts written to the published length and hashtag rules of Xiaohongshu, Weibo, X, Douyin, LinkedIn and WeChat Moments → checks for absolute claims, medical claims, diversion traces and placeholders (warnings only) → export to `posts.md`. Rules change; check them again before posting.
+
 ## [0.1.0] - 2026-11-02
 
 第一个版本。/ The first release.
