@@ -1,0 +1,28 @@
+{
+  "angles": [
+    {
+      "id": "desk",
+      "hook": "The lamp is still on. Three lines, then I stop.",
+      "audience": "People who mean to write a letter and keep putting it off until night",
+      "whyItSpreads": "Someone else delaying a letter will pass it to a friend, because the lamp on the desk matches their night."
+    },
+    {
+      "id": "rain",
+      "hook": "The letter gets finished when it rains.",
+      "audience": "People who stay in on a rainy day",
+      "whyItSpreads": "They send it to a friend who is also indoors, because the weather is a ready reason."
+    },
+    {
+      "id": "stamp",
+      "hook": "The stamp is used. The letter is new.",
+      "audience": "People who still write with paper and a pen",
+      "whyItSpreads": "Someone with an old stamp will show it to a friend. The object travels on its own."
+    },
+    {
+      "id": "train",
+      "hook": "Before the last train, there is time for three lines.",
+      "audience": "People with a short gap after work",
+      "whyItSpreads": "Commuters recognize the deadline and pass it to someone who also runs for the last train."
+    }
+  ]
+}

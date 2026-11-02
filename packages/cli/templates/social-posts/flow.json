@@ -1,0 +1,143 @@
+{
+  "format": "flowgit",
+  "version": "0.1",
+  "id": "social-posts",
+  "name": "多平台帖子",
+  "description": "从一个主题写出多平台帖子：先给 3 到 5 个角度，人选一个，再按各平台的官方长度、话题和用词规则写成帖子，检查后导出。示例是虚构的文具社写信会。 / Turn one topic into posts for several platforms: 3 to 5 angles, a person picks one, then posts written to each platform's published length, hashtag and wording rules, a check, and an export. The sample is a fictional stationery-club letter hour.",
+  "language": "zh",
+  "author": {
+    "name": "Flowgit"
+  },
+  "license": "Apache-2.0",
+  "tags": [
+    "social",
+    "writing",
+    "starter"
+  ],
+  "inputs": {
+    "topic": {
+      "type": "string",
+      "description": "这条内容在讲什么，例如：南风文具社的周末写信会 / What the posts are about",
+      "required": true
+    },
+    "platforms": {
+      "type": "string",
+      "default": "xiaohongshu,weibo,x",
+      "description": "要发的平台，逗号分隔。可选 xiaohongshu、weibo、x、douyin、linkedin、wechat-moments / Comma-separated platforms. Allowed: xiaohongshu, weibo, x, douyin, linkedin, wechat-moments"
+    },
+    "audience": {
+      "type": "string",
+      "default": "会把这条转给朋友的普通人",
+      "description": "写给谁 / Who it is for"
+    },
+    "tone": {
+      "type": "string",
+      "default": "口语、具体",
+      "description": "语气，例如：口语、安静、专业 / Tone, for example conversational, quiet, professional"
+    },
+    "language": {
+      "type": "string",
+      "enum": [
+        "zh",
+        "en"
+      ],
+      "default": "zh",
+      "description": "输出语言：zh 中文，en English / Output language: zh or en"
+    }
+  },
+  "stages": [
+    {
+      "id": "angles",
+      "name": "角度",
+      "description": "3 到 5 个不同角度，每个有钩子、受众，以及这个受众为什么会转发。 / 3 to 5 different angles, each with a hook, an audience, and why that audience would pass it on.",
+      "executor": {
+        "type": "llm",
+        "prompt": "prompts/angles.md",
+        "effort": "low"
+      },
+      "outputs": [
+        {
+          "type": "application/json",
+          "path": "angles.json",
+          "schema": "schemas/angles.schema.json"
+        }
+      ]
+    },
+    {
+      "id": "pick",
+      "name": "挑选",
+      "description": "从角度里选一个，把 id 写进 pick.md。示例已经选了 desk。 / Pick one angle and write its id into pick.md. The sample already picks desk.",
+      "inputs": [
+        "angles"
+      ],
+      "executor": {
+        "type": "human",
+        "instructions": "看 angles.json，把要用的角度 id 写进 pick.md。可以改钩子的措辞。示例选的是 desk，示例材料是虚构的。 / Read angles.json and write the angle id you want into pick.md. You may retune the hook. The sample picks desk. The sample material is fictional."
+      },
+      "outputs": [
+        {
+          "type": "text/markdown",
+          "path": "pick.md"
+        }
+      ]
+    },
+    {
+      "id": "posts",
+      "name": "帖子",
+      "description": "按选中的角度，为每个平台写标题、正文、话题、画面和可安排的发布时间。 / From the chosen angle, write a title, body, hashtags, image idea and a schedulable time for each platform.",
+      "inputs": [
+        "angles",
+        "pick"
+      ],
+      "executor": {
+        "type": "llm",
+        "prompt": "prompts/posts.md",
+        "effort": "medium"
+      },
+      "outputs": [
+        {
+          "type": "application/json",
+          "path": "posts.json",
+          "schema": "schemas/posts.schema.json"
+        }
+      ]
+    },
+    {
+      "id": "check",
+      "name": "检查",
+      "description": "按 rules.md 检查长度、话题数量和格式、绝对化用语、医疗用语、导流痕迹和占位符。内容问题只写进报告；JSON 格式不对才失败。 / Check length, hashtag count and shape, absolute claims, medical claims, diversion traces and placeholders against rules.md. Content issues stay in the report; only a bad JSON shape fails the stage.",
+      "inputs": [
+        "posts"
+      ],
+      "executor": {
+        "type": "script",
+        "run": "node scripts/check.mjs rules.md"
+      },
+      "outputs": [
+        {
+          "type": "text/markdown",
+          "path": "check-report.md"
+        }
+      ]
+    },
+    {
+      "id": "export",
+      "name": "导出",
+      "description": "把每个平台收成 posts.md 里的一节。 / Write one section per platform into posts.md.",
+      "inputs": [
+        "posts",
+        "check"
+      ],
+      "executor": {
+        "type": "script",
+        "run": "node scripts/export.mjs"
+      },
+      "outputs": [
+        {
+          "type": "text/markdown",
+          "path": "posts.md"
+        }
+      ]
+    }
+  ]
+}

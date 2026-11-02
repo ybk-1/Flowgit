@@ -92,6 +92,7 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 - `live-selling`：直播带货脚本。商品资料（人）→ 七段流程表（留人、痛点、塑品、信任、价格、逼单、返场）→ 逐段话术和弹幕问答（并行）→ 按《网络直播营销管理办法》检查虚构的销量、库存和数字，以及绝对化、医疗用语和价格比较。
 - `short-drama`：竖屏微短剧。设定和人物 → 分集节拍（钩子、压抑、爆发、悬念，付费卡点）→ 逐集剧本 → 按广电总局管理提示和创作标准审读 → 检查集数、估算时长、旁白开头、悬念和付费卡点。
 - `lesson-plan`：老师备课，按逆向设计。教学目标（布鲁姆层级）→ 评价任务 → 教案和分层练习（并行）→ 学生练习单和答案，并检查教学评一致性、时间和“双减”作业时长。
+- `social-posts`：多平台帖子。3 到 5 个角度（人挑选）→ 按小红书、微博、X、抖音、LinkedIn、微信朋友圈已公布的长度和话题规则写帖 → 检查绝对化用语、医疗用语、导流痕迹和占位符（只提醒）→ 导出 `posts.md`。规则会变，发出去之前要再核对。
 - `examples/agent-page`：用 agent 做一页介绍网页（只在仓库里）。
 - `short-video` (default): script → storyboard → assets → edit → export. FFmpeg renders a vertical video with zoom, blurred fill, gradient text cards, a title, transitions, background music and voiceover (clips follow the voice); the output language is Chinese or English.
 - `weekly-report`: a starter that turns rough notes (person) into a draft (model) and checks it (script); the [guide](docs/guide.md) builds it step by step.
@@ -104,6 +105,7 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 - `live-selling`: a live-selling stream script. Product facts (person) → a seven-part rundown (hook, pain, demo, trust, price, close, recap) → segment script and chat Q&A (in parallel) → checks for invented sales, stock and numbers under China's live-stream marketing rules, plus absolute and medical claims and price comparisons.
 - `short-drama`: a vertical micro-drama. Story bible and characters → episode beats (hook, suppression, payoff, cliffhanger, paywall) → scripts → a read against NRTA guidance and craft standards → checks on count, length, voice-over openings, cliffhangers and the paywall.
 - `lesson-plan`: lesson prep with backward design. Objectives (Bloom levels) → assessment tasks → lesson plan and tiered exercises (in parallel) → a student worksheet and answer key, with checks on alignment, timing and homework load under the double-reduction rules.
+- `social-posts`: posts for several platforms. 3 to 5 angles (a person picks) → posts written to the published length and hashtag rules of Xiaohongshu, Weibo, X, Douyin, LinkedIn and WeChat Moments → checks for absolute claims, medical claims, diversion traces and placeholders (warnings only) → export to `posts.md`. Rules change; check them again before posting.
 - `examples/agent-page`: a one-page explainer made by an agent (repo only).
 
 ### 项目 / Project
