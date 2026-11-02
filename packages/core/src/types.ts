@@ -26,6 +26,8 @@ export interface Output {
   /** Relative to the flow directory. Ends with "/" for a directory. */
   path: string;
   description?: string;
+  /** Relative path of a JSON Schema file. Only for JSON outputs. Checked after the stage runs. */
+  schema?: string;
 }
 
 export interface ExecutorHuman {

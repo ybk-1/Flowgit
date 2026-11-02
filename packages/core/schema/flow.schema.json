@@ -185,6 +185,11 @@
         },
         "description": {
           "type": "string"
+        },
+        "schema": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Relative path of a JSON Schema file. Only for JSON outputs (application/json or a type ending in +json). Checked after the stage runs; an llm stage gets one automatic repair attempt."
         }
       }
     },
