@@ -335,6 +335,10 @@ Each run of a stage:
 
 Restoring (`flowgit restore <stage> <n>`, or "Restore" on the board) copies `runs/<stage>/<n>/outputs/` back in place. If the current outputs match no saved version, they are a hand edit and are saved as a `manual` version before the restore. Restored outputs equal a saved version, so they are not a hand edit: the stage does not show as `edited` and the next run does not save another copy; downstream stages become `stale` because their upstream output changed.
 
+`flowgit prune [--keep <n>] [--stage <id>] [--dry-run] [--yes]` 删掉不需要的整个 `runs/<阶段>/<n>/`。每个阶段保留最新的 `--keep` 个版本（默认 5，至少 1），另外保留所有 `executor` 为 `manual` 的版本、产物哈希和当前文件一致的最新一个版本，以及最新一次成功的版本。版本号不会重新使用，下一次运行仍是现有最大编号加一。`--dry-run` 只列出要删除的版本和能腾出的空间（KB / MB / GB）。在终端里会问一次 `[y/N]`；不在终端里，除非加上 `--yes`，否则什么都不删。`runs/` 超过 500 MB 时，`flowgit status` 的最后一行会提示可以用 `flowgit prune` 清理。
+
+`flowgit prune [--keep <n>] [--stage <id>] [--dry-run] [--yes]` deletes whole `runs/<stage>/<n>/` folders that are no longer kept. Each stage keeps its newest `--keep` versions (default 5, minimum 1), plus every version whose `executor` is `manual`, the newest version whose output hashes match the current files, and the newest successful version. Version numbers are never reused: the next run is still one past the highest number. `--dry-run` only lists the versions and the space they would free (KB / MB / GB). A terminal asks once `[y/N]`; outside a terminal nothing is deleted unless `--yes` is passed. When `runs/` is over 500 MB, the last line of `flowgit status` points at `flowgit prune`.
+
 `run.json` 的主要字段：`stage`、`n`、`status`、`executor`、`startedAt`、`finishedAt`、`inputHash`、`inputs`（上游产物和它们的 sha256）、`flowInputs`、`outputs`（路径、类型、sha256、大小）、`params`（provider、模型、用量、命令等）、`log`、`error`。
 
 Main `run.json` fields: `stage`, `n`, `status`, `executor`, `startedAt`, `finishedAt`, `inputHash`, `inputs` (upstream artifacts and their sha256), `flowInputs`, `outputs` (path, type, sha256, size), `params` (provider, model, usage, command, ...), `log`, `error`.

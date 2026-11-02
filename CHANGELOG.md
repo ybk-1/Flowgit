@@ -38,7 +38,7 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 
 ### 命令行 / CLI
 
-- `init`、`templates`、`validate`、`status`（终端看板）、`board`（网页看板）、`inputs`、`run`、`log`、`diff`、`restore`、`providers`、`doctor`、`graph`、`export-skill`。
+- `init`、`templates`、`validate`、`status`（终端看板）、`board`（网页看板）、`inputs`、`run`、`log`、`diff`、`restore`、`prune`、`providers`、`doctor`、`graph`、`export-skill`。
 - `init -t` 可以是 Git 地址（`git clone --depth 1`，可加 `--ref` 和 `--path`）。从本地目录或 Git 复制时默认不带产物，`--with-outputs` 才带上；Git 来源会把 `forkedFrom` 写进新的 `flow.json`。没有安装 git 时会说明怎么装。
 - `convert --to md|json` 在 `flow.json` 和 `flow.md` 之间转换，内容不变；`init --format md` 新建时直接用 `flow.md`。`stage add`、`stage rm` 写回时保持原来的格式。
 - `stage add` / `stage rm`：用命令加、删阶段。llm 和 agent 没给提示词时会建一个中英双语骨架，已有文件不覆盖。删阶段不删文件，也不动 `runs/`；还有别的阶段依赖它时要 `--force`。
@@ -49,6 +49,7 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 - `graph` 把流程画成 Mermaid 流程图，贴进 GitHub 或 Obsidian 就能看到；加 `--status` 按状态上色，`-o/--out` 直接写成 UTF-8 文件（`.md` 自动包上代码块）。
 - `log` 不写阶段时按时间列出整个流程的所有版本，并合计用掉的 token。
 - `diff` 对比同一个阶段的两个版本，或者某个版本和现在的文件：文本和 JSON 显示按行的改动，二进制只比较是否相同，文件夹列出新增、删除和改动的文件。
+- `flowgit prune` 清理旧版本：每个阶段默认保留最新 5 个，并留下所有手动修改、和当前文件一致的最新版本，以及最近一次成功的运行。`--dry-run` 只列出能腾出的空间；不在终端里必须加 `--yes` 才会删除。删掉的版本号不会再被使用。`runs/` 超过 500 MB 时，`flowgit status` 最后一行会提示可以清理。
 - `board` 在浏览器打开本机看板（新包 `@flowgit/web`）：每个阶段一张卡，显示状态、最新版本和产物，点产物在侧栏预览文本、JSON、图片、视频和目录。文件一变就通过 SSE 的 `flow:changed` 刷新（约 300 毫秒合并一次）；保存产物、上传、运行结束、回退和保存输入也会推送。连接着的时候不再每 3 秒轮询，断开时提示并改回每 3 秒刷新，每 5 秒重连。文本产物可以直接修改保存（JSON 先检查格式），人工阶段的文件夹可以上传文件；改过的产物下次运行前会先存成一个版本。可以填写流程输入，运行单个阶段或全部阶段，日志实时显示；同时只跑一个，运行中不能保存产物。每张卡可以看历史版本、对比两个版本（或和当前文件比）并回退。只监听 `127.0.0.1`，接口要令牌并检查 `Host`。
 - 看板换了新造型：亮色是粗网格加大号阶段编号，可以运行的那一步整块变蓝；暗色是深色卡片，状态用发光圆点标出。跟着系统的深浅色自动切换，不用联网加载字体。
 - `run all --dry-run` 预演：每个阶段会跳过、运行还是停下等你，最多调用几次模型，什么都不运行。`doctor` 通过后和导出的 `SKILL.md` 里都会提到它。
@@ -58,7 +59,7 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 - 提示词文件，以及要发给模型或服务的上游产物，如果是指向流程目录外面的链接，就不读取（`validate` 也会报出来），免得下载来的流程把 `~/.ssh` 这类文件发出去。脚本和 agent 阶段不受影响。
 - 流程自己的 `flowgit.local.json` 改了某个带密钥的模型服务的地址时，`doctor` 会警告，运行日志也会写出来，因为密钥会发到那个地址。
 - 提示、报错和 `--help` 都是中英双语（包括输错命令、少写参数这类报错，会提示“是不是想输入 …”），并针对余额不足、限流、连不上（包括代理）给出具体建议。
-- `init`, `templates`, `validate`, `status` (terminal board), `board` (web board), `inputs`, `run`, `log`, `diff`, `restore`, `providers`, `doctor`, `graph`, `export-skill`.
+- `init`, `templates`, `validate`, `status` (terminal board), `board` (web board), `inputs`, `run`, `log`, `diff`, `restore`, `prune`, `providers`, `doctor`, `graph`, `export-skill`.
 - `init -t` accepts a Git URL (`git clone --depth 1`, with `--ref` and `--path`). Copying a local directory or a Git URL leaves outputs behind unless `--with-outputs` is set, and a Git source writes `forkedFrom` into the new `flow.json`. If git is not installed, the error says how to install it.
 - `stage add` / `stage rm`: add or remove a stage from the command line. An llm or agent stage without a prompt gets a bilingual skeleton, and an existing file is never overwritten. Removing a stage deletes no files and leaves `runs/` alone; `--force` is required when other stages depend on it.
 - `share` copies a flow into a directory that is safe to hand to someone else. A secret blocks the write entirely; emails and local paths are listed afterwards. `runs/`, `flowgit.local.json` and `.env*` are never copied.
@@ -69,6 +70,7 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 - `convert --to md|json` switches between `flow.json` and `flow.md` without changing the flow; `init --format md` starts a flow as `flow.md`. `stage add` and `stage rm` write back in the file's own format.
 - `log` without a stage lists every version of the whole flow by time and adds up the tokens used.
 - `diff` compares two versions of a stage, or a version with the current files: line changes for text and JSON, same-or-different for binaries, and added, removed and changed files for folders.
+- `flowgit prune` deletes old versions: each stage keeps its newest 5, every manual edit, the newest version matching the current files, and the newest successful run. `--dry-run` only lists how much space that frees; outside a terminal nothing is deleted unless `--yes` is set. Deleted version numbers are never reused. When `runs/` is over 500 MB, the last line of `flowgit status` says so.
 - `board` opens a local board in the browser (new package `@flowgit/web`): one card per stage with its state, latest version and outputs; click an output to preview text, JSON, images, video or a folder in a side panel. A file change refreshes it through the SSE event `flow:changed` (debounced by about 300 ms); saving an output, an upload, the end of a run, a restore and saving inputs push it too. While that stream is connected it no longer polls every 3 seconds; if the stream drops it says so, polls every 3 seconds again, and retries every 5 seconds. Text outputs can be edited and saved (JSON is checked first), and files can be uploaded into a human stage's folder; an edited output is saved as a version before the next run. Flow inputs can be filled in, and one stage or the whole flow can be run with a live log; one run at a time, and outputs cannot be saved while it runs. Each card can list its versions, compare two of them (or one with the current files) and restore one. It listens on `127.0.0.1` only, and its API needs a token and checks `Host`.
 - The board has a new look: in light mode a bold grid with large stage numbers, and the stage you can run now in a solid blue block; in dark mode graphite cards with glowing status dots. It follows the system light/dark setting and loads no web fonts.
 - `run all --dry-run` shows whether each stage would be skipped, run or stop for you, and at most how many model calls it would make, without running anything. `doctor` points to it when nothing blocks, and so does the exported `SKILL.md`.
