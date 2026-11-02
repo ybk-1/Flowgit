@@ -69,12 +69,12 @@ describe("flowgit CLI with the short-video template", () => {
     expect(list.status).toBe(0);
     const templates = JSON.parse(list.stdout) as { id: string; default: boolean; stages: { executor: string }[] }[];
     expect(templates[0]).toMatchObject({ id: "short-video", default: true });
-    expect(templates.map((t) => t.id)).toEqual(expect.arrayContaining(["weekly-report", "article", "support-sop"]));
+    expect(templates.map((t) => t.id)).toEqual(expect.arrayContaining(["weekly-report", "article", "support-sop", "job-application"]));
     expect(spawnSync(process.execPath, [cli, "templates"], { encoding: "utf8", env: { ...process.env, NO_COLOR: "1" } }).stdout).toMatch(/weekly-report\s+周报（入门示例）\s+随手记 human → 周报草稿 llm → 检查 script/);
 
     const wrong = spawnSync(process.execPath, [cli, "init", path.join(work, "nope"), "-t", "no-such-template"], { encoding: "utf8" });
     expect(wrong.status).toBe(1);
-    expect(wrong.stderr).toContain("bundled templates: short-video, article, support-sop, weekly-report");
+    expect(wrong.stderr).toContain("bundled templates: short-video, article, job-application, support-sop, weekly-report");
   });
 
   it("shows a short, quoted path when the new flow is below the current folder", () => {
@@ -587,5 +587,43 @@ describe("flowgit stage add / rm", () => {
     expect(readd.out).toContain("没有覆盖");
     expect(fs.readFileSync(prompt, "utf8")).toBe("KEEP\n");
     expect(report(["validate"]).code).toBe(0);
+  });
+});
+
+describe("job-application template", () => {
+  let jobDir: string;
+
+  function run(args: string[], env: Record<string, string> = {}) {
+    const r = spawnSync(process.execPath, [cli, "-C", jobDir, ...args], {
+      encoding: "utf8",
+      env: { ...process.env, NO_COLOR: "1", ...env },
+    });
+    return { code: r.status, out: `${r.stdout}${r.stderr}` };
+  }
+
+  beforeAll(() => {
+    if (!fs.existsSync(cli)) throw new Error("Build the CLI first: pnpm -r run build");
+    jobDir = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-job-"));
+  });
+
+  afterAll(() => {
+    if (jobDir) fs.rmSync(jobDir, { recursive: true, force: true });
+  });
+
+  it("runs on demo replies and shows the analysis linked to both resume and letter", () => {
+    const init = spawnSync(process.execPath, [cli, "init", jobDir, "-t", "job-application"], { encoding: "utf8" });
+    expect(init.status, `${init.stdout}${init.stderr}`).toBe(0);
+    expect(run(["inputs", "set", "role=后端工程师"]).code).toBe(0);
+    const ran = run(["run", "all"], { FLOWGIT_LLM_MOCK_DIR: path.join(jobDir, "demo-replies") });
+    expect(ran.code, ran.out).toBe(0);
+    expect(fs.existsSync(path.join(jobDir, "check-report.md"))).toBe(true);
+    expect(fs.readFileSync(path.join(jobDir, "check-report.md"), "utf8")).toContain("3/3");
+    const graph = run(["graph"]);
+    expect(graph.code, graph.out).toBe(0);
+    expect(graph.out).toContain('s2["匹配分析<br/>llm"]');
+    expect(graph.out).toContain('s3["简历<br/>llm"]');
+    expect(graph.out).toContain('s4["求职信<br/>llm"]');
+    expect(graph.out).toContain("s2 --> s3");
+    expect(graph.out).toContain("s2 --> s4");
   });
 });

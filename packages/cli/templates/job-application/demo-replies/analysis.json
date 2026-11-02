@@ -1,0 +1,5 @@
+{
+  "matches": ["用 TypeScript 写过订单 HTTP API", "做过 PostgreSQL 表", "写过一次故障复盘"],
+  "gaps": ["职位在电商公司，简历里的公司是北风科技"],
+  "keywords": ["TypeScript", "PostgreSQL", "HTTP API"]
+}

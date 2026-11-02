@@ -1,0 +1,71 @@
+{
+  "format": "flowgit",
+  "version": "0.1",
+  "id": "job-application",
+  "name": "求职材料",
+  "description": "对照一份职位描述改简历、写求职信。简历和求职信并行，最后用脚本检查关键词和占位符。 / Tailor a resume and write a cover letter for one job description. The resume and letter run in parallel, then a script checks keywords and placeholders.",
+  "language": "zh",
+  "author": { "name": "Flowgit" },
+  "license": "Apache-2.0",
+  "tags": ["writing", "job", "starter"],
+  "inputs": {
+    "role": {
+      "type": "string",
+      "description": "目标职位，例如：后端工程师 / Target job title, e.g. backend engineer",
+      "required": true
+    },
+    "language": {
+      "type": "string",
+      "enum": ["zh", "en"],
+      "default": "zh",
+      "description": "输出语言：zh 中文，en English / Output language: zh or en"
+    }
+  },
+  "stages": [
+    {
+      "id": "materials",
+      "name": "材料",
+      "description": "放入职位描述和现在的简历。模板里有一份虚构的示例，换成你自己的。 / Add the job description and your current resume. The template ships a made-up sample; swap in your own.",
+      "executor": {
+        "type": "human",
+        "instructions": "确认 materials/job.md 是这份职位的描述，materials/resume.md 是你现在的简历。示例是虚构的林可，用之前请换成你自己的。 / Check materials/job.md is the job description and materials/resume.md is your current resume. The sample is a fictional person, Lin Ke; replace it before you use it."
+      },
+      "outputs": [
+        { "type": "text/markdown", "path": "materials/job.md" },
+        { "type": "text/markdown", "path": "materials/resume.md" }
+      ]
+    },
+    {
+      "id": "analysis",
+      "name": "匹配分析",
+      "description": "对照职位，列出已经符合的、缺的，以及简历里应该出现的关键词。 / Compare the job and the resume: what already matches, what is missing, and keywords the resume should contain.",
+      "inputs": ["materials"],
+      "executor": { "type": "llm", "prompt": "prompts/analysis.md", "effort": "low" },
+      "outputs": [{ "type": "application/json", "path": "analysis.json" }]
+    },
+    {
+      "id": "resume",
+      "name": "简历",
+      "description": "按分析改写简历。不能编造经历，每处改动都要能在原简历里找到依据。 / Rewrite the resume from the analysis. Do not invent experience; every change must trace back to the original resume.",
+      "inputs": ["materials", "analysis"],
+      "executor": { "type": "llm", "prompt": "prompts/resume.md", "effort": "medium" },
+      "outputs": [{ "type": "text/markdown", "path": "resume.md" }]
+    },
+    {
+      "id": "letter",
+      "name": "求职信",
+      "description": "按同一份分析写求职信，和简历并行，不依赖改写后的简历。 / Write a cover letter from the same analysis, in parallel with the resume, not from the rewritten resume.",
+      "inputs": ["materials", "analysis"],
+      "executor": { "type": "llm", "prompt": "prompts/letter.md", "effort": "medium" },
+      "outputs": [{ "type": "text/markdown", "path": "cover-letter.md" }]
+    },
+    {
+      "id": "check",
+      "name": "检查",
+      "description": "检查关键词覆盖、篇幅和有没有留下占位符。 / Check keyword coverage, length, and leftover placeholders.",
+      "inputs": ["analysis", "resume", "letter"],
+      "executor": { "type": "script", "run": "node scripts/check.mjs" },
+      "outputs": [{ "type": "text/markdown", "path": "check-report.md" }]
+    }
+  ]
+}
