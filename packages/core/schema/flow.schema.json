@@ -378,7 +378,7 @@
     },
     "executorWorkflow": {
       "type": "object",
-      "description": "Reserved for v0.2: run an external workflow file (ComfyUI, n8n ...).",
+      "description": "Run a workflow file. engine \"flowgit\" runs a Flowgit sub-flow (a flow.json). Other engines (ComfyUI, n8n, ...) are reserved; their params stay an arbitrary object.",
       "required": [
         "type",
         "engine",
@@ -390,15 +390,48 @@
           "const": "workflow"
         },
         "engine": {
-          "type": "string"
+          "type": "string",
+          "minLength": 1
         },
         "file": {
-          "type": "string"
+          "type": "string",
+          "minLength": 1
         },
         "params": {
-          "type": "object"
+          "type": "object",
+          "description": "For engine flowgit: { inputs?, copy? }. inputs are passed to the sub-flow (strings may use {{inputs.key}}). copy maps a sub-flow output path to this stage's output path, and must cover every output. Other engines: any object."
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": ["engine"],
+            "properties": {
+              "engine": { "const": "flowgit" }
+            }
+          },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "inputs": {
+                    "type": "object"
+                  },
+                  "copy": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
     },
     "executorService": {
       "type": "object",

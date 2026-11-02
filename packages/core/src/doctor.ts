@@ -4,9 +4,11 @@ import { AGENT_ADAPTERS } from "./executors/agent.js";
 import { headerEnvNames } from "./executors/service.js";
 import { DEFAULT_MODEL, ignoredProxyVar } from "./executors/llm.js";
 import { isRunnableExecutor } from "./executors/index.js";
+import { loadFlow } from "./load.js";
 import { DEFAULT_PROVIDER, providerKeyState, resolveModel } from "./providers.js";
 import { MissingInputsError, loadFlowInputs } from "./runs.js";
-import type { LoadedFlow, Stage } from "./types.js";
+import { flowFileId, flowgitParams, renderInputTree, resolveSubflowFile, subflowEnterProblem, subflowStack } from "./subflow.js";
+import type { ExecutorWorkflow, LoadedFlow, Stage } from "./types.js";
 import { findOnPath } from "./util.js";
 
 export type DoctorLevel = "ok" | "warn" | "error";
@@ -110,9 +112,74 @@ function llmChecks(loaded: LoadedFlow, stage: Stage, opts: DoctorOptions, env: N
   ];
 }
 
-function stageChecks(loaded: LoadedFlow, stage: Stage, opts: DoctorOptions, env: NodeJS.ProcessEnv): DoctorCheck[] {
+function workflowChecks(loaded: LoadedFlow, stage: Stage, opts: DoctorOptions, env: NodeJS.ProcessEnv, stack: string[]): DoctorCheck[] {
+  const ex = stage.executor as ExecutorWorkflow;
+  const stackNow = subflowStack(loaded.file, stack);
+  const resolved = resolveSubflowFile(loaded.dir, ex.file);
+  if ("error" in resolved) return [{ level: "error", stage: stage.id, message: resolved.error }];
+  const problem = subflowEnterProblem(stackNow, resolved.abs);
+  if (problem) return [{ level: "error", stage: stage.id, message: problem }];
+  let sub: LoadedFlow;
+  try {
+    sub = loadFlow(path.dirname(resolved.abs));
+  } catch (err) {
+    return [{ level: "error", stage: stage.id, message: (err as Error).message }];
+  }
+  const checks: DoctorCheck[] = [{ level: "ok", stage: stage.id, message: `运行子流程 ${ex.file} / run the sub-flow ${ex.file}` }];
+  let rendered: Record<string, unknown> = {};
+  try {
+    const parentInputs = loadFlowInputs(loaded.dir, loaded.flow, opts.inputs);
+    rendered = renderInputTree(flowgitParams(ex).inputs ?? {}, parentInputs) as Record<string, unknown>;
+    loadFlowInputs(sub.dir, sub.flow, rendered);
+  } catch (err) {
+    if (err instanceof MissingInputsError) {
+      checks.push({
+        level: "warn",
+        stage: stage.id,
+        message: `子流程还没填输入 / sub-flow inputs not set: ${err.missing.join(", ")}`,
+        hint: `在 params.inputs 里传入 / pass them in params.inputs`,
+      });
+    } else {
+      checks.push({ level: "error", stage: stage.id, message: (err as Error).message });
+    }
+  }
+  const nextStack = [...stackNow, flowFileId(resolved.abs)];
+  for (const child of sub.flow.stages) {
+    for (const check of stageChecks(sub, child, { ...opts, inputs: rendered }, env, nextStack)) {
+      checks.push({ ...check, stage: check.stage ? `${stage.id}/${check.stage}` : stage.id });
+    }
+  }
+  return checks;
+}
+
+/** True when this flow, or a flowgit sub-flow under it, has an llm stage. */
+function flowUsesLlm(loaded: LoadedFlow, stack?: string[]): boolean {
+  const stackNow = subflowStack(loaded.file, stack);
+  for (const stage of loaded.flow.stages) {
+    const ex = stage.executor;
+    if (ex.type === "llm") return true;
+    if (ex.type !== "workflow" || ex.engine !== "flowgit") continue;
+    const resolved = resolveSubflowFile(loaded.dir, ex.file);
+    if ("error" in resolved || subflowEnterProblem(stackNow, resolved.abs)) continue;
+    try {
+      if (flowUsesLlm(loadFlow(path.dirname(resolved.abs)), [...stackNow, flowFileId(resolved.abs)])) return true;
+    } catch {
+      // workflowChecks reports a sub-flow that cannot be loaded
+    }
+  }
+  return false;
+}
+
+function stageChecks(loaded: LoadedFlow, stage: Stage, opts: DoctorOptions, env: NodeJS.ProcessEnv, stack: string[] = []): DoctorCheck[] {
   const ex = stage.executor;
-  if (!isRunnableExecutor(ex.type)) {
+  if (!isRunnableExecutor(ex)) {
+    if (ex.type === "workflow") {
+      return [{
+        level: "warn",
+        stage: stage.id,
+        message: `workflow 引擎 "${ex.engine}" 还不能运行，目前只有 flowgit / workflow engine "${ex.engine}" cannot run yet; only "flowgit" can`,
+      }];
+    }
     return [{ level: "warn", stage: stage.id, message: `${ex.type} 执行器在 v0.1 还不能运行 / the ${ex.type} executor is reserved and can't run in v0.1` }];
   }
   switch (ex.type) {
@@ -124,6 +191,8 @@ function stageChecks(loaded: LoadedFlow, stage: Stage, opts: DoctorOptions, env:
       const programs = [commandProgram(ex.run), ...(ex.requires ?? [])].filter((p): p is string => !!p);
       return [...new Set(programs)].map((p) => programCheck(stage.id, p, env));
     }
+    case "workflow":
+      return workflowChecks(loaded, stage, opts, env, stack);
     case "service":
       return headerEnvNames(ex.headers).map((name) =>
         env[name]
@@ -198,7 +267,7 @@ export function doctor(loaded: LoadedFlow, opts: DoctorOptions = {}): DoctorChec
   }
   checks.push(...merged);
 
-  const callsModels = !env.FLOWGIT_LLM_MOCK_DIR && loaded.flow.stages.some((s) => s.executor.type === "llm");
+  const callsModels = !env.FLOWGIT_LLM_MOCK_DIR && flowUsesLlm(loaded);
   const proxy = callsModels ? ignoredProxyVar(env) : undefined;
   if (proxy) {
     checks.push({

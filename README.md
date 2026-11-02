@@ -241,6 +241,24 @@ A `service` stage calls an HTTP endpoint. `POST` sends the flow inputs and text 
 { "type": "service", "method": "POST", "url": "https://example.com/hook", "headers": { "Authorization": "Bearer {{env.ECHO_TOKEN}}" } }
 ```
 
+## 子流程 / Sub-flows
+
+`workflow` 阶段在 `engine` 为 `flowgit` 时运行另一份 `flow.json`。`params.inputs` 把父流程的输入传进去（字符串里可以写 `{{inputs.名称}}`），`params.copy` 把子流程的产物复制成这个阶段的产物。子流程用自己的 `runs/`。可以嵌套，最多 5 层；绕回去会报错。示例：[`examples/subflow`](examples/subflow)。
+
+A `workflow` stage with `engine` `flowgit` runs another `flow.json`. `params.inputs` passes the parent inputs in (a string may contain `{{inputs.name}}`), and `params.copy` copies the sub-flow's outputs into this stage's outputs. The sub-flow keeps its own `runs/`. Nesting is allowed up to 5 levels; a cycle is an error. Example: [`examples/subflow`](examples/subflow).
+
+```json
+{
+  "type": "workflow",
+  "engine": "flowgit",
+  "file": "subflows/brief/flow.json",
+  "params": {
+    "inputs": { "topic": "{{inputs.topic}}", "language": "zh" },
+    "copy": { "brief.md": "brief.md" }
+  }
+}
+```
+
 ## 格式 / Format
 
 最小的 `flow.json`：
@@ -301,7 +319,7 @@ docs/
   spec.md                  格式规范 / format spec
   guide.md                 教程：动手做一个流程 / tutorial: build your own flow
   releasing.md             怎么发布到 npm / how to publish to npm
-examples/                  只在仓库里的示例，比如 agent-page / repo-only examples such as agent-page
+examples/                  只在仓库里的示例，比如 agent-page、subflow / repo-only examples such as agent-page and subflow
 CHANGELOG.md               每个版本的更新记录 / what changed in each version
 ```
 
@@ -324,17 +342,17 @@ Everything on GitHub (commit messages, PRs, docs) is bilingual, Chinese first.
 
 ## 路线图 / Roadmap
 
-1. **格式 + 命令行**（本仓库现状，0.1.0 准备发布）：Flow 规范 v0.1，JSON 产物可以带 schema；六个自带模板（短视频、周报入门、图文、客服 SOP、求职材料、调研报告）；llm 阶段接任何模型，agent 阶段接 Claude Code、Codex、Cursor、Gemini，service 阶段调用 HTTP 服务；script、agent 和 service 阶段可以设超时；`stage add` / `stage rm`、`diff`（版本对比）、`doctor`、`templates`、`graph`（流程图）等命令。更新记录见 [CHANGELOG.md](CHANGELOG.md)。
+1. **格式 + 命令行**（本仓库现状，0.1.0 准备发布）：Flow 规范 v0.1，JSON 产物可以带 schema；六个自带模板（短视频、周报入门、图文、客服 SOP、求职材料、调研报告）；llm 阶段接任何模型，agent 阶段接 Claude Code、Codex、Cursor、Gemini，service 阶段调用 HTTP 服务，`workflow` 阶段用 `engine: "flowgit"` 运行子流程；script、agent 和 service 阶段可以设超时；`stage add` / `stage rm`、`diff`（版本对比）、`doctor`、`templates`、`graph`（流程图）等命令。更新记录见 [CHANGELOG.md](CHANGELOG.md)。
 2. **阶段看板**：本机看板已经有了（`flowgit board`），每张卡能看产物、改、运行、看历史、对比和回退。下一步是在看板上加删阶段、看流程图、预演和实时更新，然后是网站：在网上打开一个流程就是一块看板。
 3. **发布与复用**：已经能从别人的流程开始（`flowgit init -t <Git 地址>`，默认不带产物），分享前自动去隐私（`flowgit share`）。下一步是画廊。
-4. **更多领域**：更多模板（下一个是落地页网站，做网站现在有 `examples/agent-page` 示例）；短视频自动配音；`workflow` 执行器运行子流程；之后让作者把流程变成 MCP 服务供别人调用。
+4. **更多领域**：更多模板（下一个是落地页网站，做网站现在有 `examples/agent-page` 示例）；短视频自动配音；之后让作者把流程变成 MCP 服务供别人调用。
 
 English:
 
-1. **Format + CLI** (this repo today, 0.1.0 getting ready to ship): Flow spec v0.1, with optional schemas for JSON outputs; six bundled templates (short video, weekly-report starter, article posts, support SOP, job application, research report); llm stages on any model, agent stages on Claude Code, Codex, Cursor or Gemini, and service stages that call HTTP services; timeouts for script, agent and service stages; commands such as `stage add` / `stage rm`, `diff` (compare versions), `doctor`, `templates` and `graph` (a diagram of the flow). See [CHANGELOG.md](CHANGELOG.md) for details.
+1. **Format + CLI** (this repo today, 0.1.0 getting ready to ship): Flow spec v0.1, with optional schemas for JSON outputs; six bundled templates (short video, weekly-report starter, article posts, support SOP, job application, research report); llm stages on any model, agent stages on Claude Code, Codex, Cursor or Gemini, service stages that call HTTP services, and `workflow` stages that run a sub-flow with `engine: "flowgit"`; timeouts for script, agent and service stages; commands such as `stage add` / `stage rm`, `diff` (compare versions), `doctor`, `templates` and `graph` (a diagram of the flow). See [CHANGELOG.md](CHANGELOG.md) for details.
 2. **Stage board**: the local board is here (`flowgit board`); each card lets you see its outputs, edit them, run, browse history, compare and restore. Next on the board: add and remove stages, a flow graph view, dry-run previews and live updates. After that comes the web app: open a flow online and it is a board.
 3. **Publish and reuse**: you can already start from someone else's flow (`flowgit init -t <Git URL>`, without their outputs by default) and strip private data before sharing (`flowgit share`). Next is a gallery.
-4. **More domains**: more templates (a landing-page site is next; building a website has the `examples/agent-page` example today); automatic voiceover for short videos; a `workflow` executor that runs a sub-flow; later, authors can expose a flow as an MCP service for others to call.
+4. **More domains**: more templates (a landing-page site is next; building a website has the `examples/agent-page` example today); automatic voiceover for short videos; later, authors can expose a flow as an MCP service for others to call.
 
 ## 许可证 / License
 

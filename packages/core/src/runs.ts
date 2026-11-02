@@ -12,7 +12,8 @@ import type {
   StageStatus,
 } from "./types.js";
 import { requireStage, topoOrder } from "./graph.js";
-import { copyPath, hashPath, isDirOutput, outputRel, sha256String } from "./util.js";
+import { MAX_SUBFLOW_DEPTH } from "./subflow.js";
+import { copyPath, hashPath, isDirOutput, isSafeRelative, outputRel, sha256String } from "./util.js";
 
 export const RUNS_DIR = "runs";
 export const LOCAL_FILE = "flowgit.local.json";
@@ -129,20 +130,42 @@ export function commandFiles(dir: string, command: string): string[] {
  * Fingerprint of how a stage runs: its executor definition, plus the files it
  * uses (the llm/agent prompt file; for scripts and custom agents, any word of
  * the command that is a file in the flow directory, e.g. "node scripts/render.mjs").
- * Editing a prompt or a script therefore marks the stage stale.
+ * A flowgit sub-flow also includes that flow.json and the same fingerprint of
+ * every stage inside it, so editing its prompt or script marks this stage stale.
+ * `seen` holds sub-flow flow.json paths already entered, to stop a cycle.
  */
-export function stageConfigHash(dir: string, stage: Stage): string {
+export function stageConfigHash(dir: string, stage: Stage, seen: Set<string> = new Set()): string {
   const files: string[] = [];
   const ex = stage.executor;
   if (ex.type === "llm" || ex.type === "agent") files.push(ex.prompt);
   for (const out of stage.outputs) if (out.schema) files.push(out.schema);
   if (ex.type === "script") files.push(...commandFiles(dir, ex.run));
   if (ex.type === "agent" && ex.agent === "custom" && ex.command) files.push(...commandFiles(dir, ex.command));
+  let nested: string[] | undefined;
+  if (ex.type === "workflow" && ex.engine === "flowgit" && isSafeRelative(ex.file)) {
+    const abs = path.resolve(dir, ex.file);
+    files.push(ex.file);
+    if (!seen.has(abs) && seen.size < MAX_SUBFLOW_DEPTH) {
+      const next = new Set(seen);
+      next.add(abs);
+      if (fs.existsSync(abs) && fs.statSync(abs).isFile()) {
+        try {
+          const sub = JSON.parse(fs.readFileSync(abs, "utf8")) as { stages?: Stage[] };
+          const subDir = path.dirname(abs);
+          nested = (sub.stages ?? []).map((child) => stageConfigHash(subDir, child, next));
+        } catch {
+          nested = undefined;
+        }
+      }
+    }
+  }
   const fileHashes = files.map((f) => {
     const abs = path.join(dir, f);
     return [f, fs.existsSync(abs) ? hashPath(abs).sha256 : null];
   });
-  return sha256String(JSON.stringify({ executor: ex, files: fileHashes }));
+  const payload: { executor: Stage["executor"]; files: (string | null)[][]; nested?: string[] } = { executor: ex, files: fileHashes };
+  if (nested) payload.nested = nested;
+  return sha256String(JSON.stringify(payload));
 }
 
 export function inputHash(refs: RunInputRef[], flowInputs: Record<string, unknown>, configHash = ""): string {

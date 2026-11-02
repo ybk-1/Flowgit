@@ -74,11 +74,25 @@ export interface ExecutorAgent {
   timeoutSec?: number;
 }
 
+/**
+ * Params when `engine` is `"flowgit"`. Other engines keep an arbitrary object:
+ * they are reserved and Flowgit does not read these fields.
+ */
+export interface FlowgitWorkflowParams {
+  /** Passed to the sub-flow as its inputs. Strings may contain {{inputs.key}} from the parent. */
+  inputs?: Record<string, unknown>;
+  /** Sub-flow output path → this stage's output path. Every output of this stage must appear as a value. */
+  copy?: Record<string, string>;
+}
+
 export interface ExecutorWorkflow {
   type: "workflow";
+  /** `"flowgit"` runs a Flowgit sub-flow. Any other engine is reserved. */
   engine: string;
+  /** Sub-flow `flow.json`, relative to this flow's directory and inside it. */
   file: string;
-  params?: Record<string, unknown>;
+  /** For engine `"flowgit"`, `{ inputs?, copy? }`. Other engines: any object. */
+  params?: FlowgitWorkflowParams | Record<string, unknown>;
 }
 
 export interface ExecutorService {

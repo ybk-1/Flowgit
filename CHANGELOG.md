@@ -25,12 +25,14 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 - `llm`：接任何模型。模型写成 `<provider>/<model>`，内置 Anthropic、OpenAI、OpenRouter、智谱 GLM、DeepSeek、Moonshot、通义千问和本机 Ollama，其他兼容 Anthropic 或 OpenAI 接口的服务加一条配置就行。密钥只从环境变量读。每次调用后显示 token 用量，`run all` 调用了好几次时最后再显示合计。
 - `script`：在流程目录执行一条命令；`requires` 列出命令还要用到的程序（例如 `ffmpeg`）。
 - `service`：调用 HTTP 服务。`POST` 发送流程输入和 1 MB 以内的文本上游产物，`GET` 把流程输入放进查询参数。请求头用 `{{env.变量名}}` 传密钥，不写进文件；跳转只跟同一个源，不会把请求头带到别的网站。`timeoutSec` 默认 60。示例见 `examples/service-echo`。
+- `workflow`（`engine: "flowgit"`）：运行另一份 `flow.json`。`params.inputs` 传给子流程（字符串可用 `{{inputs.名称}}`），`params.copy` 把子流程的产物复制成本阶段的产物。子流程用自己的 `runs/`。子流程停在人工阶段或失败时，父阶段也停或失败。可以嵌套，环和超过 5 层会报错；改子流程的提示词或脚本会让父阶段需要重跑。其他引擎仍是预留。示例见 `examples/subflow`。
 - `agent`：以无界面模式启动 Claude Code、Codex、Cursor、Gemini 或自定义的 agent CLI，只用能写流程目录的最小权限。
 - `script` 和 `agent` 可以设 `timeoutSec`：到时间就停掉整棵进程树（macOS、Linux 先 `SIGTERM`、5 秒后 `SIGKILL`；Windows 用 `taskkill /T /F`），这次运行记为失败。按 Ctrl+C 时也会一起停掉子进程。
 - `human`: done by a person; when outputs are missing the flow stops and says what to put where.
 - `llm`: any model. Models are written `<provider>/<model>`, with Anthropic, OpenAI, OpenRouter, Zhipu GLM, DeepSeek, Moonshot, Qwen and local Ollama built in; any other Anthropic- or OpenAI-compatible service is one config entry. Keys are read only from environment variables. Each call shows its token usage, and `run all` ends with a total when it made several calls.
 - `script`: runs a command in the flow directory; `requires` lists other programs the command needs (e.g. `ffmpeg`).
 - `service`: calls an HTTP service. `POST` sends the flow inputs and text upstream outputs up to 1 MB; `GET` puts the flow inputs in the query string. Headers pass keys with `{{env.NAME}}`, never written to a file, and redirects are followed only within the same origin so headers never reach another site. `timeoutSec` defaults to 60. See `examples/service-echo`.
+- `workflow` (`engine: "flowgit"`): runs another `flow.json`. `params.inputs` are passed to the sub-flow (strings may use `{{inputs.name}}`), and `params.copy` copies sub-flow outputs into this stage's outputs. The sub-flow keeps its own `runs/`. A human wait or a failure in the sub-flow waits or fails the parent too. Nesting is allowed; a cycle or more than 5 levels is an error, and editing a sub-flow prompt or script marks the parent stale. Other engines stay reserved. See `examples/subflow`.
 - `agent`: starts Claude Code, Codex, Cursor, Gemini or a custom agent CLI headless, with the least permission that still lets it write in the flow directory.
 - `script` and `agent` take `timeoutSec`: when it runs out, the whole process tree is stopped (`SIGTERM`, then `SIGKILL` after 5 seconds on macOS and Linux; `taskkill /T /F` on Windows) and the run is recorded as failed. Ctrl+C stops the child processes too.
 
@@ -72,6 +74,7 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 - `job-application`：对照职位描述改简历并写求职信。简历和求职信并行，最后脚本检查关键词、篇幅和占位符。
 - `research-report`：把题目拆成子问题、收集资料、写成带引用的报告。脚本检查没被引用的来源、不存在的引用、没被回答的子问题和没有出处的段落。
 - `examples/agent-page`：用 agent 做一页介绍网页（只在仓库里）。
+- `examples/subflow`：题目（人）→ 子流程（模型和脚本）→ 摘要（脚本）。演示 `workflow` 执行器。
 - `short-video` (default): script → storyboard → assets → edit → export. FFmpeg renders a vertical video with zoom, blurred fill, gradient text cards, a title, transitions, background music and voiceover (clips follow the voice); the output language is Chinese or English.
 - `weekly-report`: a starter that turns rough notes (person) into a draft (model) and checks it (script); the [guide](docs/guide.md) builds it step by step.
 - `article`: an illustrated post, outline → draft → image plan → photos (person) → export to `post.md` and `post.html`. Length and tone follow the platform (Xiaohongshu, WeChat, blog), and a missing photo becomes a placeholder with its scene description.
@@ -79,6 +82,7 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 - `job-application`: tailor a resume and write a cover letter for a job description. The resume and letter run in parallel, then a script checks keywords, length and placeholders.
 - `research-report`: split a topic into sub-questions, gather sources and write a cited report. A script checks uncited sources, citations of missing files, unanswered sub-questions and paragraphs with no citation.
 - `examples/agent-page`: a one-page explainer made by an agent (repo only).
+- `examples/subflow`: topic (person) → sub-flow (model and script) → summary (script). Shows the `workflow` executor.
 
 ### 项目 / Project
 

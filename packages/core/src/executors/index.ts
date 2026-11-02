@@ -4,6 +4,7 @@ import { humanExecutor } from "./human.js";
 import { llmExecutor } from "./llm.js";
 import { scriptExecutor } from "./script.js";
 import { serviceExecutor } from "./service.js";
+import { workflowExecutor } from "./workflow.js";
 import { ExecutorNotImplementedError, type StageExecutor } from "./types.js";
 
 export * from "./types.js";
@@ -19,6 +20,7 @@ export {
   shellQuote,
   type AgentAdapter,
 } from "./agent.js";
+export { workflowExecutor } from "./workflow.js";
 export {
   llmExecutor,
   anthropicComplete,
@@ -45,6 +47,7 @@ const registry: Partial<Record<ExecutorType, StageExecutor>> = {
   script: scriptExecutor,
   agent: agentExecutor,
   service: serviceExecutor,
+  workflow: workflowExecutor,
 };
 
 export function getExecutor(type: ExecutorType): StageExecutor {
@@ -53,6 +56,9 @@ export function getExecutor(type: ExecutorType): StageExecutor {
   return ex;
 }
 
-export function isRunnableExecutor(type: ExecutorType): boolean {
+/** True when this executor can run. `workflow` runs only for engine `"flowgit"`. */
+export function isRunnableExecutor(executor: ExecutorType | { type: ExecutorType; engine?: string }): boolean {
+  const type = typeof executor === "string" ? executor : executor.type;
+  if (type === "workflow") return typeof executor !== "string" && executor.engine === "flowgit";
   return type in registry;
 }

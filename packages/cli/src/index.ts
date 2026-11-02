@@ -127,9 +127,15 @@ function fail(err: unknown): never {
     process.exit(code);
   };
   if (e instanceof HumanInputNeededError) {
-    console.log(`\n${c.yellow("⏸")} 「${e.stage.name}」在等你 / waiting for you: ${e.missing.join(", ")}`);
-    if (e.instructions) console.log(`  ${e.instructions}`);
-    console.log(`  放好文件后运行 / when ready: flowgit run ${e.stage.id}   (或 / or: flowgit run ${e.stage.id} --from <path>)`);
+    if (e.subflowStage) {
+      console.log(`\n${c.yellow("⏸")} ${e.message}`);
+      if (e.instructions) console.log(`  ${e.instructions}`);
+      console.log(`  放好文件后重新运行 / when the file is in place: flowgit run ${e.stage.id}`);
+    } else {
+      console.log(`\n${c.yellow("⏸")} 「${e.stage.name}」在等你 / waiting for you: ${e.missing.join(", ")}`);
+      if (e.instructions) console.log(`  ${e.instructions}`);
+      console.log(`  放好文件后运行 / when ready: flowgit run ${e.stage.id}   (或 / or: flowgit run ${e.stage.id} --from <path>)`);
+    }
     exit(2);
   }
   if (e instanceof FlowNotFoundError) {
@@ -858,7 +864,7 @@ function printPlan(steps: PlanStep[], runCommand: string): void {
   const rows = [[c.dim("#"), c.dim("阶段 stage"), c.dim("会怎样 action"), c.dim("详情 details")]];
   steps.forEach((s, i) => rows.push([String(i + 1), `${s.stage.name} ${c.dim(s.stage.id)}`, PLAN_LABEL[s.action], s.detail ?? ""]));
   console.log(table(rows));
-  const calls = steps.filter((s) => s.callsModel).length;
+  const calls = steps.reduce((n, s) => n + (s.modelCalls ?? (s.callsModel ? 1 : 0)), 0);
   console.log(
     `\n${
       calls
@@ -883,6 +889,7 @@ function runDetail(r: RunRecord): string {
   if (r.executor === "llm") return `${p.provider && p.provider !== "anthropic" ? `${p.provider}/` : ""}${p.model ?? ""}${took}${tokenNote(p.usage)}`;
   if (r.executor === "script") return String(p.run ?? "");
   if (r.executor === "agent") return `${p.agent ?? ""}${took}`;
+  if (r.executor === "workflow") return String(p.file ?? "");
   return String(p.provided ?? "");
 }
 

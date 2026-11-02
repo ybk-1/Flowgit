@@ -3,8 +3,16 @@ import path from "node:path";
 import { Ajv2020 } from "ajv/dist/2020.js";
 import type { ErrorObject } from "ajv";
 import { findCycle } from "./graph.js";
-import type { Flow, LoadedFlow, ValidationIssue } from "./types.js";
 import { outputSchemaIssues } from "./schema-check.js";
+import {
+  flowFileId,
+  flowgitParams,
+  normRel,
+  resolveSubflowFile,
+  subflowEnterProblem,
+  subflowStack,
+} from "./subflow.js";
+import type { ExecutorWorkflow, Flow, LoadedFlow, Output, ValidationIssue } from "./types.js";
 import { isSafeRelative, outputRel } from "./util.js";
 
 export const FLOW_FILE = "flow.json";
@@ -54,6 +62,8 @@ function schemaIssues(errors: ErrorObject[] | null | undefined): ValidationIssue
 export interface ValidateOptions {
   /** Flow directory; when given, referenced files (prompts) are checked. */
   dir?: string;
+  /** @internal Absolute flow.json paths from the outermost flow through this one. */
+  flowStack?: string[];
 }
 
 /**
@@ -126,7 +136,16 @@ export function validateFlow(data: unknown, opts: ValidateOptions = {}): Validat
       if (ex.command && ex.agent !== "custom") {
         issues.push({ level: "warning", path: `${base}/executor/command`, message: `command 只在 agent 为 "custom" 时使用，这里会被忽略 / command is only used when agent is "custom"; it is ignored here` });
       }
-    } else if (ex.type === "workflow" || ex.type === "mcp") {
+    } else if (ex.type === "workflow") {
+      if (ex.engine === "flowgit") issues.push(...workflowIssues(flow, stage.outputs, ex, base, opts));
+      else {
+        issues.push({
+          level: "warning",
+          path: `${base}/executor`,
+          message: `workflow 引擎 "${ex.engine}" 还不能运行，目前只有 flowgit / workflow engine "${ex.engine}" cannot run yet; only "flowgit" can`,
+        });
+      }
+    } else if (ex.type === "mcp") {
       issues.push({ level: "warning", path: `${base}/executor`, message: `执行器 "${ex.type}" 在 v0.1 里只是预留，还不能运行 / executor "${ex.type}" is reserved in spec v0.1 and cannot run yet` });
     }
   });
@@ -135,6 +154,113 @@ export function validateFlow(data: unknown, opts: ValidateOptions = {}): Validat
   if (cycle.length) {
     issues.push({ level: "error", path: "/stages", message: `阶段之间形成了环 / stages form a cycle: ${cycle.join(" -> ")}` });
   }
+  return issues;
+}
+
+function templateWarnings(value: unknown, flow: Flow, issuePath: string): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+  const visit = (item: unknown) => {
+    if (typeof item === "string") {
+      for (const match of item.matchAll(/\{\{\s*inputs\.([A-Za-z0-9_]+)\s*\}\}/g)) {
+        if (!flow.inputs || !(match[1] in flow.inputs)) {
+          issues.push({
+            level: "warning",
+            path: issuePath,
+            message: `params.inputs 用了 {{inputs.${match[1]}}}，但 flow.inputs 里没有 "${match[1]}" / params.inputs uses {{inputs.${match[1]}}} but flow.inputs has no "${match[1]}"`,
+          });
+        }
+      }
+    } else if (Array.isArray(item)) item.forEach(visit);
+    else if (item && typeof item === "object") Object.values(item).forEach(visit);
+  };
+  visit(value);
+  return issues;
+}
+
+function subflowOutputPaths(data: unknown): string[] | undefined {
+  if (!data || typeof data !== "object") return undefined;
+  const stages = (data as { stages?: { outputs?: Output[] }[] }).stages;
+  if (!Array.isArray(stages)) return undefined;
+  const paths: string[] = [];
+  for (const stage of stages) {
+    for (const out of stage.outputs ?? []) paths.push(normRel(outputRel(out)));
+  }
+  return paths;
+}
+
+function copyIssues(outputs: Output[], copy: Record<string, string> | undefined, sources: string[] | undefined, issuePath: string): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+  const dests = new Map<string, string>();
+  for (const [src, dst] of Object.entries(copy ?? {})) {
+    if (typeof dst !== "string" || !isSafeRelative(dst)) {
+      issues.push({ level: "error", path: issuePath, message: `copy 的目标必须是相对路径 / copy destination must be a relative path: "${String(dst)}"` });
+      continue;
+    }
+    if (!isSafeRelative(src)) {
+      issues.push({ level: "error", path: issuePath, message: `copy 的来源必须是相对路径 / copy source must be a relative path: "${src}"` });
+      continue;
+    }
+    const dest = normRel(dst);
+    if (dests.has(dest)) {
+      issues.push({ level: "error", path: issuePath, message: `copy 的目标重复 / copy destination is repeated: "${dest}"` });
+    }
+    dests.set(dest, src);
+    if (sources && !sources.includes(normRel(src))) {
+      issues.push({ level: "error", path: issuePath, message: `copy 的来源不是子流程的产物 / copy source is not an output of the sub-flow: "${src}"` });
+    }
+  }
+  const parent = new Set(outputs.map((out) => normRel(outputRel(out))));
+  for (const dest of dests.keys()) {
+    if (!parent.has(dest)) {
+      issues.push({ level: "error", path: issuePath, message: `copy 的目标不是这个阶段的产物 / copy destination is not an output of this stage: "${dest}"` });
+    }
+  }
+  for (const rel of parent) {
+    if (!dests.has(rel)) {
+      issues.push({ level: "error", path: issuePath, message: `copy 没有覆盖产物 "${rel}" / copy does not cover output "${rel}"` });
+    }
+  }
+  return issues;
+}
+
+function workflowIssues(flow: Flow, outputs: Output[], ex: ExecutorWorkflow, base: string, opts: ValidateOptions): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+  const at = `${base}/executor/file`;
+  const params = flowgitParams(ex);
+  issues.push(...templateWarnings(params.inputs, flow, `${base}/executor/params/inputs`));
+  const resolved = resolveSubflowFile(opts.dir ?? ".", ex.file);
+  if ("error" in resolved) {
+    issues.push({ level: "error", path: at, message: resolved.error });
+    issues.push(...copyIssues(outputs, params.copy, undefined, `${base}/executor/params/copy`));
+    return issues;
+  }
+  if (!opts.dir) {
+    issues.push(...copyIssues(outputs, params.copy, undefined, `${base}/executor/params/copy`));
+    return issues;
+  }
+  if (!fs.existsSync(resolved.abs)) {
+    issues.push({ level: "error", path: at, message: `找不到子流程 / sub-flow file not found: ${ex.file}` });
+    issues.push(...copyIssues(outputs, params.copy, undefined, `${base}/executor/params/copy`));
+    return issues;
+  }
+  const stack = subflowStack(path.join(opts.dir, FLOW_FILE), opts.flowStack);
+  const problem = subflowEnterProblem(stack, resolved.abs);
+  if (problem) {
+    issues.push({ level: "error", path: at, message: problem });
+    return issues;
+  }
+  let data: unknown;
+  try {
+    data = JSON.parse(fs.readFileSync(resolved.abs, "utf8"));
+  } catch (err) {
+    issues.push({ level: "error", path: at, message: `${ex.file} 不是合法的 JSON / is not valid JSON: ${(err as Error).message}` });
+    return issues;
+  }
+  const subDir = path.dirname(resolved.abs);
+  for (const issue of validateFlow(data, { dir: subDir, flowStack: [...stack, flowFileId(resolved.abs)] })) {
+    issues.push({ ...issue, path: `${at}${issue.path}`, message: `${ex.file}: ${issue.message}` });
+  }
+  issues.push(...copyIssues(outputs, params.copy, subflowOutputPaths(data), `${base}/executor/params/copy`));
   return issues;
 }
 

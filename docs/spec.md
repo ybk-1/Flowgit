@@ -117,9 +117,51 @@ Stages must not form a cycle. Run order follows `inputs`; ties keep the order in
 | `llm` | 能 / yes | `prompt`, `system?`, `model?`, `effort?`, `maxTokens?` | 读取 `prompt` 指向的 Markdown，替换 `{{inputs.*}}`，把上游产物附在后面，调用模型，把回复写进唯一的产物。产物是 JSON 时自动从回复里提取 JSON。`model` 可写 `<provider>/<model>`（见下面的"模型供应商"），不写前缀就是 Claude。默认模型 `claude-opus-5-5`，优先级：`--model` > `model` > `FLOWGIT_MODEL` > 默认 | Reads the Markdown file named by `prompt`, fills in `{{inputs.*}}`, appends the upstream artifacts, calls the model and writes the reply to the stage's single output. JSON outputs have the JSON extracted from the reply. `model` may be `<provider>/<model>` (see "Model providers" below); no prefix means Claude. Default model `claude-opus-5-5`; precedence: `--model` > `model` > `FLOWGIT_MODEL` > default |
 | `script` | 能 / yes | `run`, `requires?`, `cwd?`, `env?`, `timeoutSec?` | 在流程目录执行一条 shell 命令。命令自己负责写出产物。`requires` 列出命令还要用到的程序（例如 `["ffmpeg"]`），运行前和 `flowgit doctor` 都会检查它们在不在 PATH 上。`timeoutSec` 见下面 | Runs a shell command in the flow directory. The command writes the outputs itself. `requires` lists other programs the command needs (e.g. `["ffmpeg"]`); they are checked on PATH before the run and by `flowgit doctor`. See below for `timeoutSec` |
 | `agent` | 能 / yes | `agent`, `prompt`, `command?`, `args?`, `timeoutSec?` | 在流程目录里以无界面模式启动一个 agent CLI（Claude Code、Codex、Cursor、Gemini，或自定义命令），把渲染好的提示词交给它，由它自己写出产物。见下面的"agent 执行器" | Starts an agent CLI headless in the flow directory (Claude Code, Codex, Cursor, Gemini, or a custom command), hands it the rendered prompt, and lets it write the outputs itself. See "The agent executor" below |
-| `workflow` | 预留 / reserved | `engine`, `file`, `params?` | 运行外部工作流文件（ComfyUI、n8n 等） | Runs an external workflow file (ComfyUI, n8n, ...) |
+| `workflow` | `engine` 为 `flowgit` 时能 / yes when `engine` is `flowgit` | `engine`, `file`, `params?` | 运行另一个流程。`flowgit` 跑一条 Flowgit 子流程；ComfyUI、n8n 等其他引擎仍是预留。见下面的「子流程」 | Runs another flow. `flowgit` runs a Flowgit sub-flow; other engines such as ComfyUI and n8n stay reserved. See "Sub-flows" below |
 | `service` | 能 / yes | `url`, `method?`, `headers?`, `timeoutSec?` | 调用 HTTP 服务。只允许 `http` 和 `https`。`POST` 发送 `{ inputs, upstream }`（只带 1 MB 以内的文本产物），`GET` 把流程输入放进查询参数。`headers` 的值可以写 `{{env.变量名}}`，运行时从环境变量读取，这是传密钥的唯一方式，密钥不写进文件。`timeoutSec` 默认 60。跳转只跟同一个源（最多 5 次）；要跳到别的源时直接失败，免得请求头里的密钥被带过去。非 2xx、返回的 JSON 不合法、或引用的环境变量没设置，都记为失败。`url`、`method` 和 `headers` 的写法（不是取到的值）算进配置哈希 | Calls an HTTP service. Only `http` and `https`. `POST` sends `{ inputs, upstream }` (text outputs up to 1 MB), `GET` puts flow inputs in the query string. Header values may contain `{{env.NAME}}`, read from the environment at run time; this is the only way to pass a key, and keys are never written to a file. `timeoutSec` defaults to 60. Redirects are followed within the same origin only (up to 5); a redirect to another origin fails the run so a key in the headers is never sent there. A non-2xx response, invalid JSON, or an unset env var fails the run. `url`, `method` and the `headers` as written (not the resolved values) count in the config hash |
 | `mcp` | 预留 / reserved | `server`, `tool`, `args?` | 调用 MCP 服务器上的工具。以后整个流程也会通过这一层暴露给别人调用 | Calls a tool on an MCP server. Later, whole flows will be exposed to others through this layer |
+
+### 子流程 / Sub-flows
+
+`engine` 为 `"flowgit"` 时，`workflow` 阶段运行另一份 `flow.json`。其他引擎只保留字段，还不能运行。
+
+When `engine` is `"flowgit"`, a `workflow` stage runs another `flow.json`. Other engines keep the fields and cannot run yet.
+
+```json
+{
+  "type": "workflow",
+  "engine": "flowgit",
+  "file": "subflows/short-video/flow.json",
+  "params": {
+    "inputs": { "topic": "{{inputs.topic}}", "language": "zh" },
+    "copy": { "export/final.mp4": "video.mp4" }
+  }
+}
+```
+
+- `file`：子流程的 `flow.json`，相对父流程目录，而且必须留在目录里面。带 `..` 或绝对路径，校验失败。
+- `params.inputs`：交给子流程的输入。字符串里的 `{{inputs.名称}}` 用父流程的输入替换（和提示词同一个 `renderTemplate`）。子流程用自己的 `runs/`，不会写进父流程的 `runs/`。
+- `params.copy`：子流程产物路径 → 本阶段产物路径，文件和文件夹都可以。本阶段声明的每一个产物都必须被 `copy` 的某个值覆盖，否则校验失败。
+- 子流程停在人工阶段时，父阶段也停。提示里写明子流程的阶段，以及文件在子流程目录下的路径。子流程失败时，父阶段失败，错误里带上子流程的阶段 id。
+- 可以嵌套。形成环是错误。最多 5 层。
+- 子流程的日志前缀是 `[子流程 / sub-flow <阶段 id>]`。
+- 是否需要重跑的哈希包含子流程的 `flow.json`，以及它点名的提示词文件和脚本文件（沿用阶段配置哈希）。改了子流程，父阶段就会变成 `stale`。
+- `run all --dry-run`、`doctor`、`graph` 和 `export-skill` 都认识它。`export-skill` 写成「运行子流程 `<file>` / run the sub-flow `<file>`」。`graph` 把这种阶段标成 `sub-flow`。
+- 示例：[`examples/subflow`](../examples/subflow)，题目（人）→ 子流程（模型和脚本）→ 摘要（脚本）。
+
+- `file`: the sub-flow's `flow.json`, relative to the parent directory and inside it. A `..` segment or an absolute path fails validation.
+- `params.inputs`: values passed to the sub-flow. `{{inputs.name}}` in a string is filled from the parent inputs (the same `renderTemplate` as prompts). The sub-flow keeps its own `runs/` and does not write into the parent's `runs/`.
+- `params.copy`: sub-flow output path → this stage's output path, for a file or a directory. Every output this stage declares must be the value of some `copy` entry, or validation fails.
+- When the sub-flow stops on a human stage, the parent stage stops too. The message names that sub-flow stage and the path under the sub-flow directory. When the sub-flow fails, the parent stage fails, and the error includes the sub-flow stage id.
+- Nesting is allowed. A cycle is an error. The maximum depth is 5.
+- Sub-flow logs are prefixed with `[子流程 / sub-flow <stage id>]`.
+- The staleness hash includes the sub-flow's `flow.json` and the prompt and script files it names (the same stage-config hash). Changing the sub-flow marks the parent `stale`.
+- `run all --dry-run`, `doctor`, `graph` and `export-skill` understand it. `export-skill` writes "运行子流程 `<file>` / run the sub-flow `<file>`". `graph` labels the stage `sub-flow`.
+- Example: [`examples/subflow`](../examples/subflow), topic (person) → sub-flow (model and script) → summary (script).
+
+`params` 只有在 `engine` 为 `flowgit` 时才是上面这个形状（`inputs` 和 `copy`）。其他引擎的 `params` 仍是任意对象。
+
+Only when `engine` is `flowgit` is `params` the shape above (`inputs` and `copy`). For every other engine, `params` stays an arbitrary object.
 
 ### 模型供应商 / Model providers
 
@@ -293,9 +335,9 @@ Main `run.json` fields: `stage`, `n`, `status`, `executor`, `startedAt`, `finish
 | `edited` | 产物被手动改过：和任何一个成功的版本都不一样（回退到旧版本不算） | Outputs were edited by hand: they match no successful run (restoring an older version does not count) |
 | `error` | 最新一次运行失败 | The latest run failed |
 
-`inputHash` 是"上游产物的 sha256 + 流程输入 + 执行器配置"的指纹。执行器配置包括执行器定义本身、llm 的提示词文件，以及 script 命令里出现的、存在于流程目录中的文件（比如 `node scripts/render.mjs` 里的 `scripts/render.mjs`）。所以改一句提示词，这个阶段和它下游的阶段都会变成 `stale`。
+`inputHash` 是"上游产物的 sha256 + 流程输入 + 执行器配置"的指纹。执行器配置包括执行器定义本身、llm 的提示词文件，以及 script 命令里出现的、存在于流程目录中的文件（比如 `node scripts/render.mjs` 里的 `scripts/render.mjs`）。`workflow` 且 `engine` 为 `flowgit` 时，还包含子流程的 `flow.json`，以及那份子流程里同样算法算出来的提示词和脚本文件。所以改一句提示词，或者改了子流程，这个阶段和它下游的阶段都会变成 `stale`。
 
-`inputHash` fingerprints the upstream artifacts' sha256, the flow inputs, and the executor config. The executor config covers the executor definition itself, an llm stage's prompt file, and any file in the flow directory named in a script command (e.g. `scripts/render.mjs` in `node scripts/render.mjs`). So changing one line of a prompt marks that stage and everything downstream as `stale`.
+`inputHash` fingerprints the upstream artifacts' sha256, the flow inputs, and the executor config. The executor config covers the executor definition itself, an llm stage's prompt file, and any file in the flow directory named in a script command (e.g. `scripts/render.mjs` in `node scripts/render.mjs`). A `workflow` with `engine: "flowgit"` also includes the sub-flow's `flow.json` and, by the same hash, the prompt and script files that sub-flow names. So changing one line of a prompt, or changing the sub-flow, marks that stage and everything downstream as `stale`.
 
 ### 对比版本 / Diffing versions
 
@@ -327,8 +369,8 @@ For each output the stage declares:
 
 ## 以后的版本 / Planned
 
-- v0.2：`workflow`（ComfyUI / n8n）和 `service` 执行器；剪辑阶段输出 OpenTimelineIO（`.otio`）；`flowgit pack` 打包分享。
+- v0.2：剪辑阶段输出 OpenTimelineIO（`.otio`）；`flowgit pack` 打包分享。`workflow` 的其他引擎（ComfyUI、n8n）仍是预留。
 - 之后：`mcp` 执行器，以及把整条流程暴露成 MCP 服务供别人调用。
 
-- v0.2: `workflow` (ComfyUI / n8n) and `service` executors; the edit stage emits OpenTimelineIO (`.otio`); `flowgit pack` for sharing.
+- v0.2: the edit stage emits OpenTimelineIO (`.otio`); `flowgit pack` for sharing. Other `workflow` engines (ComfyUI, n8n) stay reserved.
 - Later: the `mcp` executor, and exposing a whole flow as an MCP service others can call.
