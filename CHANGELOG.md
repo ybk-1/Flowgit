@@ -41,6 +41,7 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 - `stage add` / `stage rm`：用命令加、删阶段。llm 和 agent 没给提示词时会建一个中英双语骨架，已有文件不覆盖。删阶段不删文件，也不动 `runs/`；还有别的阶段依赖它时要 `--force`。
 - `share`：把流程复制成可以分享的副本。先检查密钥（发现就拒绝、什么都不写）、邮箱和本机路径（写完后提醒）。`runs/`、`flowgit.local.json` 和 `.env*` 永远不复制。
 - `doctor` 在运行前检查 Node、流程输入、密钥、代理设置，以及脚本和 agent 要用的命令。
+- 用代理或 VPN 时自动连得上模型：`run` 和 `board` 会走 `HTTPS_PROXY`，不用再设 `NODE_USE_ENV_PROXY=1`；Windows 和 macOS 上打开了系统代理也会自动用上。`doctor` 显示用的是哪个代理，`FLOWGIT_PROXY=off` 可以关掉。
 - `export-skill` 把流程导出成 `SKILL.md`，AI 工具不用界面也能按步骤运行。
 - `graph` 把流程画成 Mermaid 流程图，贴进 GitHub 或 Obsidian 就能看到；加 `--status` 按状态上色，`-o/--out` 直接写成 UTF-8 文件（`.md` 自动包上代码块）。
 - `log` 不写阶段时按时间列出整个流程的所有版本，并合计用掉的 token。
@@ -54,6 +55,7 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 - `stage add` / `stage rm`: add or remove a stage from the command line. An llm or agent stage without a prompt gets a bilingual skeleton, and an existing file is never overwritten. Removing a stage deletes no files and leaves `runs/` alone; `--force` is required when other stages depend on it.
 - `share` copies a flow into a directory that is safe to hand to someone else. A secret blocks the write entirely; emails and local paths are listed afterwards. `runs/`, `flowgit.local.json` and `.env*` are never copied.
 - `doctor` checks Node, flow inputs, keys, proxy settings, and the programs script and agent stages use, before a run.
+- Models are reachable behind a proxy or VPN: `run` and `board` use `HTTPS_PROXY` without `NODE_USE_ENV_PROXY=1`, and pick up the Windows or macOS system proxy too. `doctor` shows which proxy is used; `FLOWGIT_PROXY=off` turns this off.
 - `export-skill` exports a flow as a `SKILL.md`, so AI tools can run it step by step without the UI.
 - `graph` draws the flow as a Mermaid diagram that GitHub and Obsidian render; `--status` colors it by state, and `-o/--out` writes a UTF-8 file (a `.md` file gets the code block).
 - `log` without a stage lists every version of the whole flow by time and adds up the tokens used.

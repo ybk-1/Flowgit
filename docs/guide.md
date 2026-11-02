@@ -477,7 +477,7 @@ flowgit graph --status --out flow.md
 | 不知道还缺什么 / not sure what's missing | 运行 `flowgit doctor`，它会列出缺的密钥、命令和 agent，以及怎么补上 | Run `flowgit doctor`: it lists missing keys, programs and agents, and how to fix each |
 | 没有找到 API 凭据 / no credentials | 设置对应供应商的密钥变量（`flowgit providers` 能看到是哪个），或者先用 `FLOWGIT_LLM_MOCK_DIR` 试跑 | Set the provider's key variable (`flowgit providers` shows which), or try it first with `FLOWGIT_LLM_MOCK_DIR` |
 | 余额不足 / Insufficient balance；请求太频繁 / Rate-limited | 到供应商的控制台充值或检查用量上限。Flowgit 已经自动重试过几次 | Top up or check your limits in the provider's console. Flowgit has already retried a few times |
-| 连不上这个地址 / Could not reach it | 需要代理的话，同时设置 `HTTPS_PROXY` 和 `NODE_USE_ENV_PROXY=1` | If you need a proxy, set both `HTTPS_PROXY` and `NODE_USE_ENV_PROXY=1` |
+| 连不上这个地址 / Could not reach it | 用代理的话，先确认代理软件开着；`flowgit doctor` 会显示 Flowgit 用的是哪个代理。代理只有 socks 端口的话，换成 http 端口或者打开 TUN 模式 | If you use a proxy, check that the proxy app is running; `flowgit doctor` shows which proxy Flowgit uses. If the proxy only has a socks port, use its http port or turn on TUN mode |
 | 脚本阶段失败 / a script stage failed | 看 `flowgit log <阶段>` 和 `runs/<阶段>/<版本>/run.json` 里的 `log`。改好产物或脚本后再跑 | Read `flowgit log <stage>` and the `log` in `runs/<stage>/<n>/run.json`. Fix the output or the script and run again |
 
 做出了好用的流程？欢迎用 [流程想法](https://github.com/cgold9820-dotcom/Flowgit/issues/new?template=flow_idea.yml) 告诉我们，或者直接开 PR 放进 `examples/`（只在仓库里的示例）或 `packages/cli/templates/`（随命令行一起安装的模板）。

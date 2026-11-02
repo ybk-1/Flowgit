@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type { ExecutorService } from "../types.js";
 import { isTextType, outputRel, wantsJson } from "../util.js";
-import { proxyHint } from "./llm.js";
+import { proxyHint } from "../proxy.js";
 import type { ExecContext, ExecResult, InputArtifact, StageExecutor } from "./types.js";
 
 const ENV_REF = /\{\{\s*env\.([A-Za-z_][A-Za-z0-9_]*)\s*\}\}/g;
@@ -116,7 +116,7 @@ export const serviceExecutor: StageExecutor = {
         throw new Error(`超时（${timeoutSec} 秒），已停止 / Timed out after ${timeoutSec}s and was stopped`);
       }
       if (error.message.includes(" / the service redirected") || error.message.includes("too many redirects")) throw error;
-      const hint = proxyHint(ctx.options.env ?? process.env);
+      const hint = proxyHint(ctx.options.env ?? process.env, target.href);
       const cause = (error as Error & { cause?: { message?: string } }).cause?.message;
       throw new Error(`调用服务失败 / service call failed: ${error.message}${cause ? ` (${cause})` : ""}${hint ? `\n${hint.join("\n")}` : ""}`);
     }

@@ -195,9 +195,9 @@ Built in: `anthropic`, `openai`, `openrouter`, `glm`, `deepseek`, `moonshot`, `q
 
 After each model call Flowgit shows the tokens it used; when `run all` makes several calls it also prints a total. `flowgit log <stage>` lists the usage of every version too, and `flowgit log` without a stage adds up the tokens the whole flow has used, so you can estimate the cost.
 
-用代理或 VPN 上网时：Node 默认不走 `HTTPS_PROXY`，需要再设置 `NODE_USE_ENV_PROXY=1`（PowerShell：`$env:NODE_USE_ENV_PROXY="1"`）。连不上模型时 Flowgit 会提醒你。
+用代理或 VPN 上网时：设置了 `HTTPS_PROXY` 就会走它；Windows 和 macOS 上打开了系统代理（比如代理软件的「系统代理」模式）也会自动用上，不用再设别的。`flowgit doctor` 会显示用的是哪个代理，不想走代理就设置 `FLOWGIT_PROXY=off`。需要 Node 22.21 以上或 24 以上。
 
-Behind a proxy or VPN: Node ignores `HTTPS_PROXY` by default, so also set `NODE_USE_ENV_PROXY=1` (PowerShell: `$env:NODE_USE_ENV_PROXY="1"`). Flowgit reminds you when it can't reach a model.
+Behind a proxy or VPN: Flowgit uses `HTTPS_PROXY` when it is set, and on Windows and macOS it also picks up the system proxy (such as a proxy app's "system proxy" mode), with nothing else to set. `flowgit doctor` shows which proxy it uses; set `FLOWGIT_PROXY=off` to skip it. Needs Node 22.21+ or 24+.
 
 ```json
 {

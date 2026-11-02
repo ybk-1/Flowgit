@@ -295,21 +295,20 @@ describe("calling a provider over HTTP", () => {
   });
 
   it("suggests NODE_USE_ENV_PROXY when a proxy variable is set and a request can't connect", async () => {
-    expect(proxyHint({})).toBeUndefined();
+    // Flowgit used as a library: nothing routes through the proxy, so say how
     expect(proxyHint({ HTTPS_PROXY: "http://127.0.0.1:7890", NODE_USE_ENV_PROXY: "1" })).toBeUndefined();
     expect(proxyHint({ https_proxy: "http://127.0.0.1:7890" })?.join("\n")).toMatch(/https_proxy is set.*NODE_USE_ENV_PROXY=1/);
+    // a local address never needs a proxy
+    expect(proxyHint({ https_proxy: "http://127.0.0.1:7890" }, "http://127.0.0.1:11434/v1")).toBeUndefined();
 
-    // a closed port: the connection fails, and the error carries the hint
-    const closed = http.createServer();
-    await new Promise<void>((resolve) => closed.listen(0, "127.0.0.1", resolve));
-    const port = (closed.address() as AddressInfo).port;
-    await new Promise<void>((resolve) => closed.close(() => resolve()));
+    // a host that doesn't resolve: the connection fails, and the error carries the hint
     process.env.TEST_OAI_KEY = "oai-key";
-    const saved = { HTTPS_PROXY: process.env.HTTPS_PROXY, NODE_USE_ENV_PROXY: process.env.NODE_USE_ENV_PROXY };
+    const names = ["HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy", "ALL_PROXY", "all_proxy", "NODE_USE_ENV_PROXY"];
+    const saved = Object.fromEntries(names.map((k) => [k, process.env[k]]));
+    for (const k of names) delete process.env[k];
     process.env.HTTPS_PROXY = "http://127.0.0.1:9";
-    delete process.env.NODE_USE_ENV_PROXY;
     try {
-      fs.writeFileSync(path.join(home, "providers.json"), JSON.stringify({ providers: { gone: { protocol: "openai", baseUrl: `http://127.0.0.1:${port}/v1`, apiKeyEnv: "TEST_OAI_KEY" } } }));
+      fs.writeFileSync(path.join(home, "providers.json"), JSON.stringify({ providers: { gone: { protocol: "openai", baseUrl: "http://flowgit-proxy-test.invalid/v1", apiKeyEnv: "TEST_OAI_KEY" } } }));
       writeFlow(flowWith("gone/some-model"));
       await expect(runStage(loadFlow(dir), "write", {})).rejects.toThrow(/Could not reach it[\s\S]*HTTPS_PROXY is set[\s\S]*NODE_USE_ENV_PROXY=1/);
     } finally {
@@ -318,7 +317,7 @@ describe("calling a provider over HTTP", () => {
         else process.env[k] = v;
       }
     }
-  });
+  }, 15_000); // the SDK retries, and a DNS miss can be slow on Windows
 
   it("explains a missing key before sending anything, and a rejected key or a cut-off reply after", async () => {
     writeFlow(flowWith("myglm/glm-5.3"), { providers: { myglm: { protocol: "anthropic", baseUrl: base, apiKeyEnv: "TEST_GLM_KEY" }, mine: { protocol: "openai", baseUrl: `${base}/v1`, apiKeyEnv: "TEST_OAI_KEY" } } });

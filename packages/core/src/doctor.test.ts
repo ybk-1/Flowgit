@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { commandProgram, doctor, findOnPath, loadFlow, runStage, validateFlow, type DoctorCheck, type Flow } from "./index.js";
+import { commandProgram, doctor, findOnPath, loadFlow, proxySupport, runStage, validateFlow, type DoctorCheck, type Flow } from "./index.js";
 
 let dir: string;
 let bin: string;
@@ -116,16 +116,26 @@ describe("doctor", () => {
     );
   });
 
-  it("warns about a proxy Node will ignore, only when a model is called", () => {
+  it("reports the proxy model requests will go through, only when a model is called", () => {
     const loaded = setup({
       stages: [{ id: "draft", name: "draft", executor: { type: "llm", prompt: "prompt.md", model: "deepseek/deepseek-flash" }, outputs: [{ type: "text/markdown", path: "a.md" }] }],
     });
-    const env = { ...pathEnv(), DEEPSEEK_API_KEY: "sk-test", HTTPS_PROXY: "http://127.0.0.1:7890" };
-    const proxy = (checks: DoctorCheck[]) => checks.find((c) => c.message.includes("NODE_USE_ENV_PROXY"));
-    expect(proxy(doctor(loaded, { env }))).toMatchObject({ level: "warn" });
-    expect(proxy(doctor(loaded, { env: { ...env, NODE_USE_ENV_PROXY: "1" } }))).toBeUndefined();
+    const env = { ...pathEnv(), DEEPSEEK_API_KEY: "sk-test", HTTPS_PROXY: "http://me:secret@127.0.0.1:7890" };
+    const none = () => undefined;
+    const proxy = (checks: DoctorCheck[]) => checks.find((c) => /proxy|代理/.test(c.message));
+    if (proxySupport() !== "none") {
+      expect(proxy(doctor(loaded, { env, systemProxy: none }))).toMatchObject({
+        level: "ok",
+        message: "模型和服务请求走代理 http://127.0.0.1:7890（HTTPS_PROXY）/ model and service requests go through http://127.0.0.1:7890 (HTTPS_PROXY)",
+      });
+      const windows = { url: "http://127.0.0.1:7897", source: "windows" as const, usable: true };
+      expect(proxy(doctor(loaded, { env: { ...pathEnv(), DEEPSEEK_API_KEY: "sk-test" }, systemProxy: () => windows }))?.message).toContain("(the Windows system proxy)");
+    }
+    expect(proxy(doctor(loaded, { env: { ...env, HTTPS_PROXY: "socks5://127.0.0.1:7891" }, systemProxy: none }))).toMatchObject({ level: "warn" });
+    expect(proxy(doctor(loaded, { env: { ...env, FLOWGIT_PROXY: "off" }, systemProxy: none }))?.message).toContain("FLOWGIT_PROXY=off");
+    expect(proxy(doctor(loaded, { env: { ...pathEnv(), DEEPSEEK_API_KEY: "sk-test" }, systemProxy: none }))).toBeUndefined();
     fs.mkdirSync(path.join(dir, "replies"));
-    expect(proxy(doctor(loaded, { env: { ...env, FLOWGIT_LLM_MOCK_DIR: path.join(dir, "replies") } }))).toBeUndefined();
+    expect(proxy(doctor(loaded, { env: { ...env, FLOWGIT_LLM_MOCK_DIR: path.join(dir, "replies") }, systemProxy: none }))).toBeUndefined();
   });
 
   it("reports flow inputs outside their enum as errors", () => {

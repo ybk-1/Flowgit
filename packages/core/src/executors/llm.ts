@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { DEFAULT_PROVIDER, missingKeyMessage, providerKeyState, resolveModel, type ResolvedProvider } from "../providers.js";
+import { proxyHint } from "../proxy.js";
 import type { ExecutorLlm, Flow, Stage } from "../types.js";
 import { schemaFailure, schemaProblems, schemaTexts } from "../schema-check.js";
 import { outputRel, truncate, wantsJson } from "../util.js";
@@ -78,25 +79,8 @@ function usesSdkCredentials(p: ResolvedProvider): boolean {
   return p.id === DEFAULT_PROVIDER && p.apiKeyEnv === "ANTHROPIC_API_KEY";
 }
 
-/**
- * Node's fetch ignores HTTPS_PROXY unless NODE_USE_ENV_PROXY=1 is set, so behind a
- * proxy (or a VPN that only exports proxy variables) requests fail to connect.
- * Returns the name of the proxy variable Node will ignore, if any.
- */
-export function ignoredProxyVar(env: NodeJS.ProcessEnv = process.env): string | undefined {
-  const proxy = ["HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy", "ALL_PROXY", "all_proxy"].find((k) => env[k]);
-  return proxy && env.NODE_USE_ENV_PROXY !== "1" ? proxy : undefined;
-}
-
-/** What to do when a request couldn't connect and Node ignored a proxy variable. */
-export function proxyHint(env: NodeJS.ProcessEnv = process.env): string[] | undefined {
-  const proxy = ignoredProxyVar(env);
-  if (!proxy) return undefined;
-  return [
-    `检测到 ${proxy}，但 Node 默认不走代理。设置 NODE_USE_ENV_PROXY=1 后重试（PowerShell：$env:NODE_USE_ENV_PROXY="1"；macOS/Linux：export NODE_USE_ENV_PROXY=1）。还是不行就升级到最新的 Node 22 或 24。`,
-    `${proxy} is set, but Node ignores proxies by default. Set NODE_USE_ENV_PROXY=1 and try again (PowerShell: $env:NODE_USE_ENV_PROXY="1"; macOS/Linux: export NODE_USE_ENV_PROXY=1). If it still fails, update to the latest Node 22 or 24.`,
-  ];
-}
+// Kept here too, where they used to live.
+export { ignoredProxyVar, proxyHint } from "../proxy.js";
 
 /** Turn an SDK error into a bilingual one that says which provider failed and what to check. */
 function requestError(err: unknown, p: ResolvedProvider): Error {
@@ -126,7 +110,7 @@ function requestError(err: unknown, p: ResolvedProvider): Error {
     lines.push("供应商那边暂时出错（已经自动重试过），稍后再试 / The provider returned a server error (already retried); try again later");
   } else if (e?.status === undefined && /connect|fetch failed|ECONNREFUSED|ENOTFOUND|timed out/i.test(`${e?.name} ${msg}`)) {
     lines.push("连不上这个地址，检查 baseUrl 和网络 / Could not reach it; check the baseUrl and your network");
-    const hint = proxyHint();
+    const hint = proxyHint(process.env, p.baseUrl);
     if (hint) lines.push(...hint);
   }
   return new Error(lines.join("\n"));

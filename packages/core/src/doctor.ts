@@ -2,9 +2,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { AGENT_ADAPTERS } from "./executors/agent.js";
 import { headerEnvNames } from "./executors/service.js";
-import { DEFAULT_MODEL, ignoredProxyVar } from "./executors/llm.js";
+import { DEFAULT_MODEL } from "./executors/llm.js";
 import { isRunnableExecutor } from "./executors/index.js";
 import { DEFAULT_PROVIDER, providerKeyState, resolveModel } from "./providers.js";
+import { pickProxy, proxyOff, proxyProblem, proxySourceLabel, showProxy, systemProxy, type ProxyInfo } from "./proxy.js";
 import { MissingInputsError, loadFlowInputs } from "./runs.js";
 import type { LoadedFlow, Stage } from "./types.js";
 import { findOnPath } from "./util.js";
@@ -27,6 +28,8 @@ export interface DoctorOptions {
   /** Flow input overrides, as with `run --input`. */
   inputs?: Record<string, unknown>;
   env?: NodeJS.ProcessEnv;
+  /** Looks up the system proxy; tests pass their own. */
+  systemProxy?: () => ProxyInfo | undefined;
 }
 
 export const MIN_NODE_MAJOR = 22;
@@ -198,14 +201,25 @@ export function doctor(loaded: LoadedFlow, opts: DoctorOptions = {}): DoctorChec
   }
   checks.push(...merged);
 
-  const callsModels = !env.FLOWGIT_LLM_MOCK_DIR && loaded.flow.stages.some((s) => s.executor.type === "llm");
-  const proxy = callsModels ? ignoredProxyVar(env) : undefined;
-  if (proxy) {
-    checks.push({
-      level: "warn",
-      message: `设置了 ${proxy}，但 Node 默认不走代理。要通过代理连模型的话，再设置 NODE_USE_ENV_PROXY=1 / ${proxy} is set, but Node ignores proxies by default. If you need it to reach the model, also set NODE_USE_ENV_PROXY=1`,
-      hint: 'PowerShell：$env:NODE_USE_ENV_PROXY="1"；macOS/Linux：export NODE_USE_ENV_PROXY=1',
-    });
-  }
+  const callsNetwork = loaded.flow.stages.some((s) => s.executor.type === "service" || (s.executor.type === "llm" && !env.FLOWGIT_LLM_MOCK_DIR));
+  if (callsNetwork) checks.push(...proxyChecks(env, opts.systemProxy ?? systemProxy));
   return checks;
+}
+
+/** The proxy that model and service requests will go through, as `flowgit run` picks it. */
+function proxyChecks(env: NodeJS.ProcessEnv, system: () => ProxyInfo | undefined): DoctorCheck[] {
+  if (proxyOff(env)) return [{ level: "ok", message: "不走代理（FLOWGIT_PROXY=off）/ not using a proxy (FLOWGIT_PROXY=off)" }];
+  const proxy = pickProxy(env, system);
+  if (!proxy) return [];
+  const problem = proxyProblem(proxy);
+  if (problem) return [{ level: "warn", message: problem.join(" / ") }];
+  const [zh, en] = proxySourceLabel(proxy);
+  const where = showProxy(proxy.url);
+  return [
+    {
+      level: "ok",
+      message: `模型和服务请求走代理 ${where}（${zh}）/ model and service requests go through ${where} (${en})`,
+      hint: "不想走代理就设置 FLOWGIT_PROXY=off / set FLOWGIT_PROXY=off to skip it",
+    },
+  ];
 }

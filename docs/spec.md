@@ -186,9 +186,9 @@ Every preset's endpoint comes from the vendor's official docs, linked in `packag
 
 Note: Zhipu's GLM Coding Plan quota only applies inside the tools Zhipu lists ([official docs](https://docs.bigmodel.cn/cn/coding-plan/overview)); Flowgit's `glm` provider uses regular API balance and a regular API key.
 
-代理：Node 默认不走 `HTTPS_PROXY` 等代理变量。需要代理才能连上模型时，再设置 `NODE_USE_ENV_PROXY=1`（需要较新的 Node 22 或 24）。连不上而又设置了代理变量时，报错会提示这一点。
+代理：`flowgit run` 和 `flowgit board` 调用模型和服务时会走代理。先看 `HTTPS_PROXY`、`HTTP_PROXY`（以及 Node 本身不读的 `ALL_PROXY`），没有的话用 Windows 或 macOS 的系统代理。本机地址（`localhost`、`127.0.0.1`、`::1`）不走代理，除非你自己设了 `NO_PROXY`。Node 只能用 http 代理，`socks5://` 用不了。Node 24.14 以上在进程里直接切换；Node 22.21 以上会带着 `NODE_USE_ENV_PROXY=1` 把命令重新启动一次，脚本和 agent 阶段看到的仍是你原来的环境变量。设置 `FLOWGIT_PROXY=off` 可以关掉。连不上时，报错会说明这次走的是哪个代理。
 
-Proxies: Node ignores `HTTPS_PROXY` and similar variables by default. If you need a proxy to reach the model, also set `NODE_USE_ENV_PROXY=1` (needs a recent Node 22 or 24). When a request can't connect and a proxy variable is set, the error says so.
+Proxies: when `flowgit run` and `flowgit board` call models and services, they go through a proxy: `HTTPS_PROXY` or `HTTP_PROXY` first (and `ALL_PROXY`, which Node itself doesn't read), otherwise the Windows or macOS system proxy. Local addresses (`localhost`, `127.0.0.1`, `::1`) skip the proxy unless you set `NO_PROXY` yourself. Node can only use http proxies, not `socks5://`. Node 24.14+ switches in-process; Node 22.21+ starts the command once more with `NODE_USE_ENV_PROXY=1`, and script and agent stages still see your own environment. Set `FLOWGIT_PROXY=off` to turn this off. When a request can't connect, the error says which proxy it went through.
 
 `timeoutSec`（可选，整数，至少为 1）只写在 `script` 和 `agent` 上。不写表示不限时。到了这个秒数，Flowgit 停掉整棵进程树，而不是只停掉外壳：macOS 和 Linux 上命令单独成一个进程组，先对进程组发 `SIGTERM`，5 秒后还在就发 `SIGKILL`；Windows 上用 `taskkill /pid <pid> /T /F`。这次运行记为失败，错误是 `超时（N 秒），已停止 / Timed out after Ns and was stopped`。父进程如果收到 `SIGINT`、`SIGTERM` 或 `SIGHUP`，也会把同一个信号转给这个进程组再退出。`timeoutSec` 属于执行器配置，改了它，这个阶段和下游都会变成 `stale`。
 

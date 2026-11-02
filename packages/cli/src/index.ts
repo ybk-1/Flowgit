@@ -60,6 +60,9 @@ import {
 } from "@flowgit/core";
 import { openBrowser, startBoard } from "@flowgit/web";
 import { bilingualCliError, c, colorizeUnifiedDiff, nextHint, statusBoard, table, width } from "./format.js";
+import { restoreProxyChild, routeThroughProxy } from "./proxy.js";
+
+restoreProxyChild();
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const VERSION = (JSON.parse(fs.readFileSync(path.join(here, "..", "package.json"), "utf8")) as { version: string }).version;
@@ -225,6 +228,13 @@ program
   .description("Flowgit: 万物皆可流程化。Turn anything into a visual, staged, forkable flow.")
   .version(VERSION, "-V, --version", "显示版本号 / show the version number")
   .option("-C, --dir <dir>", "流程目录（含 flow.json）/ flow directory (contains flow.json)", ".");
+
+// run and board call models and services: send those through the user's proxy, if there is one.
+program.hook("preAction", async (_program, action) => {
+  if (action.name() !== "run" && action.name() !== "board") return;
+  const code = await routeThroughProxy();
+  if (code !== undefined) process.exit(code);
+});
 
 const dirOf = () => resolveFlowDir(program.opts<{ dir: string }>().dir);
 
