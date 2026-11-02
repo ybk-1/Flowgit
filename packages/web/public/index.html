@@ -24,8 +24,9 @@
       <div class="top-actions">
         <button id="add-stage" type="button">新增阶段 / Add stage</button>
         <button id="preview" type="button">预演 / Preview</button>
-        <button id="run-all" type="button">全部运行 Run all</button>
+        <button id="run-all" type="button" aria-describedby="run-all-help">全部运行 Run all</button>
       </div>
+      <p class="hint run-help" id="run-all-help">按住 1 秒直接运行，卡片上会先预演 / hold 1s to run; the cards preview it first</p>
     </div>
   </header>
   <div id="banner" class="banner" hidden></div>
@@ -124,6 +125,7 @@
   <noscript>
     <p class="banner">需要 JavaScript 才能看看板。 / JavaScript is required to show the board.</p>
   </noscript>
+  <script src="/fx.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>

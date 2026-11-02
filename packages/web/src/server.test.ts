@@ -463,6 +463,20 @@ describe("read-only board", () => {
     expect(app.body).toContain("localStorage.getItem");
     expect(app.body).toContain("localStorage.setItem");
   });
+
+  it("serves the motion script before the app, and the app holds Run all", async () => {
+    const page = await httpGet(server.port, `/?token=${server.token}`);
+    const fx = await httpGet(server.port, "/fx.js");
+    const app = await httpGet(server.port, "/app.js");
+    expect(fx.status).toBe(200);
+    expect(fx.headers["content-type"]).toBe("text/javascript; charset=utf-8");
+    expect(fx.body).toContain("prefers-reduced-motion");
+    expect(page.body.indexOf('src="/fx.js"')).toBeGreaterThan(-1);
+    expect(page.body.indexOf('src="/fx.js"')).toBeLessThan(page.body.indexOf('src="/app.js"'));
+    expect(page.body).toContain('aria-describedby="run-all-help"');
+    expect(app.body).toContain("FX.hold(runAllButton");
+    expect(app.body).toContain("运行中");
+  });
 });
 
 interface SseEvent {

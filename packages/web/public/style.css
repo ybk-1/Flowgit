@@ -900,17 +900,101 @@ body {
   background: #000;
 }
 
-.history-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+/* History: versions as discs. Drag or flick to spin; the one in front is described below. */
+.deck {
+  --disc: 132px;
+  position: relative;
+  flex: 0 0 auto;
+  height: 188px;
+  border: 1px solid var(--code-line);
+  border-radius: 10px;
+  background: radial-gradient(ellipse at 50% 120%, var(--code-bg-2), var(--code-bg) 70%);
+  perspective: 760px;
+  overflow: hidden;
+  touch-action: pan-y;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+}
 
-.history-item {
+.deck.dragging { cursor: grabbing; }
+.deck:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.disc {
+  --d: var(--code-muted);
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--disc);
+  height: var(--disc);
+  margin: calc(var(--disc) / -2) 0 0 calc(var(--disc) / -2);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(circle at 50% 50%, var(--code-bg) 0 8px, var(--code-line) 8px 9px, transparent 9px),
+    repeating-radial-gradient(circle at 50% 50%, rgba(230, 233, 239, 0.06) 0 1px, transparent 1px 4px),
+    var(--code-bg-2);
+  border: 2px solid var(--d);
+  box-shadow: 0 14px 24px -18px #000;
+  will-change: transform;
+}
+
+.disc[data-status="ok"] { --d: var(--code-add); }
+.disc[data-status="error"] { --d: var(--code-del); }
+.disc[data-kind="manual"] { --d: var(--code-changed); }
+.disc.front { box-shadow: 0 0 0 4px color-mix(in srgb, var(--d) 22%, transparent), 0 18px 28px -18px #000; }
+
+.disc .v {
+  margin-top: -36px;
+  font-family: var(--font-mono);
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  color: var(--d);
+}
+
+.disc .when, .disc .who {
+  position: absolute;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--code-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.disc .when { top: 16px; }
+.disc .who { bottom: 18px; padding: 0 20px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.deck-front {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
   gap: 6px;
-  padding: 10px;
+  padding: 12px;
   border: 1px solid var(--code-line);
   border-radius: 10px;
 }
+
+#panel-body .deck-front .version-head { color: var(--code-ink); font-family: var(--font-mono); font-size: 13px; }
+
+.deck-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+
+.deck-actions button {
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--code-ink);
+  background: var(--code-bg-2);
+  border: 1px solid var(--code-line);
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+
+.deck-actions button:hover:not(:disabled) { border-color: var(--code-muted); }
+.deck-actions button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .version-detail, .history-hint, .diff-same, .diff-summary {
   color: var(--code-muted);
@@ -1052,6 +1136,101 @@ body {
 :root[data-theme="dark"] .outputs button { background: var(--surface-2); border-color: transparent; }
 :root[data-theme="dark"] .top-side { border-left: 0; }
 
+/* ---------- Motion (fx.js) ---------- */
+
+/* A decoded label keeps a screen-reader copy; only the aria-hidden face cycles glyphs. */
+.fx-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Run all fills from the left while it is held. */
+#run-all {
+  background-image: linear-gradient(90deg, color-mix(in srgb, var(--accent-ink) 30%, transparent) calc(var(--hold, 0) * 100%), transparent 0);
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: manipulation;
+}
+
+.run-help { max-width: 380px; text-align: right; font-size: 11px; line-height: 1.45; }
+
+/* The stage the run is on: accent state, and a light running along its rule. */
+.card[data-running] { --state: var(--accent); }
+.card[data-state="never-run"][data-running] { --state: var(--accent-ink); }
+
+.card[data-running] .badge {
+  border-top-color: transparent;
+  background:
+    linear-gradient(90deg, transparent, var(--state), transparent) 0 0 / 40% 2px no-repeat,
+    linear-gradient(color-mix(in srgb, var(--state) 30%, transparent), color-mix(in srgb, var(--state) 30%, transparent)) 0 0 / 100% 2px no-repeat;
+  animation: fx-rail 1.1s linear infinite;
+}
+
+@keyframes fx-rail {
+  from { background-position: -70% 0, 0 0; }
+  to { background-position: 170% 0, 0 0; }
+}
+
+#panel-body .badge[data-running] { --state: var(--accent); }
+
+.flow-node[data-running], .legend-item[data-state="running"] { --state: var(--accent); }
+.legend-item[data-state="running"] .legend-swatch { border-style: dashed; border-color: var(--ink); }
+.flow-node[data-running] .flow-box { stroke: var(--ink); stroke-dasharray: 10 6; animation: fx-march 0.8s linear infinite; }
+
+@keyframes fx-march {
+  to { stroke-dashoffset: -32; }
+}
+
+/* A dry run on the cards: what each stage would do. */
+.plan-chip {
+  --plan: var(--plan-action, var(--muted));
+  align-self: flex-start;
+  margin: 0;
+  padding: 3px 8px;
+  border: 1px solid var(--plan);
+  border-radius: var(--btn-radius);
+  background: color-mix(in srgb, var(--plan) 10%, transparent);
+  color: var(--plan);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.plan-chip[data-action="run"] { --plan-action: var(--accent); }
+.plan-chip[data-action="keep-edit"] { --plan-action: var(--edited); }
+.plan-chip[data-action="wait"] { --plan-action: var(--stale); }
+.plan-chip[data-action="cannot-run"] { --plan-action: var(--error); }
+.card[data-state="never-run"] .plan-chip { --plan: var(--accent-ink); }
+
+.flow-type.is-plan { fill: var(--ink); font-weight: 700; }
+
+@media (prefers-color-scheme: dark) {
+  /* In the studio look the status dot pulses instead of a light on the rule. */
+  :root:not([data-theme="light"]) .card[data-state="never-run"][data-running] { --state: var(--accent); }
+  :root:not([data-theme="light"]) .card[data-running] .badge { background: none; animation: none; }
+  :root:not([data-theme="light"]) .card[data-running]::after { animation: fx-pulse 1.2s ease-in-out infinite; }
+  :root:not([data-theme="light"]) .card[data-state="never-run"] .plan-chip { --plan: var(--plan-action, var(--muted)); }
+}
+
+:root[data-theme="dark"] .card[data-state="never-run"][data-running] { --state: var(--accent); }
+:root[data-theme="dark"] .card[data-running] .badge { background: none; animation: none; }
+:root[data-theme="dark"] .card[data-running]::after { animation: fx-pulse 1.2s ease-in-out infinite; }
+:root[data-theme="dark"] .card[data-state="never-run"] .plan-chip { --plan: var(--plan-action, var(--muted)); }
+
+@keyframes fx-pulse {
+  50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--state) 22%, transparent), 0 0 18px var(--state); }
+}
+
 @media (min-width: 960px) {
   body.panel-open .board { padding-right: 660px; }
 }
@@ -1066,6 +1245,11 @@ body {
   .banner, .inputs-panel, .log { padding-left: 16px; padding-right: 16px; }
   .notice { margin-left: 16px; margin-right: 16px; }
   :root { --num-size: 64px; }
+  .run-help { max-width: none; text-align: left; }
+  .deck { --disc: 112px; height: 164px; }
+  .disc .v { margin-top: -30px; font-size: 26px; }
+  .disc .when { top: 12px; }
+  .disc .who { bottom: 14px; padding: 0 16px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
