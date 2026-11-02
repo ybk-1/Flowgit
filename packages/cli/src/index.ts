@@ -1,5 +1,7 @@
 #!/usr/bin/env node
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Command, Help } from "commander";
@@ -13,6 +15,7 @@ import {
   UpstreamNotReadyError,
   coerceFlowInput,
   doctor,
+  flowFiles,
   flowInputProblem,
   flowToMermaid,
   effectiveProvider,
@@ -35,6 +38,7 @@ import {
   validateFlow,
   usageTokens,
   type Flow,
+  type ForkedFrom,
   type LoadedFlow,
   type PlanAction,
   type PlanStep,
@@ -188,36 +192,183 @@ function bundledTemplates(): { id: string; flow: Flow }[] {
     .map((id) => ({ id, flow: JSON.parse(fs.readFileSync(path.join(templatesDir, id, FLOW_FILE), "utf8")) as Flow }));
 }
 
+function isGitUrl(source: string): boolean {
+  return /^(https?:\/\/|git@|ssh:\/\/|file:\/\/)/.test(source);
+}
+
+/** A bundled template name, not a path and not a Git URL. */
+function bundledDir(name: string): string | undefined {
+  if (!name || name.includes("/") || name.includes("\\") || isGitUrl(name)) return undefined;
+  const dir = path.join(templatesDir, name);
+  return fs.existsSync(path.join(dir, FLOW_FILE)) ? dir : undefined;
+}
+
+function gitMissing(): Error {
+  return new Error(
+    [
+      "没有找到 git。请先安装 Git：https://git-scm.com/downloads",
+      "Git was not found. Install it from https://git-scm.com/downloads",
+      "  Windows: winget install Git.Git",
+      "  macOS: brew install git",
+      "  Debian/Ubuntu: sudo apt install git",
+    ].join("\n"),
+  );
+}
+
+function runGit(args: string[], cwd?: string): { status: number | null; stdout: string; stderr: string; missing: boolean } {
+  const r = spawnSync("git", args, { cwd, encoding: "utf8" });
+  return {
+    status: r.status,
+    stdout: r.stdout ?? "",
+    stderr: r.stderr ?? "",
+    missing: !!r.error && (r.error as NodeJS.ErrnoException).code === "ENOENT",
+  };
+}
+
+/** git clone --depth 1 into a temp directory. Caller deletes it. */
+function cloneFlowRepo(url: string, ref?: string): { dir: string; commit: string } {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-clone-"));
+  const args = ["clone", "--depth", "1"];
+  if (ref) args.push("--branch", ref);
+  args.push("--", url, dir);
+  const cloned = runGit(args);
+  if (cloned.missing) {
+    fs.rmSync(dir, { recursive: true, force: true });
+    throw gitMissing();
+  }
+  if (cloned.status !== 0) {
+    fs.rmSync(dir, { recursive: true, force: true });
+    const detail = (cloned.stderr || cloned.stdout).trim();
+    throw new Error(`克隆失败 / clone failed: ${url}${ref ? ` (${ref})` : ""}${detail ? `\n${detail}` : ""}`);
+  }
+  const rev = runGit(["rev-parse", "HEAD"], dir);
+  if (rev.missing || rev.status !== 0 || !rev.stdout.trim()) {
+    fs.rmSync(dir, { recursive: true, force: true });
+    if (rev.missing) throw gitMissing();
+    throw new Error(`读不到提交号 / could not read the commit: ${(rev.stderr || rev.stdout).trim()}`);
+  }
+  return { dir, commit: rev.stdout.trim() };
+}
+
+function copyListed(src: string, target: string, rels: string[]): void {
+  for (const rel of rels) {
+    const from = path.join(src, ...rel.split("/"));
+    const to = path.join(target, ...rel.split("/"));
+    fs.mkdirSync(path.dirname(to), { recursive: true });
+    fs.copyFileSync(from, to);
+  }
+}
+
+/** Declared outputs that exist in the source, so we can say they were skipped. */
+function presentOutputs(src: string, flow: Flow): string[] {
+  const found: string[] = [];
+  for (const stage of flow.stages ?? []) {
+    for (const out of stage.outputs ?? []) {
+      const rel = out.path.replace(/\\/g, "/").replace(/\/+$/, "");
+      if (rel && fs.existsSync(path.join(src, ...rel.split("/")))) found.push(out.path);
+    }
+  }
+  return found;
+}
+
+function readSourceFlow(src: string): Flow {
+  const file = path.join(src, FLOW_FILE);
+  let data: unknown;
+  try {
+    data = JSON.parse(fs.readFileSync(file, "utf8")) as unknown;
+  } catch (err) {
+    throw new Error(`${file} 不是合法的 JSON / is not valid JSON: ${(err as Error).message}`);
+  }
+  if (!data || typeof data !== "object" || !Array.isArray((data as Flow).stages)) {
+    throw new Error(`${file} 不是一个流程 / is not a flow`);
+  }
+  return data as Flow;
+}
+
+function nextStepLine(target: string): string {
+  const rel = path.relative(process.cwd(), target);
+  const shown = rel === "" ? "." : rel.startsWith("..") || path.isAbsolute(rel) ? target : rel;
+  return `  下一步 / next: cd ${/\s/.test(shown) ? `"${shown}"` : shown} && flowgit status`;
+}
+
 program
   .command("init")
-  .description("从模板新建流程（默认 short-video）/ create a new flow from a template (default: short-video)")
+  .description("从模板、本地目录或 Git 地址新建流程（默认 short-video）/ create a flow from a template, a local directory or a Git URL (default: short-video)")
   .argument("[dir]", "目标目录 / target directory", ".")
-  .option("-t, --template <name>", "模板名（flowgit templates 查看）或流程目录路径 / template name (see flowgit templates) or path to a flow directory", DEFAULT_TEMPLATE)
+  .option("-t, --template <name>", "模板、目录或 Git 地址 / template, directory or Git URL", DEFAULT_TEMPLATE)
+  .option("--ref <ref>", "Git 分支或标签 / Git branch or tag")
+  .option("--path <subdir>", "仓库里的子目录 / subdirectory inside the repo")
+  .option("--with-outputs", "连产物一起复制 / also copy stage outputs")
   .option("--force", "覆盖已有的 flow.json / overwrite an existing flow.json")
-  .action((dir: string, opts: { template: string; force?: boolean }) => {
+  .action((dir: string, opts: { template: string; ref?: string; path?: string; withOutputs?: boolean; force?: boolean }) => {
     const target = path.resolve(dir);
-    const builtin = path.join(templatesDir, opts.template);
-    const src = fs.existsSync(builtin) ? builtin : path.resolve(opts.template);
-    if (!fs.existsSync(path.join(src, FLOW_FILE))) {
-      const names = bundledTemplates().map((t) => t.id).join(", ");
-      fail(new Error(`找不到模板 / Template not found: ${opts.template}\n  自带的模板 / bundled templates: ${names}（flowgit templates 查看说明 / see flowgit templates）`));
-    }
     if (fs.existsSync(path.join(target, FLOW_FILE)) && !opts.force) {
       fail(new Error(`${path.join(target, FLOW_FILE)} 已存在，加 --force 覆盖 / already exists (use --force to overwrite)`));
     }
-    fs.mkdirSync(target, { recursive: true });
-    fs.cpSync(src, target, {
-      recursive: true,
-      filter: (p) => {
-        const rel = path.relative(src, p).split(path.sep)[0];
-        return !["runs", "node_modules", "flowgit.local.json"].includes(rel);
-      },
-    });
-    console.log(`${c.green("✓")} 已创建流程 / created flow in ${target}`);
-    // A short relative path when the flow is below the current folder, the full path otherwise.
-    const rel = path.relative(process.cwd(), target);
-    const shown = rel === "" ? "." : rel.startsWith("..") || path.isAbsolute(rel) ? target : rel;
-    console.log(`  下一步 / next: cd ${/\s/.test(shown) ? `"${shown}"` : shown} && flowgit status`);
+    const builtin = bundledDir(opts.template);
+    if (builtin) {
+      if (opts.ref || opts.path) fail(new Error(`--ref 和 --path 只用于 Git 地址 / --ref and --path are only for a Git URL`));
+      fs.mkdirSync(target, { recursive: true });
+      fs.cpSync(builtin, target, {
+        recursive: true,
+        filter: (p) => {
+          const rel = path.relative(builtin, p).split(path.sep)[0];
+          return !["runs", "node_modules", "flowgit.local.json"].includes(rel);
+        },
+      });
+      console.log(`${c.green("✓")} 已创建流程 / created flow in ${target}`);
+      console.log(nextStepLine(target));
+      return;
+    }
+    if ((opts.ref || opts.path) && !isGitUrl(opts.template)) {
+      fail(new Error(`--ref 和 --path 只用于 Git 地址 / --ref and --path are only for a Git URL`));
+    }
+
+    let src = "";
+    let cleanup: string | undefined;
+    let forked: ForkedFrom | undefined;
+    try {
+      try {
+        if (isGitUrl(opts.template)) {
+          const cloned = cloneFlowRepo(opts.template, opts.ref);
+          cleanup = cloned.dir;
+          src = path.resolve(cloned.dir, opts.path ?? ".");
+          const escaped = path.relative(cloned.dir, src);
+          if (escaped.startsWith("..") || path.isAbsolute(escaped)) {
+            throw new Error(`--path 必须在仓库里面 / --path must stay inside the repository`);
+          }
+          forked = { source: opts.template, ...(opts.ref ? { ref: opts.ref } : {}), commit: cloned.commit };
+        } else {
+          src = path.resolve(opts.template);
+        }
+        if (!fs.existsSync(path.join(src, FLOW_FILE))) {
+          const names = bundledTemplates().map((t) => t.id).join(", ");
+          const where = opts.path ? `${opts.template} (${opts.path})` : opts.template;
+          throw new Error(`找不到流程 / Flow not found: ${where}\n  自带的模板 / bundled templates: ${names}（flowgit templates 查看说明 / see flowgit templates）`);
+        }
+        const sourceFlow = readSourceFlow(src);
+        const withOutputs = !!opts.withOutputs;
+        const rels = flowFiles({ dir: src, file: path.join(src, FLOW_FILE), flow: sourceFlow }, { withOutputs });
+        fs.mkdirSync(target, { recursive: true });
+        copyListed(src, target, rels);
+        if (forked) {
+          const file = path.join(target, FLOW_FILE);
+          const flow = JSON.parse(fs.readFileSync(file, "utf8")) as Flow;
+          flow.forkedFrom = forked;
+          fs.writeFileSync(file, `${JSON.stringify(flow, null, 2)}\n`);
+        }
+        const skipped = withOutputs ? [] : presentOutputs(src, sourceFlow);
+        console.log(`${c.green("✓")} 已创建流程 / created flow in ${target}`);
+        console.log(`  来源 / source: ${opts.template}${opts.path ? ` (${opts.path})` : ""}`);
+        console.log(`  复制了 ${rels.length} 个文件 / copied ${rels.length} file(s)`);
+        console.log(skipped.length ? `  跳过的产物 / skipped outputs: ${skipped.join(", ")}` : `  没有跳过产物 / no outputs skipped`);
+        console.log(nextStepLine(target));
+      } finally {
+        if (cleanup) fs.rmSync(cleanup, { recursive: true, force: true });
+      }
+    } catch (err) {
+      fail(err);
+    }
   });
 
 program

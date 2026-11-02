@@ -3,7 +3,7 @@ import http from "node:http";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 // Runs the built CLI (dist/) against the bundled short-video template,
@@ -274,5 +274,78 @@ describe("flowgit CLI with the short-video template", () => {
     const bad = flowgit(["run", "script", "--model", "nope/x"], env);
     expect(bad.code).toBe(1);
     expect(bad.out).toContain('Unknown provider "nope"');
+  });
+});
+
+describe("flowgit init from a directory or a Git URL", () => {
+  const hasGit = spawnSync("git", ["--version"]).status === 0;
+  let root: string;
+  let source: string;
+
+  function run(args: string[]) {
+    const r = spawnSync(process.execPath, [cli, ...args], { encoding: "utf8", env: { ...process.env, NO_COLOR: "1" } });
+    return { code: r.status, out: `${r.stdout}${r.stderr}` };
+  }
+
+  beforeAll(() => {
+    if (!fs.existsSync(cli)) throw new Error("Build the CLI first: pnpm -r run build");
+    root = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-fork-init-"));
+    source = path.join(root, "source");
+    const init = run(["init", source, "-t", "weekly-report"]);
+    expect(init.code, init.out).toBe(0);
+    fs.writeFileSync(path.join(source, "notes.md"), "this week\n");
+    fs.mkdirSync(path.join(source, "runs", "notes", "1"), { recursive: true });
+    fs.writeFileSync(path.join(source, "runs", "notes", "1", "run.json"), "{}\n");
+    fs.writeFileSync(path.join(source, "flowgit.local.json"), "{}\n");
+    fs.writeFileSync(path.join(source, ".env"), "SECRET=1\n");
+  });
+
+  afterAll(() => {
+    if (root) fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  it("copies a local flow without its outputs unless --with-outputs is set", () => {
+    const dest = path.join(root, "copy");
+    const copied = run(["init", dest, "-t", source]);
+    expect(copied.code, copied.out).toBe(0);
+    expect(copied.out).toContain("跳过的产物 / skipped outputs: notes.md");
+    expect(fs.existsSync(path.join(dest, "prompts", "draft.md"))).toBe(true);
+    expect(fs.existsSync(path.join(dest, "notes.md"))).toBe(false);
+    expect(fs.existsSync(path.join(dest, "runs"))).toBe(false);
+    expect(fs.existsSync(path.join(dest, ".env"))).toBe(false);
+    expect(fs.existsSync(path.join(dest, "flowgit.local.json"))).toBe(false);
+    const flow = JSON.parse(fs.readFileSync(path.join(dest, "flow.json"), "utf8")) as { forkedFrom?: unknown };
+    expect(flow.forkedFrom).toBeUndefined();
+
+    const withOutputs = path.join(root, "with-outputs");
+    const again = run(["init", withOutputs, "-t", source, "--with-outputs"]);
+    expect(again.code, again.out).toBe(0);
+    expect(again.out).toContain("没有跳过产物");
+    expect(fs.readFileSync(path.join(withOutputs, "notes.md"), "utf8")).toBe("this week\n");
+    expect(fs.existsSync(path.join(withOutputs, ".env"))).toBe(false);
+  });
+
+  it.skipIf(!hasGit)("records forkedFrom.commit when init clones a file:// repository", () => {
+    const repo = path.join(root, "repo");
+    fs.cpSync(source, repo, { recursive: true, filter: (p) => !p.split(path.sep).includes("runs") && path.basename(p) !== "flowgit.local.json" && path.basename(p) !== ".env" });
+    const git = (args: string[]) => {
+      const r = spawnSync("git", ["-c", "user.email=dev@example.com", "-c", "user.name=Flowgit", ...args], { cwd: repo, encoding: "utf8" });
+      expect(r.status, `${args.join(" ")}\n${r.stdout}${r.stderr}`).toBe(0);
+      return r;
+    };
+    git(["init", "-b", "main"]);
+    git(["add", "-A"]);
+    git(["commit", "-m", "init flow"]);
+    const commit = spawnSync("git", ["rev-parse", "HEAD"], { cwd: repo, encoding: "utf8" }).stdout.trim();
+    const url = pathToFileURL(repo).href;
+    const dest = path.join(root, "from-git");
+    const cloned = run(["init", dest, "-t", url, "--ref", "main"]);
+    expect(cloned.code, cloned.out).toBe(0);
+    expect(cloned.out).toContain(url);
+    expect(cloned.out).toContain("notes.md");
+    expect(fs.existsSync(path.join(dest, "notes.md"))).toBe(false);
+    expect(fs.existsSync(path.join(dest, "prompts", "draft.md"))).toBe(true);
+    const flow = JSON.parse(fs.readFileSync(path.join(dest, "flow.json"), "utf8")) as { forkedFrom: { source: string; ref?: string; commit: string } };
+    expect(flow.forkedFrom).toEqual({ source: url, ref: "main", commit });
   });
 });
