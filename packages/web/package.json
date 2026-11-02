@@ -1,7 +1,7 @@
 {
   "name": "@flowgit/web",
   "version": "0.1.0",
-  "description": "Flowgit local web board: view, edit, add and remove stages, run them, fill in flow inputs, browse, compare and restore history, switch to a flow graph, preview a run, and see token usage, served by node:http on 127.0.0.1. 本机网页看板：查看、修改、新增和删除阶段，运行阶段，填写流程输入，查看历史、对比和回退，切换到流程图，预演，以及查看 token 用量。",
+  "description": "Flowgit local web board: view, edit, add and remove stages, run them, fill in flow inputs, browse, compare and restore history, switch to a flow graph, preview a run, see token usage, and show output thumbnails, served by node:http on 127.0.0.1. 本机网页看板：查看、修改、新增和删除阶段，运行阶段，填写流程输入，查看历史、对比和回退，切换到流程图，预演，查看 token 用量，以及显示产物缩略图。",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",

@@ -1,5 +1,7 @@
 node_modules/
 dist/
+# Board video-frame cache. Not part of a flow. / 看板视频抽帧缓存，不属于流程本身。
+.flowgit/
 *.tsbuildinfo
 .DS_Store
 coverage/

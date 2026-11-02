@@ -882,6 +882,8 @@ describe("flowgit share", () => {
     fs.mkdirSync(path.join(flowDir, "runs", "draft", "1"), { recursive: true });
     fs.writeFileSync(path.join(flowDir, "runs", "draft", "1", "run.json"), "{}\n");
     fs.writeFileSync(path.join(flowDir, "flowgit.local.json"), "{\"inputs\":{}}\n");
+    fs.mkdirSync(path.join(flowDir, ".flowgit", "thumbs"), { recursive: true });
+    fs.writeFileSync(path.join(flowDir, ".flowgit", "thumbs", "a.jpg"), "jpg");
   });
 
   afterAll(() => {
@@ -908,6 +910,8 @@ describe("flowgit share", () => {
     expect(fs.readFileSync(path.join(shared, "prompts", "draft.md"), "utf8")).toContain("dev@example.com");
     expect(fs.existsSync(path.join(shared, "runs"))).toBe(false);
     expect(fs.existsSync(path.join(shared, "flowgit.local.json"))).toBe(false);
+    expect(fs.existsSync(path.join(shared, ".flowgit"))).toBe(false);
+    expect(ok.out).toContain(".flowgit/");
     expect(ok.out).not.toContain("dev@example.com");
   });
 

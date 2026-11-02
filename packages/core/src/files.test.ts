@@ -40,6 +40,7 @@ describe("flowFiles", () => {
     write(dir, ".env.local", "x");
     write(dir, "node_modules/pkg/index.js", "x");
     write(dir, ".git/config", "x");
+    write(dir, ".flowgit/thumbs/a.jpg", "jpg");
 
     const loaded = loadFlow(dir);
     const without = flowFiles(loaded, { withOutputs: false });
@@ -48,12 +49,12 @@ describe("flowFiles", () => {
     for (const skipped of ["notes.md", "assets/a.png", ".env", ".env.local", "flowgit.local.json"]) {
       expect(without, skipped).not.toContain(skipped);
     }
-    expect(without.some((f) => f.startsWith("runs/") || f.startsWith("node_modules/") || f.startsWith(".git/"))).toBe(false);
+    expect(without.some((f) => f.startsWith("runs/") || f.startsWith("node_modules/") || f.startsWith(".git/") || f.startsWith(".flowgit/"))).toBe(false);
 
     const withOutputs = flowFiles(loaded, { withOutputs: true });
     expect(withOutputs).toEqual(expect.arrayContaining([...without, "notes.md", "assets/a.png"]));
     expect(withOutputs).toHaveLength(without.length + 2);
-    expect(withOutputs.some((f) => f.startsWith("runs/") || f === ".env" || f === "flowgit.local.json")).toBe(false);
+    expect(withOutputs.some((f) => f.startsWith("runs/") || f.startsWith(".flowgit/") || f === ".env" || f === "flowgit.local.json")).toBe(false);
   });
 
   it("leaves out a sub-flow's outputs and runs too, but keeps its flow, prompts and scripts", () => {

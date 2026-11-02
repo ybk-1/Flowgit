@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import crypto from "node:crypto";
 import http from "node:http";
 import fs from "node:fs";
 import os from "node:os";
@@ -27,7 +28,7 @@ function httpCall(
   reqPath: string,
   body?: string | Buffer,
   headers: Record<string, string> = {},
-): Promise<{ status: number; body: string; headers: http.IncomingHttpHeaders }> {
+): Promise<{ status: number; body: string; raw: Buffer; headers: http.IncomingHttpHeaders }> {
   return new Promise((resolve, reject) => {
     const payload = body === undefined ? null : Buffer.isBuffer(body) ? body : Buffer.from(body);
     const req = http.request(
@@ -45,9 +46,11 @@ function httpCall(
         const chunks: Buffer[] = [];
         res.on("data", (chunk) => chunks.push(chunk as Buffer));
         res.on("end", () => {
+          const raw = Buffer.concat(chunks);
           resolve({
             status: res.statusCode ?? 0,
-            body: Buffer.concat(chunks).toString("utf8"),
+            body: raw.toString("utf8"),
+            raw,
             headers: res.headers,
           });
         });
@@ -899,6 +902,8 @@ describe("live board updates", () => {
       fs.mkdirSync(path.join(work, ".git"), { recursive: true });
       fs.writeFileSync(path.join(work, ".git", "config"), "[core]\n");
       fs.writeFileSync(path.join(work, ".flowgit-tmp-abc"), "tmp");
+      fs.mkdirSync(path.join(work, ".flowgit", "thumbs"), { recursive: true });
+      fs.writeFileSync(path.join(work, ".flowgit", "thumbs", "a.jpg"), "jpg");
       await delay(500);
       expect(live.events.slice(seen).filter((event) => event.event === "flow:changed")).toEqual([]);
     } finally {
@@ -1338,5 +1343,182 @@ describe("plan and usage on the board", () => {
       await board.close();
       fs.rmSync(work, { recursive: true, force: true });
     }
+  });
+});
+
+describe("output thumbnails", () => {
+  const hasFfmpeg = spawnSync("ffmpeg", ["-version"], { encoding: "utf8" }).status === 0;
+  const png = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+    "base64",
+  );
+  const svg = Buffer.from(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><rect width="10" height="10"/></svg>',
+    "utf8",
+  );
+
+  let work: string;
+  let server: BoardServer;
+
+  function authed(extra: Record<string, string> = {}) {
+    return { "X-Flowgit-Token": server.token, ...extra };
+  }
+
+  beforeAll(async () => {
+    work = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-web-thumb-"));
+    const flow = {
+      format: "flowgit",
+      version: "0.1",
+      name: "thumbs",
+      stages: [
+        {
+          id: "pic",
+          name: "图",
+          executor: { type: "human" },
+          outputs: [
+            { type: "image/png", path: "shot.png" },
+            { type: "image/svg+xml", path: "mark.svg" },
+            { type: "video/mp4", path: "clip.mp4" },
+            { type: "video/mp4", path: "plain.mp4" },
+            { type: "audio/wav", path: "tone.wav" },
+          ],
+        },
+      ],
+    };
+    fs.writeFileSync(path.join(work, "flow.json"), `${JSON.stringify(flow, null, 2)}\n`);
+    fs.writeFileSync(path.join(work, "shot.png"), png);
+    fs.writeFileSync(path.join(work, "mark.svg"), svg);
+    fs.writeFileSync(path.join(work, "plain.mp4"), Buffer.from("not-a-real-video"));
+    if (hasFfmpeg) {
+      const made = spawnSync(
+        "ffmpeg",
+        [
+          "-hide_banner",
+          "-loglevel",
+          "error",
+          "-y",
+          "-f",
+          "lavfi",
+          "-i",
+          "testsrc=size=160x90:rate=10:duration=2",
+          "-pix_fmt",
+          "yuv420p",
+          path.join(work, "clip.mp4"),
+        ],
+        { encoding: "utf8" },
+      );
+      expect(made.status, made.stderr).toBe(0);
+      const tone = spawnSync(
+        "ffmpeg",
+        [
+          "-hide_banner",
+          "-loglevel",
+          "error",
+          "-y",
+          "-f",
+          "lavfi",
+          "-i",
+          "sine=frequency=440:duration=1.5",
+          path.join(work, "tone.wav"),
+        ],
+        { encoding: "utf8" },
+      );
+      expect(tone.status, tone.stderr).toBe(0);
+    } else {
+      fs.writeFileSync(path.join(work, "clip.mp4"), Buffer.from("not-a-real-video"));
+      fs.writeFileSync(path.join(work, "tone.wav"), Buffer.from("not-audio"));
+    }
+    server = await startBoard({ dir: work, port: 0, open: false });
+  }, 30_000);
+
+  afterAll(async () => {
+    await server?.close();
+    if (work) fs.rmSync(work, { recursive: true, force: true });
+  });
+
+  it("requires the token", async () => {
+    const res = await httpGet(server.port, "/api/thumb?stage=pic&output=0");
+    expect(res.status).toBe(401);
+  });
+
+  it("returns an image file and an ETag", async () => {
+    const res = await httpGet(server.port, "/api/thumb?stage=pic&output=0", authed());
+    expect(res.status).toBe(200);
+    expect(res.raw.equals(png)).toBe(true);
+    expect(res.headers["content-type"]).toMatch(/^image\/png/);
+    const etag = crypto.createHash("sha256").update(png).digest("hex");
+    expect(res.headers.etag).toBe(`"${etag}"`);
+    expect(res.headers["content-security-policy"]).not.toBe("sandbox");
+  });
+
+  it("returns 403 for ../", async () => {
+    const stage = await httpGet(server.port, `/api/thumb?stage=${encodeURIComponent("../")}&output=0`, authed());
+    expect(stage.status).toBe(403);
+    const output = await httpGet(server.port, `/api/thumb?stage=pic&output=${encodeURIComponent("../")}`, authed());
+    expect(output.status).toBe(403);
+  });
+
+  it("serves svg with a sandbox content security policy", async () => {
+    const res = await httpGet(server.port, "/api/thumb?stage=pic&output=1", authed());
+    expect(res.status).toBe(200);
+    expect(res.raw.equals(svg)).toBe(true);
+    expect(res.headers["content-security-policy"]).toBe("sandbox");
+  });
+
+  it("returns 204 for a video when ffmpeg is not on PATH", async () => {
+    const saved = process.env.PATH;
+    const blank = path.join(work, "no-bin");
+    fs.mkdirSync(blank, { recursive: true });
+    process.env.PATH = blank;
+    try {
+      const res = await httpGet(server.port, "/api/thumb?stage=pic&output=3", authed());
+      expect(res.status).toBe(204);
+      expect(res.raw.length).toBe(0);
+      const hash = crypto.createHash("sha256").update(fs.readFileSync(path.join(work, "plain.mp4"))).digest("hex");
+      expect(fs.existsSync(path.join(work, ".flowgit", "thumbs", `${hash}.jpg`))).toBe(false);
+    } finally {
+      if (saved === undefined) delete process.env.PATH;
+      else process.env.PATH = saved;
+    }
+  });
+
+  it.skipIf(!hasFfmpeg)("caches a video frame and the second request hits the cache", async () => {
+    const file = path.join(work, "clip.mp4");
+    const hash = crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");
+    const cached = path.join(work, ".flowgit", "thumbs", `${hash}.jpg`);
+    const first = await httpGet(server.port, "/api/thumb?stage=pic&output=2", authed());
+    expect(first.status, first.body).toBe(200);
+    expect(first.headers["content-type"]).toMatch(/^image\/jpeg/);
+    expect(fs.existsSync(cached)).toBe(true);
+    expect(fs.readFileSync(cached).subarray(0, 2).equals(Buffer.from([0xff, 0xd8]))).toBe(true);
+    const marker = Buffer.from("cached-frame");
+    fs.writeFileSync(cached, marker);
+    const second = await httpGet(server.port, "/api/thumb?stage=pic&output=2", authed());
+    expect(second.status).toBe(200);
+    expect(second.raw.equals(marker)).toBe(true);
+    expect(fs.readFileSync(cached).equals(marker)).toBe(true);
+  }, 20_000);
+
+  it("returns a null audio duration when ffprobe is not on PATH", async () => {
+    const saved = process.env.PATH;
+    const blank = path.join(work, "no-bin");
+    fs.mkdirSync(blank, { recursive: true });
+    process.env.PATH = blank;
+    try {
+      const res = await httpGet(server.port, "/api/thumb?stage=pic&output=4", authed());
+      expect(res.status, res.body).toBe(200);
+      expect(JSON.parse(res.body)).toEqual({ duration: null });
+    } finally {
+      if (saved === undefined) delete process.env.PATH;
+      else process.env.PATH = saved;
+    }
+  });
+
+  it.skipIf(!hasFfmpeg)("returns an audio duration from ffprobe", async () => {
+    const res = await httpGet(server.port, "/api/thumb?stage=pic&output=4", authed());
+    expect(res.status, res.body).toBe(200);
+    const body = JSON.parse(res.body) as { duration: number | null };
+    expect(body.duration).toBeGreaterThan(1);
+    expect(body.duration).toBeLessThan(2);
   });
 });
