@@ -8,6 +8,8 @@ import { loadFlow, resolveFlowInputs, statusAll } from "@flowgit/core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { startBoard, type BoardServer } from "./server.js";
 
+delete process.env.FLOWGIT_TTS_API_KEY;
+
 const here = path.dirname(fileURLToPath(import.meta.url));
 const cli = path.join(here, "..", "..", "cli", "dist", "index.js");
 const templateReplies = path.join(here, "..", "..", "cli", "templates", "short-video", "demo-replies");
@@ -15,7 +17,7 @@ const templateReplies = path.join(here, "..", "..", "cli", "templates", "short-v
 function flowgit(args: string[], env: Record<string, string> = {}) {
   return spawnSync(process.execPath, [cli, ...args], {
     encoding: "utf8",
-    env: { ...process.env, NO_COLOR: "1", ...env },
+    env: { ...process.env, NO_COLOR: "1", FLOWGIT_TTS_API_KEY: "", ...env },
   });
 }
 
@@ -88,7 +90,7 @@ describe("read-only board", () => {
     return { "X-Flowgit-Token": server.token, ...extra };
   }
 
-  it("GET /api/flow returns five stages with the states after a run up to assets", async () => {
+  it("GET /api/flow returns six stages with the states after a run up to assets", async () => {
     const res = await httpGet(server.port, "/api/flow", authed());
     expect(res.status).toBe(200);
     const body = JSON.parse(res.body) as {
@@ -110,22 +112,24 @@ describe("read-only board", () => {
     expect(body.missingInputs).toEqual([]);
     expect(body.inputs.topic).toBe("为什么猫喜欢纸箱");
     expect(body.inputs.duration).toBe(30);
-    expect(body.stages).toHaveLength(5);
-    expect(body.stages.map((s) => s.id)).toEqual(["script", "storyboard", "assets", "edit", "export"]);
-    expect(body.stages.map((s) => s.executor)).toEqual(["llm", "llm", "human", "script", "script"]);
-    expect(body.stages.map((s) => s.state)).toEqual(["ok", "ok", "never-run", "waiting-upstream", "waiting-upstream"]);
-    expect(body.stages.map((s) => s.runs)).toEqual([1, 1, 0, 0, 0]);
-    expect(body.stages[0].latest).toMatchObject({ n: 1, status: "ok" });
-    expect(body.stages[0].latest?.time).toMatch(/^\d{4}-\d{2}-\d{2}T/);
-    expect(body.stages[1].latest).toMatchObject({ n: 1, status: "ok" });
-    expect(body.stages[2].latest).toBeNull();
-    expect(body.stages[0].outputs.map((o) => o.path)).toEqual(["script.md"]);
-    expect(body.stages[2].outputs.map((o) => o.path)).toEqual(["assets"]);
-    expect(body.stages[0].outputs[0]).toMatchObject({ path: "script.md", type: "text/markdown", directory: false, text: true });
-    expect(body.stages[1].outputs[0]).toMatchObject({ path: "storyboard.json", directory: false, text: true });
-    expect(body.stages[2].outputs[0]).toMatchObject({ path: "assets", directory: true, text: false });
-    expect(body.stages[2].instructions).toContain("assets/");
-    expect(body.stages[4].outputs[0]).toMatchObject({ path: "final.mp4", directory: false, text: false });
+    expect(body.stages).toHaveLength(6);
+    expect(body.stages.map((s) => s.id)).toEqual(["script", "voice", "storyboard", "assets", "edit", "export"]);
+    expect(body.stages.map((s) => s.executor)).toEqual(["llm", "script", "llm", "human", "script", "script"]);
+    expect(body.stages.map((s) => s.state)).toEqual(["ok", "ok", "ok", "never-run", "waiting-upstream", "waiting-upstream"]);
+    expect(body.stages.map((s) => s.runs)).toEqual([1, 1, 1, 0, 0, 0]);
+    const byId = Object.fromEntries(body.stages.map((s) => [s.id, s]));
+    expect(byId.script.latest).toMatchObject({ n: 1, status: "ok" });
+    expect(byId.script.latest?.time).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    expect(byId.storyboard.latest).toMatchObject({ n: 1, status: "ok" });
+    expect(byId.assets.latest).toBeNull();
+    expect(byId.script.outputs.map((o) => o.path)).toEqual(["script.md"]);
+    expect(byId.assets.outputs.map((o) => o.path)).toEqual(["assets"]);
+    expect(byId.script.outputs[0]).toMatchObject({ path: "script.md", type: "text/markdown", directory: false, text: true });
+    expect(byId.storyboard.outputs[0]).toMatchObject({ path: "storyboard.json", directory: false, text: true });
+    expect(byId.assets.outputs[0]).toMatchObject({ path: "assets", directory: true, text: false });
+    expect(byId.assets.instructions).toContain("assets/");
+    expect(byId.voice.outputs[0]).toMatchObject({ path: "voice", directory: true, text: false });
+    expect(byId.export.outputs[0]).toMatchObject({ path: "final.mp4", directory: false, text: false });
   });
 
   it("rejects /api/* without a token", async () => {
@@ -194,6 +198,7 @@ describe("read-only board", () => {
       expect(body.missingInputs).toContain("topic");
       expect(body.stages.map((s) => s.state)).toEqual([
         "never-run",
+        "waiting-upstream",
         "waiting-upstream",
         "waiting-upstream",
         "waiting-upstream",
@@ -493,7 +498,7 @@ describe("run and inputs on the board", () => {
       expect(post.status, post.body).toBe(200);
       const end = await live.waitFor("run:end");
       const done = live.events.filter((event) => event.event === "stage:done").map((event) => JSON.parse(event.data).stage);
-      expect(done).toEqual(["script", "storyboard"]);
+      expect(done).toEqual(["script", "voice", "storyboard"]);
       expect(live.events.at(-1)?.event).toBe("run:end");
       const ended = JSON.parse(end.data) as { ok: boolean; waiting?: { stage: string; missing: string[]; instructions?: string } };
       expect(ended.ok).toBe(true);
@@ -503,13 +508,14 @@ describe("run and inputs on the board", () => {
       const flow = JSON.parse((await httpGet(board.port, "/api/flow", authed())).body) as {
         stages: Array<{ id: string; state: string; instructions?: string }>;
       };
-      expect(flow.stages.map((stage) => stage.state)).toEqual(["ok", "ok", "never-run", "waiting-upstream", "waiting-upstream"]);
+      expect(flow.stages.map((stage) => stage.state)).toEqual(["ok", "ok", "ok", "never-run", "waiting-upstream", "waiting-upstream"]);
       expect(flow.stages.find((stage) => stage.id === "assets")?.instructions).toContain("assets/");
 
       const late = await openEvents(board.port, board.token);
       await late.waitFor("run:end");
       expect(late.events.filter((event) => event.event === "stage:done").map((event) => JSON.parse(event.data).stage)).toEqual([
         "script",
+        "voice",
         "storyboard",
       ]);
       const cursor = live.events.length;

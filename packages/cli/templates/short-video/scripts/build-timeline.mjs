@@ -62,8 +62,14 @@ const audioNamed = (names) =>
   available.find((f) => AUDIO.has(path.extname(f).toLowerCase()) && names.includes(path.parse(f).name.toLowerCase()));
 // 背景音乐：assets/music.mp3（或 bgm.*）。 / Background music: assets/music.mp3 (or bgm.*).
 const musicFile = audioNamed(["music", "bgm"]);
-// 配音：assets/voice.mp3（或 narration.*、voiceover.*、配音.*）。 / Voiceover: assets/voice.mp3 (or narration.*, voiceover.*, 配音.*).
-const voiceFile = audioNamed(["voice", "narration", "voiceover", "配音"]);
+// 配音：优先 assets/ 里自己录的 voice.*（或 narration.*、voiceover.*、配音.*），
+// 否则用配音阶段合成的 voice/voice.mp3。
+// Voiceover: a recording in assets/ (voice.*, narration.*, voiceover.*, 配音.*) wins;
+// otherwise voice/voice.mp3 from the voice stage.
+const recordedVoice = audioNamed(["voice", "narration", "voiceover", "配音"]);
+const generatedVoice = path.join(dir, "voice", "voice.mp3");
+const voiceRel = recordedVoice ? `assets/${recordedVoice}` : fs.existsSync(generatedVoice) ? "voice/voice.mp3" : undefined;
+const voiceLabel = recordedVoice ? recordedVoice : voiceRel ?? "";
 
 /** Length of an audio file in seconds, or undefined when ffprobe is missing or can't read it. */
 function audioLength(file) {
@@ -77,9 +83,9 @@ function audioLength(file) {
 // lines are spoken. Without narration text, the storyboard's durations set the proportions.
 let voice;
 let retimed; // "narration" | "storyboard" once the clips are fitted to the voice
-if (voiceFile) {
-  const length = audioLength(path.join(assetsDir, voiceFile));
-  voice = { path: `assets/${voiceFile}`, volume: 1 };
+if (voiceRel) {
+  const length = audioLength(path.join(dir, voiceRel));
+  voice = { path: voiceRel, volume: 1 };
   if (length) {
     const tail = 0.6;
     const weights = clips.map((c) => [...c.narration.replace(/\s+/g, "")].length);
@@ -97,8 +103,8 @@ if (voiceFile) {
   } else {
     console.warn(
       say(
-        `读不出配音 ${voiceFile} 的长度（需要 ffprobe），镜头时长按分镜不变`,
-        `couldn't read the length of voiceover ${voiceFile} (needs ffprobe); keeping the storyboard's durations`,
+        `读不出配音 ${voiceLabel} 的长度（需要 ffprobe），镜头时长按分镜不变`,
+        `couldn't read the length of voiceover ${voiceLabel} (needs ffprobe); keeping the storyboard's durations`,
       ),
     );
   }
@@ -123,8 +129,8 @@ const timeline = {
 fs.writeFileSync(path.join(dir, "timeline.json"), `${JSON.stringify(timeline, null, 2)}\n`);
 console.log(
   say(
-    `timeline.json：${clips.length} 个镜头，${timeline.duration} 秒，${clips.length - missing} 个有素材，${missing} 个用文字卡${voiceFile ? `，配音 ${voiceFile}` : ""}${musicFile ? `，背景音乐 ${musicFile}` : ""}`,
-    `timeline.json: ${clips.length} clips, ${timeline.duration}s, ${clips.length - missing} with assets, ${missing} as text cards${voiceFile ? `, voiceover ${voiceFile}` : ""}${musicFile ? `, music ${musicFile}` : ""}`,
+    `timeline.json：${clips.length} 个镜头，${timeline.duration} 秒，${clips.length - missing} 个有素材，${missing} 个用文字卡${voiceLabel ? `，配音 ${voiceLabel}` : ""}${musicFile ? `，背景音乐 ${musicFile}` : ""}`,
+    `timeline.json: ${clips.length} clips, ${timeline.duration}s, ${clips.length - missing} with assets, ${missing} as text cards${voiceLabel ? `, voiceover ${voiceLabel}` : ""}${musicFile ? `, music ${musicFile}` : ""}`,
   ),
 );
 if (retimed) {

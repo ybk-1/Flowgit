@@ -12,7 +12,7 @@
 
 现在的 AI 工具要么是一键黑盒，要么是给工程师用的节点图。中间过程看不见、改不了、存不下来。Flowgit 把"做出来的过程"当成产品本身：
 
-- **阶段看板**：脚本 → 分镜 → 素材 → 剪辑 → 导出，每一步一张卡，不是 200 个节点。
+- **阶段看板**：脚本 → 配音 → 分镜 → 素材 → 剪辑 → 导出，每一步一张卡，不是 200 个节点。
 - **每一步都有版本**：改了分镜，后面需要重跑的阶段自动标出来；不满意随时回退。
 - **人和 AI 混合**：一个阶段可以由模型做、由脚本做，也可以由人来做。
 - **接任何模型**：Claude、GPT、GLM、DeepSeek、Kimi、通义千问、OpenRouter、本机 Ollama 都能接，流程里只写模型名。
@@ -22,7 +22,7 @@
 
 Today's AI tools are either one-click black boxes or node graphs built for engineers. You can't see the steps in between, change them, or keep them. Flowgit treats the process of making something as the product itself:
 
-- **Stage board**: script → storyboard → assets → edit → export. One card per step, not 200 nodes.
+- **Stage board**: script → voiceover → storyboard → assets → edit → export. One card per step, not 200 nodes.
 - **Every step is versioned**: change the storyboard and the stages that need a re-run are marked for you; roll back any time.
 - **People and AI together**: a stage can be done by a model, by a script, or by a person.
 - **Any model**: Claude, GPT, GLM, DeepSeek, Kimi, Qwen, OpenRouter or a local Ollama. The flow only names the model.
@@ -37,21 +37,24 @@ The bundled short-video template after one full run and a hand edit of the story
 ```mermaid
 flowchart LR
   s1["脚本<br/>llm · ✓ ok"]
-  s2["分镜<br/>llm · ✎ edited"]
-  s3["素材<br/>human · ↻ stale"]
-  s4["剪辑<br/>script · ↻ stale"]
-  s5["导出<br/>script · ↻ stale"]
+  s2["配音<br/>script · ✓ ok"]
+  s3["分镜<br/>llm · ✎ edited"]
+  s4["素材<br/>human · ↻ stale"]
+  s5["剪辑<br/>script · ↻ stale"]
+  s6["导出<br/>script · ↻ stale"]
   s1 --> s2
-  s2 --> s3
-  s2 --> s4
+  s1 --> s3
   s3 --> s4
+  s3 --> s5
   s4 --> s5
+  s2 --> s5
+  s5 --> s6
   classDef ok fill:#dcfce7,stroke:#16a34a,color:#14532d
-  class s1 ok
+  class s1,s2 ok
   classDef stale fill:#fef3c7,stroke:#d97706,color:#78350f
-  class s3,s4,s5 stale
+  class s4,s5,s6 stale
   classDef edited fill:#cffafe,stroke:#0891b2,color:#164e63
-  class s2 edited
+  class s3 edited
 ```
 
 ## 快速开始 / Quick start
@@ -76,6 +79,7 @@ flowgit board --no-open                          # 本机网页看板 / local we
 flowgit inputs set topic="为什么猫喜欢纸箱"         # 主题 / topic
 flowgit inputs set language=en                   # 可选：zh（默认）或 en / optional: zh (default) or en
 export ANTHROPIC_API_KEY=...                     # 脚本和分镜由 Claude 写 / Claude writes the script and storyboard
+export FLOWGIT_TTS_API_KEY=...                   # 可选：自动配音，说明见短视频模板 / optional voiceover, see the short-video template
 flowgit doctor                                   # 检查密钥和 FFmpeg 准备好了没有 / check the key and FFmpeg are ready
 flowgit run all                                  # 跑到"素材"会停下等你 / stops at "assets" and waits for you
 mkdir -p assets                                  # 放素材；空着也行，导出时用文字卡 / add assets, or leave empty for text cards
@@ -97,6 +101,7 @@ cd $HOME\my-video
 
 flowgit inputs set topic="为什么猫喜欢纸箱"
 $env:ANTHROPIC_API_KEY = "..."                    # 或者换别的模型，见"接任何模型" / or another model, see "Any model"
+$env:FLOWGIT_TTS_API_KEY = "..."                  # 可选：自动配音 / optional voiceover
 flowgit doctor                                    # 检查密钥和 FFmpeg 准备好了没有 / check the key and FFmpeg are ready
 flowgit run all
 mkdir assets
@@ -119,10 +124,11 @@ FLOWGIT_LLM_MOCK_DIR=demo-replies flowgit run all
 
 #  阶段 stage       执行 executor  状态 state                  版本 runs  产物 outputs
 1  脚本 script      llm            ✓ 已完成 (ok)               v1         script.md
-2  分镜 storyboard  llm            ✎ 产物被手动修改 (edited)   v1         storyboard.json
-3  素材 assets      human          ↻ 需重跑（上游或配置变了）  v1         assets
-4  剪辑 edit        script         ↻ 需重跑（上游或配置变了）  v1         timeline.json
-5  导出 export      script         ↻ 需重跑（上游或配置变了）  v1         final.mp4
+2  配音 voice       script         ✓ 已完成 (ok)               v1         voice
+3  分镜 storyboard  llm            ✎ 产物被手动修改 (edited)   v1         storyboard.json
+4  素材 assets      human          ↻ 需重跑（上游或配置变了）  v1         assets
+5  剪辑 edit        script         ↻ 需重跑（上游或配置变了）  v1         timeline.json
+6  导出 export      script         ↻ 需重跑（上游或配置变了）  v1         final.mp4
 ```
 
 命令行的提示和报错都是中英双语。模板生成的内容（脚本、字幕、提示）用你选的 `language`。
@@ -161,7 +167,7 @@ Every command accepts `-C <dir>` for the flow directory. `run` also takes `--inp
 
 | 模板 / Template | 新建 / Create | 流程 / Flow |
 | --- | --- | --- |
-| `short-video`（默认 / default） | `flowgit init` | 脚本 → 分镜 → 素材 → 剪辑 → 导出 / script → storyboard → assets → edit → export |
+| `short-video`（默认 / default） | `flowgit init` | 脚本 → 配音 → 分镜 → 素材 → 剪辑 → 导出 / script → voiceover → storyboard → assets → edit → export |
 | `weekly-report` | `flowgit init -t weekly-report` | 随手记（人）→ 周报草稿（模型）→ 检查（脚本）/ notes (person) → draft (model) → check (script) |
 | `article` | `flowgit init -t article` | 大纲 → 正文 → 配图方案 → 照片 → 导出 / outline → draft → image plan → photos → export |
 | `support-sop` | `flowgit init -t support-sop` | 资料（人）→ 汇总（脚本）→ 规程 → 用例 → 检查（模型）→ 技能（脚本）/ knowledge (person) → collect (script) → SOP → cases → check (model) → skill (script) |
@@ -327,14 +333,14 @@ Everything on GitHub (commit messages, PRs, docs) is bilingual, Chinese first.
 1. **格式 + 命令行**（本仓库现状，0.1.0 准备发布）：Flow 规范 v0.1，JSON 产物可以带 schema；六个自带模板（短视频、周报入门、图文、客服 SOP、求职材料、调研报告）；llm 阶段接任何模型，agent 阶段接 Claude Code、Codex、Cursor、Gemini，service 阶段调用 HTTP 服务；script、agent 和 service 阶段可以设超时；`stage add` / `stage rm`、`diff`（版本对比）、`doctor`、`templates`、`graph`（流程图）等命令。更新记录见 [CHANGELOG.md](CHANGELOG.md)。
 2. **阶段看板**：本机看板已经有了（`flowgit board`），每张卡能看产物、改、运行、看历史、对比和回退。下一步是在看板上加删阶段、看流程图、预演和实时更新，然后是网站：在网上打开一个流程就是一块看板。
 3. **发布与复用**：已经能从别人的流程开始（`flowgit init -t <Git 地址>`，默认不带产物），分享前自动去隐私（`flowgit share`）。下一步是画廊。
-4. **更多领域**：更多模板（下一个是落地页网站，做网站现在有 `examples/agent-page` 示例）；短视频自动配音；`workflow` 执行器运行子流程；之后让作者把流程变成 MCP 服务供别人调用。
+4. **更多领域**：更多模板（下一个是落地页网站，做网站现在有 `examples/agent-page` 示例）；`workflow` 执行器运行子流程；之后让作者把流程变成 MCP 服务供别人调用。
 
 English:
 
 1. **Format + CLI** (this repo today, 0.1.0 getting ready to ship): Flow spec v0.1, with optional schemas for JSON outputs; six bundled templates (short video, weekly-report starter, article posts, support SOP, job application, research report); llm stages on any model, agent stages on Claude Code, Codex, Cursor or Gemini, and service stages that call HTTP services; timeouts for script, agent and service stages; commands such as `stage add` / `stage rm`, `diff` (compare versions), `doctor`, `templates` and `graph` (a diagram of the flow). See [CHANGELOG.md](CHANGELOG.md) for details.
 2. **Stage board**: the local board is here (`flowgit board`); each card lets you see its outputs, edit them, run, browse history, compare and restore. Next on the board: add and remove stages, a flow graph view, dry-run previews and live updates. After that comes the web app: open a flow online and it is a board.
 3. **Publish and reuse**: you can already start from someone else's flow (`flowgit init -t <Git URL>`, without their outputs by default) and strip private data before sharing (`flowgit share`). Next is a gallery.
-4. **More domains**: more templates (a landing-page site is next; building a website has the `examples/agent-page` example today); automatic voiceover for short videos; a `workflow` executor that runs a sub-flow; later, authors can expose a flow as an MCP service for others to call.
+4. **More domains**: more templates (a landing-page site is next; building a website has the `examples/agent-page` example today); a `workflow` executor that runs a sub-flow; later, authors can expose a flow as an MCP service for others to call.
 
 ## 许可证 / License
 
