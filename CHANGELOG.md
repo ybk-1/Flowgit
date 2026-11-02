@@ -47,6 +47,7 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 - `log` 不写阶段时按时间列出整个流程的所有版本，并合计用掉的 token。
 - `diff` 对比同一个阶段的两个版本，或者某个版本和现在的文件：文本和 JSON 显示按行的改动，二进制只比较是否相同，文件夹列出新增、删除和改动的文件。
 - `board` 在浏览器打开本机看板（新包 `@flowgit/web`）：每个阶段一张卡，显示状态、最新版本和产物，点产物在侧栏预览文本、JSON、图片、视频和目录，每 3 秒刷新。文本产物可以直接修改保存（JSON 先检查格式），人工阶段的文件夹可以上传文件；改过的产物下次运行前会先存成一个版本。可以填写流程输入，运行单个阶段或全部阶段，日志实时显示；同时只跑一个，运行中不能保存产物。每张卡可以看历史版本、对比两个版本（或和当前文件比）并回退。只监听 `127.0.0.1`，接口要令牌并检查 `Host`。
+- 看板换了新造型：亮色是粗网格加大号阶段编号，可以运行的那一步整块变蓝；暗色是深色卡片，状态用发光圆点标出。跟着系统的深浅色自动切换，不用联网加载字体。
 - `run all --dry-run` 预演：每个阶段会跳过、运行还是停下等你，最多调用几次模型，什么都不运行。`doctor` 通过后和导出的 `SKILL.md` 里都会提到它。
 - `inputs set` 保存前就检查名字和值（数字、`true`/`false`、可选值），写错了不会存进去。
 - `board` 打印和打开的链接带着令牌（`?token=…`）。直接打开 `http://127.0.0.1:4747/` 只会看到提示、拿不到令牌，所以同一台电脑上的其他账号或程序没法操作你的看板。
@@ -65,6 +66,7 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 - `log` without a stage lists every version of the whole flow by time and adds up the tokens used.
 - `diff` compares two versions of a stage, or a version with the current files: line changes for text and JSON, same-or-different for binaries, and added, removed and changed files for folders.
 - `board` opens a local board in the browser (new package `@flowgit/web`): one card per stage with its state, latest version and outputs; click an output to preview text, JSON, images, video or a folder in a side panel; refreshes every 3 seconds. Text outputs can be edited and saved (JSON is checked first), and files can be uploaded into a human stage's folder; an edited output is saved as a version before the next run. Flow inputs can be filled in, and one stage or the whole flow can be run with a live log; one run at a time, and outputs cannot be saved while it runs. Each card can list its versions, compare two of them (or one with the current files) and restore one. It listens on `127.0.0.1` only, and its API needs a token and checks `Host`.
+- The board has a new look: in light mode a bold grid with large stage numbers, and the stage you can run now in a solid blue block; in dark mode graphite cards with glowing status dots. It follows the system light/dark setting and loads no web fonts.
 - `run all --dry-run` shows whether each stage would be skipped, run or stop for you, and at most how many model calls it would make, without running anything. `doctor` points to it when nothing blocks, and so does the exported `SKILL.md`.
 - `inputs set` checks names and values (numbers, `true`/`false`, allowed values) before saving, so a typo is never stored.
 - The link `board` prints and opens carries the token (`?token=…`). Opening `http://127.0.0.1:4747/` by itself shows a note and no token, so other accounts or programs on the same computer can't drive your board.
