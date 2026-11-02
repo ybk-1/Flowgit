@@ -50,7 +50,7 @@
       "description": "把脚本拆成镜头：每个镜头的时长、画面、字幕和需要的素材文件名。 / Split the script into shots: duration, visual, caption and asset file name for each.",
       "inputs": ["script"],
       "executor": { "type": "llm", "prompt": "prompts/storyboard.md", "effort": "medium" },
-      "outputs": [{ "type": "flowgit/storyboard+json", "path": "storyboard.json" }]
+      "outputs": [{ "type": "flowgit/storyboard+json", "path": "storyboard.json", "schema": "schemas/storyboard.schema.json" }]
     },
     {
       "id": "assets",

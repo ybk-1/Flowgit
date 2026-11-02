@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Flowgit storyboard",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["title", "aspect", "shots"],
+  "properties": {
+    "title": { "type": "string", "minLength": 1 },
+    "aspect": { "type": "string", "minLength": 1 },
+    "shots": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "duration", "visual", "caption", "narration", "asset"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "duration": { "type": "number", "exclusiveMinimum": 0 },
+          "visual": { "type": "string" },
+          "caption": { "type": "string" },
+          "narration": { "type": "string" },
+          "asset": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}

@@ -276,3 +276,37 @@ describe("flowgit CLI with the short-video template", () => {
     expect(bad.out).toContain('Unknown provider "nope"');
   });
 });
+
+describe("flowgit validate output schemas", () => {
+  it("reports a schema on a non-JSON output and a missing schema file", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-schema-cli-"));
+    const flow = {
+      format: "flowgit",
+      version: "0.1",
+      name: "bad schema",
+      stages: [
+        {
+          id: "a",
+          name: "A",
+          executor: { type: "human" },
+          outputs: [{ type: "text/plain", path: "a.txt", schema: "schemas/out.schema.json" }],
+        },
+        {
+          id: "b",
+          name: "B",
+          executor: { type: "human" },
+          outputs: [{ type: "application/json", path: "b.json", schema: "schemas/missing.schema.json" }],
+        },
+      ],
+    };
+    fs.mkdirSync(path.join(dir, "schemas"), { recursive: true });
+    fs.writeFileSync(path.join(dir, "schemas", "out.schema.json"), JSON.stringify({ type: "object" }));
+    fs.writeFileSync(path.join(dir, "flow.json"), JSON.stringify(flow, null, 2));
+    const r = spawnSync(process.execPath, [cli, "-C", dir, "validate"], { encoding: "utf8", env: { ...process.env, NO_COLOR: "1" } });
+    expect(r.status).toBe(1);
+    const out = `${r.stdout}${r.stderr}`;
+    expect(out).toContain("only for JSON outputs");
+    expect(out).toContain("schema file not found");
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+});

@@ -100,10 +100,12 @@ Stages must not form a cycle. Run order follows `inputs`; ties keep the order in
 
 - `path`：相对流程目录，不能是绝对路径，不能有 `..`，不能放进 `runs/`。以 `/` 结尾或 `type` 为 `"dir"` 表示文件夹。
 - `type`：类 MIME 的类型。`text/*`、`application/json`、`*+json` 和 `flowgit/*` 会被当成文本，交给下游 llm 阶段时直接附上内容；文件夹附上文件列表；其他文件附上路径。
+- `schema`（可选）：流程目录里一个 JSON Schema 文件的相对路径，只能用在 JSON 产物上（`application/json` 或以 `+json` 结尾）。阶段跑完后立刻检查；不合格则这次运行记为失败，报错最多列出 5 条（JSON 路径和原因）。llm 阶段会自动再问模型一次，把上一次的回复和错误发给它，请它只输出改好的 JSON；两次调用的 token 用量都记在 `run.json` 里。`FLOWGIT_LLM_MOCK_DIR` 下，这一次读 `<阶段>.repair.json`，没有这个文件就失败。schema 文件的内容算进执行器配置的哈希，所以改了 schema，这个阶段就会需要重跑。
 - 同一个路径只能由一个阶段产出。
 
 - `path`: relative to the flow directory; no absolute paths, no `..`, nothing inside `runs/`. A trailing `/` or `type: "dir"` means a folder.
 - `type`: a MIME-like type. `text/*`, `application/json`, `*+json` and `flowgit/*` are treated as text and their content is attached for downstream llm stages; a folder attaches its file list; any other file attaches its path.
+- `schema` (optional): relative path of a JSON Schema file in the flow directory, only for JSON outputs (`application/json` or a type ending in `+json`). It is checked as soon as the stage finishes; a failure is recorded as a failed run and the error lists at most 5 problems (JSON path and reason). An llm stage automatically asks the model once more, sending the previous reply and the errors and asking for only the corrected JSON; token usage of both calls is stored in `run.json`. Under `FLOWGIT_LLM_MOCK_DIR` that retry reads `<stage>.repair.json` and fails if the file is missing. The schema file's content counts in the executor config hash, so editing it marks the stage stale.
 - Each path can be produced by only one stage.
 
 ### executor：执行器 / Executor

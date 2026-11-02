@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { DEFAULT_PROVIDER, missingKeyMessage, providerKeyState, resolveModel, type ResolvedProvider } from "../providers.js";
 import type { ExecutorLlm, Flow, Stage } from "../types.js";
+import { schemaFailure, schemaProblems } from "../schema-check.js";
 import { outputRel, truncate, wantsJson } from "../util.js";
 import type { ExecContext, ExecResult, InputArtifact, LlmComplete, LlmRequest, LlmResponse, StageExecutor } from "./types.js";
 
@@ -282,6 +283,15 @@ export const providerComplete: LlmComplete = (req) =>
  */
 export function mockCompleteFromDir(mockDir: string): LlmComplete {
   return async (req) => {
+    if (req.repair) {
+      const repair = path.join(mockDir, `${req.stageId}.repair.json`);
+      if (!fs.existsSync(repair)) {
+        throw new Error(
+          `FLOWGIT_LLM_MOCK_DIR 里没有阶段 "${req.stageId}" 的修复回复 / FLOWGIT_LLM_MOCK_DIR has no repair reply for stage "${req.stageId}" (expected ${req.stageId}.repair.json in ${mockDir})`,
+        );
+      }
+      return { text: fs.readFileSync(repair, "utf8"), model: `mock:${path.basename(repair)}`, usage: { input_tokens: 2, output_tokens: 2 } };
+    }
     for (const ext of ["md", "txt", "json"]) {
       const file = path.join(mockDir, `${req.stageId}.${ext}`);
       if (fs.existsSync(file)) {
@@ -336,23 +346,58 @@ export const llmExecutor: StageExecutor = {
       }
     }
     const abs = path.join(loaded.dir, outputRel(output));
-    fs.mkdirSync(path.dirname(abs), { recursive: true });
-    fs.writeFileSync(abs, content.endsWith("\n") ? content : `${content}\n`);
+    const write = (text: string) => {
+      fs.mkdirSync(path.dirname(abs), { recursive: true });
+      fs.writeFileSync(abs, text.endsWith("\n") ? text : `${text}\n`);
+    };
+    write(content);
     ctx.log(`已写入 / wrote ${outputRel(output)} (${content.length} chars, ${ms} ms)`);
+    let repair: LlmResponse | undefined;
+    if (output.schema) {
+      const problems = schemaProblems(loaded.dir, stage);
+      if (problems.length) {
+        ctx.log(`产物不符合 schema，自动再试一次 / output failed the schema, retrying once`);
+        const repairPrompt = [
+          "你上一次的回复不符合 JSON Schema。请只输出改好的 JSON，不要解释。",
+          "Your previous reply did not match the JSON Schema. Reply with only the corrected JSON, no explanation.",
+          "",
+          "上一次的回复 / previous reply:",
+          truncate(res.text, 4000),
+          "",
+          "校验错误 / validation errors:",
+          problems.slice(0, 5).map((p) => `${p.file} ${p.path}: ${p.message}`).join("\n"),
+        ].join("\n");
+        repair = await resolveLlm(ctx.options)({ ...req, repair: true, prompt: repairPrompt });
+        let repaired = repair.text;
+        try {
+          repaired = json ? extractJson(repair.text) : repair.text;
+        } catch (err) {
+          throw new Error(`${(err as Error).message}\n--- 修复回复 / repair reply ---\n${truncate(repair.text, 2000)}`);
+        }
+        write(repaired);
+        const again = schemaProblems(loaded.dir, stage);
+        if (again.length) throw schemaFailure(again);
+        ctx.log(`已按 schema 修好 / repaired to match the schema`);
+      }
+    }
     const tokens = usageTokens(res.usage);
     if (tokens) ctx.log(`用量 / usage: ${tokens.input} 输入 input + ${tokens.output} 输出 output tokens`);
+    const repairTokens = usageTokens(repair?.usage);
+    if (repairTokens) ctx.log(`修复用量 / repair usage: ${repairTokens.input} 输入 input + ${repairTokens.output} 输出 output tokens`);
     return {
       params: {
         provider: provider.id,
         protocol: provider.protocol,
-        model: res.model,
+        model: repair?.model ?? res.model,
         requestedModel: req.model,
         // effort is only sent to Anthropic's own API, so only record it there
         ...(provider.claudeApi && req.effort ? { effort: req.effort } : {}),
         maxTokens: req.maxTokens,
         promptChars: req.prompt.length,
-        stopReason: res.stopReason,
+        stopReason: repair?.stopReason ?? res.stopReason,
         usage: res.usage,
+        ...(repair ? { repairUsage: repair.usage ?? null } : {}),
+        llmCalls: repair ? [res.usage ?? null, repair.usage ?? null] : [res.usage ?? null],
         durationMs: ms,
       },
     };

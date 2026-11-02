@@ -135,6 +135,7 @@ export function stageConfigHash(dir: string, stage: Stage): string {
   const files: string[] = [];
   const ex = stage.executor;
   if (ex.type === "llm" || ex.type === "agent") files.push(ex.prompt);
+  for (const out of stage.outputs) if (out.schema) files.push(out.schema);
   if (ex.type === "script") files.push(...commandFiles(dir, ex.run));
   if (ex.type === "agent" && ex.agent === "custom" && ex.command) files.push(...commandFiles(dir, ex.command));
   const fileHashes = files.map((f) => {

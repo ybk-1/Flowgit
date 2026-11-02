@@ -25,6 +25,8 @@ export interface LlmRequest {
   prompt: string;
   maxTokens: number;
   effort?: Effort;
+  /** True when this call asks the model to repair a JSON output that failed its schema. */
+  repair?: boolean;
 }
 
 export interface LlmResponse {

@@ -21,6 +21,7 @@ import {
   stageStatus,
   writeRunRecord,
 } from "./runs.js";
+import { schemaFailure, schemaProblems } from "./schema-check.js";
 import { isDirOutput, isTextType, listFiles, nowIso, truncate } from "./util.js";
 
 export class UpstreamNotReadyError extends Error {
@@ -126,6 +127,8 @@ export async function runStage(loaded: LoadedFlow, stageId: string, options: Run
   };
   try {
     const result = await executor.run(ctx);
+    const problems = schemaProblems(dir, stage);
+    if (problems.length) throw schemaFailure(problems);
     const outputs = hashOutputs(dir, stage);
     snapshotOutputs(dir, stage, n);
     const record: RunRecord = {

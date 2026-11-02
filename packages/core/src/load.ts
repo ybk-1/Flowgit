@@ -4,6 +4,7 @@ import { Ajv2020 } from "ajv/dist/2020.js";
 import type { ErrorObject } from "ajv";
 import { findCycle } from "./graph.js";
 import type { Flow, LoadedFlow, ValidationIssue } from "./types.js";
+import { outputSchemaIssues } from "./schema-check.js";
 import { isSafeRelative, outputRel } from "./util.js";
 
 export const FLOW_FILE = "flow.json";
@@ -129,6 +130,7 @@ export function validateFlow(data: unknown, opts: ValidateOptions = {}): Validat
       issues.push({ level: "warning", path: `${base}/executor`, message: `执行器 "${ex.type}" 在 v0.1 里只是预留，还不能运行 / executor "${ex.type}" is reserved in spec v0.1 and cannot run yet` });
     }
   });
+  issues.push(...outputSchemaIssues(flow, opts.dir));
   const cycle = findCycle(flow);
   if (cycle.length) {
     issues.push({ level: "error", path: "/stages", message: `阶段之间形成了环 / stages form a cycle: ${cycle.join(" -> ")}` });
