@@ -139,9 +139,9 @@ CLI messages and errors are bilingual. What a template produces (script, caption
 
 | 命令 / Command | 作用 | What it does |
 | --- | --- | --- |
-| `flowgit init [dir] [-t 模板\|目录\|Git 地址]` | 从模板、本地目录或 Git 地址新建流程。本地目录和 Git 默认不复制产物，`--with-outputs` 才复制；Git 可加 `--ref` 和 `--path` | Create a flow from a template, a local directory or a Git URL. A local directory or Git URL skips outputs unless `--with-outputs` is set; Git also takes `--ref` and `--path` |
+| `flowgit init [dir] [-t 模板\|社区 id\|目录\|Git 地址]` | 从模板、社区模板、本地目录或 Git 地址新建流程。本地目录和 Git 默认不复制产物，`--with-outputs` 才复制；Git 可加 `--ref` 和 `--path`，地址末尾的 `#path=` 也表示子目录 | Create a flow from a template, a community id, a local directory or a Git URL. A local directory or Git URL skips outputs unless `--with-outputs` is set; Git also takes `--ref` and `--path`, and `#path=` at the end of the URL is a subdirectory |
 | `flowgit share <目录> [--with-outputs] [--force]` | 复制一份可以分享的流程：默认不带产物，发现密钥就拒绝写入，邮箱和本机路径只提醒 | Copy a flow that is safe to share: outputs stay behind by default, a secret refuses the write, emails and local paths are warnings |
-| `flowgit templates [--json]` | 列出自带的模板和它们的阶段 | List the bundled templates and their stages |
+| `flowgit templates [--json] [--all]` | 列出自带的模板和它们的阶段。`--all` 连社区模板；读不到登记时仍列出自带模板并提示一行 | List the bundled templates and their stages. `--all` adds community templates; if the registry cannot be read, the bundled list is still printed with one note |
 | `flowgit validate` | 按规范检查 `flow.json` 或 `flow.md` | Check `flow.json` or `flow.md` against the spec |
 | `flowgit convert --to md\|json` | 在 `flow.json` 和 `flow.md` 之间转换，内容不变 | Switch between `flow.json` and `flow.md`; the flow stays the same |
 | `flowgit stage add <id> --type <类型>` | 加一个阶段。没写 `--after` 就加在最后，没写 `--input` 就用前一个阶段；llm / agent 会建提示词骨架 | Add a stage. Omit `--after` to append, omit `--input` to use the previous stage; llm / agent gets a prompt skeleton |
@@ -162,6 +162,7 @@ CLI messages and errors are bilingual. What a template produces (script, caption
 | `flowgit doctor [--model m] [--json]` | 跑之前检查这台电脑：Node、流程输入、密钥、脚本和 agent 要用的命令。不调用模型，不运行阶段 | Check this machine before a run: Node, flow inputs, keys, and the programs script and agent stages use. Calls no model and runs no stage |
 | `flowgit graph [--status] [--md] [-o 文件]` | 把流程画成 Mermaid 流程图（GitHub、Obsidian 能直接显示），`--status` 按状态上色，`-o` 写成 UTF-8 文件 | Draw the flow as a Mermaid diagram (GitHub and Obsidian render it); `--status` colors it by state, `-o` writes a UTF-8 file |
 | `flowgit export-skill [-o SKILL.md]` | 生成 `SKILL.md`，给 AI 工具用 | Generate a `SKILL.md` for AI tools |
+| `flowgit gallery build [--out gallery-dist]` | 生成静态模板画廊（不部署） | Write a static template gallery (does not deploy) |
 
 所有命令都接受 `-C <dir>` 指定流程目录。`run` 还接受 `--input k=v`（只对这次运行生效）、`--model`、`--force` 和 `--dry-run`。`diff` 对文本和 JSON 按行输出 unified diff（`+` 绿色、`-` 红色，尊重 `NO_COLOR`），二进制只比较 sha256，文件夹列出新增、删除和改动的文件。
 
@@ -195,6 +196,22 @@ Every command accepts `-C <dir>` for the flow directory. `run` also takes `--inp
 图文模板按平台（小红书、公众号、博客）决定篇幅和语气，导出 `post.md` 和 `post.html`。说明见 [`packages/cli/templates/article/README.md`](packages/cli/templates/article/README.md)。客服 SOP 模板把你的资料整理成规程和测试用例，最后打包成 `skill/SKILL.md`，说明见 [`packages/cli/templates/support-sop/README.md`](packages/cli/templates/support-sop/README.md)。落地页从简报生成 `site/index.html`，缺图用色块，页面不访问网络。说明见 [`packages/cli/templates/landing-page/README.md`](packages/cli/templates/landing-page/README.md)。短视频见 [`packages/cli/templates/short-video/README.md`](packages/cli/templates/short-video/README.md)，周报入门见 [教程](docs/guide.md)。
 
 The article template sets length and tone from the platform (Xiaohongshu, WeChat, blog) and exports `post.md` and `post.html`. See [`packages/cli/templates/article/README.md`](packages/cli/templates/article/README.md). The support-SOP template turns your notes into an SOP and test cases, then packages them as `skill/SKILL.md`; see [`packages/cli/templates/support-sop/README.md`](packages/cli/templates/support-sop/README.md). The landing page builds `site/index.html` from a brief, uses a color block when a photo is missing, and loads nothing from the network. See [`packages/cli/templates/landing-page/README.md`](packages/cli/templates/landing-page/README.md). The short video is [`packages/cli/templates/short-video/README.md`](packages/cli/templates/short-video/README.md); the weekly-report starter is built in the [guide](docs/guide.md).
+
+## 模板画廊和社区模板 / Gallery and community templates
+
+自带模板装在命令行里。社区模板记在 [`registry/community.json`](registry/community.json)：一条一个 Git 地址，子目录写在 `#path=` 里。登记方式和审核标准（要能通过校验、没有密钥、许可证写清楚、模板有「依据 / Sources」）见 [`registry/README.md`](registry/README.md)。
+
+Bundled templates ship with the CLI. Community templates are listed in [`registry/community.json`](registry/community.json): one Git URL each, with a subdirectory in `#path=`. How to register one, and the review bar (it validates, has no secrets, names a clear license, and the template has 依据 / Sources), is in [`registry/README.md`](registry/README.md).
+
+```bash
+flowgit templates --all                              # 自带的 + 社区的 / bundled + community
+flowgit init my-page -t agent-page                   # 按登记的地址复制 / copy the registered URL
+flowgit gallery build                                # 静态页面写到 gallery-dist/，不部署 / static pages in gallery-dist/, no deploy
+```
+
+在这个仓库里运行时，命令用仓库里的 `registry/community.json`。找不到这份文件时（例如从 npm 装的命令行），改读 GitHub 上的 raw 地址。`FLOWGIT_REGISTRY` 可以换成别的网址或一个本地文件；读不到时，`templates --all` 仍列出自带模板，并只提示一行。
+
+When you run it inside this repo, the command uses the repo's `registry/community.json`. When that file is not there (for example a CLI installed from npm), it reads the raw file on GitHub. `FLOWGIT_REGISTRY` can point at another URL or a local file; if the list cannot be read, `templates --all` still prints the bundled templates and one note.
 
 ## 接任何模型 / Any model
 

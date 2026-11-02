@@ -81,8 +81,10 @@ import {
 } from "@flowgit/core";
 import { openBrowser, startBoard } from "@flowgit/web";
 import { runBatch } from "./batch.js";
+import { buildGallery } from "./gallery.js";
 import { bilingualCliError, c, colorizeUnifiedDiff, nextHint, statusBoard, table, width } from "./format.js";
 import { restoreProxyChild, routeThroughProxy } from "./proxy.js";
+import { loadCommunityRegistry, splitGitFragment, type CommunityEntry } from "./registry.js";
 
 restoreProxyChild();
 
@@ -511,17 +513,29 @@ function nextStepLine(target: string): string {
   return `  下一步 / next:\n    cd ${/\s/.test(shown) ? `"${shown}"` : shown}\n    flowgit status`;
 }
 
+/** A community id becomes its Git URL. Bundled names, Git URLs and real directories stay as they are. */
+async function resolveCommunityTemplate(template: string): Promise<{ template: string; entry?: CommunityEntry; note?: string; ids: string[] }> {
+  if (bundledDir(template) || isGitUrl(template) || path.isAbsolute(template) || template.includes("/") || template.includes("\\") || fs.existsSync(path.resolve(template))) {
+    return { template, ids: [] };
+  }
+  const loaded = await loadCommunityRegistry();
+  if (!loaded.ok) return { template, note: loaded.note, ids: [] };
+  const entry = loaded.entries.find((item) => item.id === template);
+  if (!entry) return { template, ids: loaded.entries.map((item) => item.id) };
+  return { template: entry.git, entry, ids: [] };
+}
+
 program
   .command("init")
-  .description("从模板、本地目录或 Git 地址新建流程（默认 short-video）/ create a flow from a template, a local directory or a Git URL (default: short-video)")
+  .description("从模板、社区模板、本地目录或 Git 地址新建流程（默认 short-video）/ create a flow from a template, a community template, a local directory or a Git URL (default: short-video)")
   .argument("[dir]", "目标目录 / target directory", ".")
   .option("-t, --template <name>", "模板、目录或 Git 地址 / template, directory or Git URL", DEFAULT_TEMPLATE)
   .option("--ref <ref>", "Git 分支或标签 / Git branch or tag")
-  .option("--path <subdir>", "仓库里的子目录 / subdirectory inside the repo")
+  .option("--path <subdir>", "仓库里的子目录；也可以写在地址末尾 #path=子目录 / subdirectory inside the repo, or #path=<subdir> on the URL")
   .option("--with-outputs", "连产物一起复制 / also copy stage outputs")
   .option("--format <format>", "流程文件写成 json（flow.json）还是 md（flow.md），默认跟来源一样 / write the flow file as json (flow.json) or md (flow.md); defaults to the source's format")
   .option("--force", "覆盖已有的流程文件 / overwrite an existing flow file")
-  .action((dir: string, opts: { template: string; ref?: string; path?: string; withOutputs?: boolean; format?: string; force?: boolean }) => {
+  .action(async (dir: string, opts: { template: string; ref?: string; path?: string; withOutputs?: boolean; format?: string; force?: boolean }) => {
     const target = path.resolve(dir);
     const format = parseFormat(opts.format);
     const existing = [FLOW_FILE, FLOW_MD_FILE].map((f) => path.join(target, f)).filter((f) => fs.existsSync(f));
@@ -556,7 +570,17 @@ program
       console.log(nextStepLine(target));
       return;
     }
-    if ((opts.ref || opts.path) && !isGitUrl(opts.template)) {
+
+    const resolved = await resolveCommunityTemplate(opts.template);
+    const template = resolved.template;
+    const ref = opts.ref ?? resolved.entry?.ref;
+    const split = splitGitFragment(template);
+    if (split.path === "") fail(new Error(`#path= 后面要写子目录 / #path= needs a subdirectory`));
+    if (opts.path && split.path && opts.path !== split.path) {
+      fail(new Error(`--path 和地址里的 #path= 不一致：「${opts.path}」和「${split.path}」 / --path and #path= in the URL disagree: "${opts.path}" and "${split.path}"`));
+    }
+    const pathInRepo = opts.path ?? split.path;
+    if ((ref || pathInRepo) && !isGitUrl(split.url)) {
       fail(new Error(`--ref 和 --path 只用于 Git 地址 / --ref and --path are only for a Git URL`));
     }
 
@@ -565,25 +589,29 @@ program
     let forked: ForkedFrom | undefined;
     try {
       try {
-        if (isGitUrl(opts.template)) {
-          const cloned = cloneFlowRepo(opts.template, opts.ref);
+        if (isGitUrl(split.url)) {
+          const cloned = cloneFlowRepo(split.url, ref);
           cleanup = cloned.dir;
-          src = path.resolve(cloned.dir, opts.path ?? ".");
-          // Resolve symlinks too, so a link in the repository can't point --path outside it.
+          src = path.resolve(cloned.dir, pathInRepo ?? ".");
+          // Resolve symlinks too, so a link in the repository can't point --path or #path= outside it.
           const real = (p: string) => (fs.existsSync(p) ? fs.realpathSync(p) : p);
           const escaped = path.relative(real(cloned.dir), real(src));
           if (escaped.startsWith("..") || path.isAbsolute(escaped)) {
             throw new Error(`--path 必须在仓库里面 / --path must stay inside the repository`);
           }
-          forked = { source: publicGitUrl(opts.template), ...(opts.ref ? { ref: opts.ref } : {}), commit: cloned.commit };
+          forked = { source: publicGitUrl(split.url), ...(ref ? { ref } : {}), commit: cloned.commit };
         } else {
-          src = path.resolve(opts.template);
+          src = path.resolve(split.url);
         }
         const srcFile = findFlowFile(src);
         if (!srcFile) {
           const names = bundledTemplates().map((t) => t.id).join(", ");
-          const where = opts.path ? `${opts.template} (${opts.path})` : opts.template;
-          throw new Error(`找不到流程 / Flow not found: ${where}\n  自带的模板 / bundled templates: ${names}（flowgit templates 查看说明 / see flowgit templates）`);
+          const where = pathInRepo ? `${template} (${pathInRepo})` : template;
+          const lines = [`找不到流程 / Flow not found: ${where}`];
+          if (resolved.note) lines.push(`  ${resolved.note}`);
+          lines.push(`  自带的模板 / bundled templates: ${names}（flowgit templates 查看说明 / see flowgit templates）`);
+          if (resolved.ids.length) lines.push(`  社区模板 / community templates: ${resolved.ids.join(", ")}（flowgit templates --all）`);
+          throw new Error(lines.join("\n"));
         }
         const sourceFlow = readSourceFlow(srcFile);
         const withOutputs = !!opts.withOutputs;
@@ -598,8 +626,10 @@ program
         }
         finish(path.basename(srcFile));
         const skipped = withOutputs ? [] : presentOutputs(src, sourceFlow);
+        const shown = isGitUrl(split.url) ? publicGitUrl(split.url) : opts.template;
         console.log(`${c.green("✓")} 已创建流程 / created flow in ${target}`);
-        console.log(`  来源 / source: ${isGitUrl(opts.template) ? publicGitUrl(opts.template) : opts.template}${opts.path ? ` (${opts.path})` : ""}`);
+        console.log(`  来源 / source: ${shown}${pathInRepo ? ` (${pathInRepo})` : ""}`);
+        if (resolved.entry) console.log(`  社区模板 / community template: ${resolved.entry.id}`);
         console.log(`  复制了 ${rels.length} 个文件 / copied ${rels.length} file(s)`);
         console.log(skipped.length ? `  跳过的产物 / skipped outputs: ${skipped.join(", ")}` : `  没有跳过产物 / no outputs skipped`);
         const actions = printActions(sourceFlow, src);
@@ -678,25 +708,39 @@ program
     }
   });
 
+function bundledTemplateJson(list: { id: string; flow: Flow }[]) {
+  return list.map(({ id, flow }) => ({
+    id,
+    name: flow.name,
+    description: flow.description ?? "",
+    default: id === DEFAULT_TEMPLATE,
+    stages: flow.stages.map((s) => ({ id: s.id, name: s.name, executor: s.executor.type })),
+  }));
+}
+
 program
   .command("templates")
-  .description("列出自带的模板 / list the bundled templates")
+  .description("列出自带的模板；--all 连社区模板 / list the bundled templates; --all adds community templates")
   .option("--json", "输出 JSON / machine-readable output")
-  .action((opts: { json?: boolean }) => {
+  .option("--all", "连社区模板一起列出 / also list community templates")
+  .action(async (opts: { json?: boolean; all?: boolean }) => {
     const list = bundledTemplates();
+    const loaded = opts.all ? await loadCommunityRegistry() : undefined;
+    const community = loaded?.ok ? loaded.entries : [];
+    const note = loaded && !loaded.ok ? loaded.note : undefined;
     if (opts.json) {
       console.log(
-        JSON.stringify(
-          list.map(({ id, flow }) => ({
-            id,
-            name: flow.name,
-            description: flow.description ?? "",
-            default: id === DEFAULT_TEMPLATE,
-            stages: flow.stages.map((s) => ({ id: s.id, name: s.name, executor: s.executor.type })),
-          })),
-          null,
-          2,
-        ),
+        opts.all
+          ? JSON.stringify(
+              {
+                bundled: bundledTemplateJson(list).map((item) => ({ ...item, source: "bundled" })),
+                community: community.map((entry) => ({ ...entry, source: "community" })),
+                ...(note ? { note } : {}),
+              },
+              null,
+              2,
+            )
+          : JSON.stringify(bundledTemplateJson(list), null, 2),
       );
       return;
     }
@@ -705,7 +749,14 @@ program
       rows.push([`${id}${id === DEFAULT_TEMPLATE ? c.dim(" (默认 default)") : ""}`, flow.name, flow.stages.map((s) => `${s.name} ${c.dim(s.executor.type)}`).join(" → ")]);
     }
     console.log(table(rows));
-    console.log(c.dim("\n用法 / usage: flowgit init <目录 dir> -t <模板 template>"));
+    if (community.length) {
+      const communityRows = [[c.dim("模板 template"), c.dim("名称 name"), c.dim("地址 git")]];
+      for (const entry of community) communityRows.push([entry.id, entry.name.zh, entry.git]);
+      console.log(`\n${c.bold("社区模板 / community templates")}`);
+      console.log(table(communityRows));
+    }
+    if (note) console.log(`\n${note}`);
+    console.log(c.dim(`\n用法 / usage: flowgit init <目录 dir> -t <模板 template>${opts.all ? "" : "    flowgit templates --all"}`));
   });
 
 program
@@ -1454,6 +1505,23 @@ program
       console.log(`${c.green("✓")} 看板 / board: ${board.url}`);
       console.log(c.dim("绑定 127.0.0.1。可以修改产物，也可以运行、填写输入、看历史、对比和回退。按 Ctrl+C 停止 / bound to 127.0.0.1. Outputs can be edited; you can also run stages, edit inputs, browse history, compare, and restore. Press Ctrl+C to stop"));
       if (opts.open) openBrowser(board.url);
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+const galleryCmd = program.command("gallery").description("静态模板画廊 / static template gallery");
+
+galleryCmd
+  .command("build")
+  .description("生成静态页面到一个目录，不部署 / write a static site into a directory, without deploying")
+  .option("--out <dir>", "输出目录 / output directory", "gallery-dist")
+  .action(async (opts: { out: string }) => {
+    try {
+      const result = await buildGallery({ outDir: opts.out });
+      console.log(`${c.green("✓")} 已生成模板画廊 / wrote the template gallery: ${result.outDir}`);
+      console.log(`  ${result.pages.length} 个模板页 / ${result.pages.length} template page(s)`);
+      if (result.note) console.log(result.note);
     } catch (err) {
       fail(err);
     }
