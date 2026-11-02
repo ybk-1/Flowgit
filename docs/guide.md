@@ -105,6 +105,29 @@ Key points:
 
 字段的完整说明见 [spec.md](spec.md)。/ Every field is described in [spec.md](spec.md).
 
+### 用命令加阶段 / Add a stage from the command line
+
+已经有 `flow.json` 时，不必手改文件。下面这条把「润色」插在「周报草稿」后面，并新建 `prompts/polish.md`（文件已存在就不会覆盖）：
+
+Once `flow.json` exists, you don't have to edit it by hand. This inserts a "polish" stage after the draft and creates `prompts/polish.md` (an existing file is left as it is):
+
+```bash
+flowgit stage add polish --type llm --name 润色 --after draft
+flowgit validate
+```
+
+不写 `--after` 就加在最后；不写 `--input` 就把前一个阶段当作输入。`human` 和 `llm` 的默认产物是 `<id>.md`，`agent` 是 `<id>/` 目录，`script` 必须写 `--run` 和 `--output`。
+
+Omit `--after` to append the stage, and omit `--input` to use the stage before it as the input. `human` and `llm` default to an output of `<id>.md`, `agent` defaults to a directory `<id>/`, and `script` requires `--run` and `--output`.
+
+删掉一个阶段不会删除它的文件，也不会动 `runs/`。如果后面的阶段还把它当作输入，命令会拒绝，并列出那些阶段；确认后加 `--force` 会去掉这些引用。试完用下面这条删掉「润色」，后面的教程还是三个阶段：
+
+Removing a stage deletes none of its files and does not touch `runs/`. If later stages still use it as an input, the command refuses and lists them; `--force` drops those references. When you're done trying it, remove "polish" with the line below so the rest of the guide still has three stages:
+
+```bash
+flowgit stage rm polish
+```
+
 ## 3. 写提示词 / Write the prompt
 
 新建 `prompts/draft.md`：
