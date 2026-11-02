@@ -110,6 +110,7 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 - `travel-guide`：旅行攻略。备选地点（标出要预约和要核实的信息）→ 按区域排的每日行程（交通、留白、雨天备选）→ 攻略笔记 → 检查节奏、时间衔接、预算和出发前核实清单。
 - `online-course`：知识付费课程，按 ADDIE。学员和学习成果 → 大纲（每段视频 6 分钟以内、每课有练习）→ 试听课逐字稿和课程介绍页（并行）→ 检查成果覆盖、分段长度，以及介绍页里的效果承诺、学员证言和价格比较。
 - 每个新模板的 README 都列出参考资料。
+- `landing-page`：落地页。简报（人）→ 结构 → 文案 → 照片（可空）→ 生成 `site/index.html` 和 `site/style.css` → 检查。缺图用色块加说明，页面不访问网络，用户写的文字都会转义。
 - `examples/agent-page`：用 agent 做一页介绍网页（只在仓库里）。
 - `examples/subflow`：题目（人）→ 子流程（模型和脚本）→ 摘要（脚本）。演示 `workflow` 执行器。
 - `short-video` (default): script → voiceover → storyboard → assets → edit → export. FFmpeg renders a vertical video with zoom, blurred fill, gradient text cards, a title, transitions, background music and voiceover (clips follow the voice); the output language is Chinese or English.
@@ -131,6 +132,7 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 - `travel-guide`: a travel guide. Candidate places (flagging bookings and facts to verify) → a day-by-day itinerary by area (transfers, free time, rainy-day backups) → the guide → checks on pace, timing, budget and the check-before-you-go list.
 - `online-course`: an online course with ADDIE. Learners and outcomes → syllabus (video segments of six minutes or less, practice in every lesson) → the trial lesson script and the course page (in parallel) → checks on outcome coverage, segment length, and promised results, testimonials and price comparisons on the page.
 - Every new template's README lists its references.
+- `landing-page`: a landing page. Brief (person) → structure → copy → photos (optional) → build `site/index.html` and `site/style.css` → check. A missing image becomes a color block with a caption, the page loads nothing from the network, and user text is escaped.
 - `examples/agent-page`: a one-page explainer made by an agent (repo only).
 - `examples/subflow`: topic (person) → sub-flow (model and script) → summary (script). Shows the `workflow` executor.
 

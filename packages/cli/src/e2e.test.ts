@@ -75,12 +75,14 @@ describe("flowgit CLI with the short-video template", () => {
     expect(list.status).toBe(0);
     const templates = JSON.parse(list.stdout) as { id: string; default: boolean; stages: { executor: string }[] }[];
     expect(templates[0]).toMatchObject({ id: "short-video", default: true });
-    expect(templates.map((t) => t.id)).toEqual(expect.arrayContaining(["weekly-report", "article", "support-sop", "job-application", "research-report", "ecommerce-listing", "slides", "live-selling", "short-drama", "lesson-plan", "novel-serial", "business-plan", "event-plan", "hiring", "travel-guide", "online-course"]));
-    expect(spawnSync(process.execPath, [cli, "templates"], { encoding: "utf8", env: { ...process.env, NO_COLOR: "1" } }).stdout).toMatch(/weekly-report\s+周报（入门示例）\s+随手记 human → 周报草稿 llm → 检查 script/);
+    expect(templates.map((t) => t.id)).toEqual(expect.arrayContaining(["weekly-report", "article", "support-sop", "job-application", "research-report", "ecommerce-listing", "slides", "live-selling", "short-drama", "lesson-plan", "novel-serial", "business-plan", "event-plan", "hiring", "travel-guide", "online-course", "landing-page"]));
+    const listed = spawnSync(process.execPath, [cli, "templates"], { encoding: "utf8", env: { ...process.env, NO_COLOR: "1" } });
+    expect(listed.stdout).toMatch(/weekly-report\s+周报（入门示例）\s+随手记 human → 周报草稿 llm → 检查 script/);
+    expect(listed.stdout).toMatch(/landing-page\s+落地页\s+简报 human → 结构 llm → 文案 llm → 照片 human → 生成 script → 检查 script/);
 
     const wrong = spawnSync(process.execPath, [cli, "init", path.join(work, "nope"), "-t", "no-such-template"], { encoding: "utf8" });
     expect(wrong.status).toBe(1);
-    expect(wrong.stderr).toContain("bundled templates: short-video, article, business-plan, ecommerce-listing, event-plan, hiring, job-application, lesson-plan, live-selling, novel-serial, online-course, research-report, short-drama, slides, support-sop, travel-guide, weekly-report");
+    expect(wrong.stderr).toContain("bundled templates: short-video, article, business-plan, ecommerce-listing, event-plan, hiring, job-application, landing-page, lesson-plan, live-selling, novel-serial, online-course, research-report, short-drama, slides, support-sop, travel-guide, weekly-report");
   });
 
   it("shows a short, quoted path when the new flow is below the current folder", () => {
@@ -854,6 +856,119 @@ describe("popular templates on demo replies", () => {
     expect(key).toContain("分母 5，分子 3");
     expect(worksheet).not.toContain("分母 5，分子 3");
     expect(worksheet).toContain("课后作业");
+  });
+});
+
+describe("landing-page template", () => {
+  let pageDir: string;
+
+  function run(args: string[], env: Record<string, string> = {}) {
+    const r = spawnSync(process.execPath, [cli, "-C", pageDir, ...args], {
+      encoding: "utf8",
+      env: { ...process.env, NO_COLOR: "1", ...env },
+    });
+    return { code: r.status, out: `${r.stdout}${r.stderr}` };
+  }
+
+  beforeAll(() => {
+    if (!fs.existsSync(cli)) throw new Error("Build the CLI first: pnpm -r run build");
+    pageDir = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-landing-"));
+  });
+
+  afterAll(() => {
+    if (pageDir) fs.rmSync(pageDir, { recursive: true, force: true });
+  });
+
+  it("builds a site from demo replies and escapes a heading", () => {
+    const init = spawnSync(process.execPath, [cli, "init", pageDir, "-t", "landing-page"], { encoding: "utf8" });
+    expect(init.status, `${init.stdout}${init.stderr}`).toBe(0);
+    expect(run(["inputs", "set", "product=箱栖", "audience=养猫的人", "goal=留下邮箱"]).code).toBe(0);
+    const ran = run(["run", "all"], { FLOWGIT_LLM_MOCK_DIR: path.join(pageDir, "demo-replies") });
+    expect(ran.code, ran.out).toBe(0);
+    expect(ran.out).toContain("5 个区块，0 张图片，5 个色块");
+
+    const htmlPath = path.join(pageDir, "site", "index.html");
+    expect(fs.existsSync(htmlPath)).toBe(true);
+    const html = fs.readFileSync(htmlPath, "utf8");
+    const copy = JSON.parse(fs.readFileSync(path.join(pageDir, "copy.json"), "utf8")) as { blocks: Record<string, { heading?: string }> };
+    for (const block of Object.values(copy.blocks)) {
+      if (block.heading) expect(html).toContain(block.heading);
+    }
+    expect(html).toContain('name="viewport"');
+    // the placeholder form sends nothing: its input has no name
+    expect(html).toMatch(/<input id="reply"/);
+    expect(html).not.toMatch(/<input[^>]*\bname=/);
+    expect(html).not.toMatch(/<script/i);
+    expect(html).not.toMatch(/\b(?:src|href)\s*=\s*["']\s*https?:/i);
+    const css = fs.readFileSync(path.join(pageDir, "site", "style.css"), "utf8");
+    expect(css).toMatch(/max-width:\s*40rem/);
+    expect(css).toContain("prefers-color-scheme: dark");
+    expect(css).not.toMatch(/https?:\/\//);
+    expect(css).not.toMatch(/url\s*\(/);
+    const report = fs.readFileSync(path.join(pageDir, "check-report.md"), "utf8");
+    expect(report).toContain("缺少替代文本的图片");
+    expect(report).toContain("没有问题。");
+
+    const en = run(["run", "check", "--input", "language=en"]);
+    expect(en.code, en.out).toBe(0);
+    expect(fs.readFileSync(path.join(pageDir, "check-report.md"), "utf8")).toContain("No problems.");
+
+    fs.writeFileSync(path.join(pageDir, "images", "hero.jpg"), "not-a-real-jpeg");
+    const withPhoto = run(["run", "build"]);
+    expect(withPhoto.code, withPhoto.out).toBe(0);
+    expect(withPhoto.out).toContain("1 张图片，4 个色块");
+    const htmlPhoto = fs.readFileSync(htmlPath, "utf8");
+    expect(htmlPhoto).toContain('src="images/hero.jpg"');
+    expect(htmlPhoto).toContain('alt="给猫一个它自己的纸箱"');
+    expect(fs.readFileSync(path.join(pageDir, "site", "images", "hero.jpg"), "utf8")).toBe("not-a-real-jpeg");
+
+    const edited = JSON.parse(fs.readFileSync(path.join(pageDir, "copy.json"), "utf8")) as { blocks: { hero: { heading: string } } };
+    edited.blocks.hero.heading = "Hello <script>alert(1)</script>";
+    fs.writeFileSync(path.join(pageDir, "copy.json"), `${JSON.stringify(edited, null, 2)}\n`);
+    const rebuilt = run(["run", "build"]);
+    expect(rebuilt.code, rebuilt.out).toBe(0);
+    const html2 = fs.readFileSync(htmlPath, "utf8");
+    expect(html2).toContain("Hello &lt;script&gt;alert(1)&lt;/script&gt;");
+    expect(html2).not.toContain("<script>");
+  });
+
+  it("reports missing alt, empty links, skipped headings, long copy, and blocks left off the page", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-landing-check-"));
+    fs.mkdirSync(path.join(root, "site"));
+    fs.writeFileSync(
+      path.join(root, "site", "index.html"),
+      '<!DOCTYPE html><html><body>\n<h1>Hi</h1>\n<h3>Skipped</h3>\n<img src="images/a.jpg">\n<a href="">x</a>\n<section data-block="hero"><h1>Hi</h1></section>\n</body></html>\n',
+    );
+    fs.writeFileSync(
+      path.join(root, "copy.json"),
+      JSON.stringify({
+        blocks: {
+          hero: { heading: "Hi", body: "short", button: "Go" },
+          gone: { heading: "Missing heading", body: "x".repeat(501), button: "" },
+        },
+      }),
+    );
+    const script = path.join(here, "..", "templates", "landing-page", "scripts", "check.mjs");
+    const r = spawnSync(process.execPath, [script], {
+      cwd: root,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        FLOWGIT_PROJECT_DIR: root,
+        FLOWGIT_FLOW_INPUTS: JSON.stringify({ language: "zh" }),
+        FLOWGIT_OUTPUTS: JSON.stringify([{ path: "check-report.md" }]),
+      },
+    });
+    expect(r.status).toBe(1);
+    const report = fs.readFileSync(path.join(root, "check-report.md"), "utf8");
+    expect(report).toContain("images/a.jpg");
+    expect(report).toContain('href=""');
+    expect(report).toContain("h1 之后是 h3");
+    expect(report).toContain("gone：正文 501 字（上限 500）");
+    expect(report).toContain("文案里有、页面上没有的区块");
+    expect(report).toContain("- gone");
+    expect(report).not.toContain("没有问题。");
+    fs.rmSync(root, { recursive: true, force: true });
   });
 });
 

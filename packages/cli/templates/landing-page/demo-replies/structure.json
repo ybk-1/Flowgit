@@ -1,0 +1,34 @@
+{
+  "blocks": [
+    {
+      "id": "hero",
+      "purpose": "让人知道这是一块折成猫窝的瓦楞纸，而且现在只能留邮箱",
+      "points": ["一块纸板折成的窝，不用工具", "现在不能下单，只能留下邮箱"],
+      "image": "hero.jpg"
+    },
+    {
+      "id": "features",
+      "purpose": "把三个卖点分开说清楚",
+      "points": ["沿压痕折叠，不用工具", "挡住一侧视线，纸板帮猫保温", "不用了可以摊平回收"],
+      "image": "features.jpg"
+    },
+    {
+      "id": "testimonial",
+      "purpose": "这里以后放用户原话。现在还没有，不能编成真实评价",
+      "points": ["标明这是占位，不是某位主人说的"],
+      "image": "testimonial.jpg"
+    },
+    {
+      "id": "faq",
+      "purpose": "回答材料、能住几只猫、现在能不能买",
+      "points": ["瓦楞纸，没有塑料零件", "适合一只成猫", "还不能下单"],
+      "image": "faq.jpg"
+    },
+    {
+      "id": "cta",
+      "purpose": "请人留下邮箱，开始卖的时候再通知",
+      "points": ["不写价格", "不承诺快递日期"],
+      "image": "cta.jpg"
+    }
+  ]
+}

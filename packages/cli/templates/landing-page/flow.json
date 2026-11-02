@@ -1,0 +1,93 @@
+{
+  "format": "flowgit",
+  "version": "0.1",
+  "id": "landing-page",
+  "name": "落地页",
+  "description": "从一份简报做出单页网站：简报（人）→ 结构 → 文案 → 照片（可空）→ 生成网页 → 检查。缺图用色块，页面不访问网络。 / Build a one-page site from a brief: brief (person) → structure → copy → photos (optional) → build → check. A missing image becomes a color block, and the page loads nothing from the network.",
+  "language": "zh",
+  "author": { "name": "Flowgit" },
+  "license": "Apache-2.0",
+  "tags": ["web", "landing-page", "starter"],
+  "inputs": {
+    "language": {
+      "type": "string",
+      "enum": ["zh", "en"],
+      "default": "zh",
+      "description": "输出语言：zh 中文，en English。决定结构、文案、页面上的固定文字和检查报告 / Output language: zh or en. Sets the structure, copy, fixed page text and the check report"
+    },
+    "product": {
+      "type": "string",
+      "description": "产品名称，例如：箱栖 / Product name, e.g. BoxNest",
+      "required": true
+    },
+    "audience": {
+      "type": "string",
+      "description": "访问者是谁，例如：养猫的人 / Who the visitor is, e.g. people who live with a cat",
+      "required": true
+    },
+    "goal": {
+      "type": "string",
+      "description": "希望访问者做什么，例如：留下邮箱 / What the visitor should do, e.g. leave an email",
+      "required": true
+    }
+  },
+  "stages": [
+    {
+      "id": "brief",
+      "name": "简报",
+      "description": "写下卖点、语气、必须出现的事实，以及不要说的话。模板里有一份虚构的箱栖简报。 / Write the selling points, tone, facts that must appear, and things not to say. The template ships a fictional BoxNest brief.",
+      "executor": {
+        "type": "human",
+        "instructions": "编辑 brief.md：卖点、语气、必须写上的事实、不要说的话。示例是虚构的「箱栖」，用之前换成你的产品。 / Edit brief.md: selling points, tone, must-have facts, and things not to say. The sample is the fictional product BoxNest; replace it before you use it."
+      },
+      "outputs": [{ "type": "text/markdown", "path": "brief.md" }]
+    },
+    {
+      "id": "structure",
+      "name": "结构",
+      "description": "把页面分成区块。每个区块有用途、要点，以及建议的图片文件名。 / Split the page into blocks. Each block has a purpose, key points, and a suggested image file name.",
+      "inputs": ["brief"],
+      "executor": { "type": "llm", "prompt": "prompts/structure.md", "effort": "medium" },
+      "outputs": [{ "type": "application/json", "path": "structure.json" }]
+    },
+    {
+      "id": "copy",
+      "name": "文案",
+      "description": "为每个区块写标题、正文和按钮文字，和 structure.json 一一对应。 / Write each block's heading, body and button text, one to one with structure.json.",
+      "inputs": ["brief", "structure"],
+      "executor": { "type": "llm", "prompt": "prompts/copy.md", "effort": "medium" },
+      "outputs": [{ "type": "application/json", "path": "copy.json" }]
+    },
+    {
+      "id": "photos",
+      "name": "照片",
+      "description": "按结构里的 image 放图片。缺的图会变成带说明的色块，空文件夹也可以。 / Add images named from each block's image field. A missing image becomes a color block with a caption, so an empty folder works.",
+      "inputs": ["structure"],
+      "executor": {
+        "type": "human",
+        "instructions": "把图片放进 images/，文件名用 structure.json 里每个区块的 image，例如 hero.jpg。没有图片就留着空的 images/，生成时会用色块加说明。 / Put images in images/, named after each block's image field in structure.json, e.g. hero.jpg. Leave images/ empty if you have none; the build uses a color block and a caption."
+      },
+      "outputs": [{ "type": "dir", "path": "images/" }]
+    },
+    {
+      "id": "build",
+      "name": "生成",
+      "description": "写成 site/index.html 和 site/style.css，并把用到的图片复制到 site/images/。手机宽度、深色模式，文字都会转义，不引用网络。 / Write site/index.html and site/style.css, and copy used images into site/images/. Phone width, dark mode, escaped text, and no network requests.",
+      "inputs": ["structure", "copy", "photos"],
+      "executor": { "type": "script", "run": "node scripts/build.mjs" },
+      "outputs": [
+        { "type": "text/html", "path": "site/index.html" },
+        { "type": "text/css", "path": "site/style.css" },
+        { "type": "dir", "path": "site/images/" }
+      ]
+    },
+    {
+      "id": "check",
+      "name": "检查",
+      "description": "检查缺替代文本的图片、空链接、跳级的标题、过长的区块，以及文案里有但页面上没有的区块。 / Check images missing alt, empty links, skipped heading levels, overly long blocks, and blocks present in the copy but missing from the page.",
+      "inputs": ["build"],
+      "executor": { "type": "script", "run": "node scripts/check.mjs" },
+      "outputs": [{ "type": "text/markdown", "path": "check-report.md" }]
+    }
+  ]
+}
