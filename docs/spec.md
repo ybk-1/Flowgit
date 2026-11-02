@@ -44,6 +44,7 @@ my-flow/
 | `author` | 否 / no | `{ "name": "...", "url": "..." }` | `{ "name": "...", "url": "..." }` |
 | `license` | 否 / no | 流程本身（提示词、脚本）的 SPDX 许可证 | SPDX license of the flow itself (prompts, scripts) |
 | `tags` | 否 / no | 标签数组 | Array of tags |
+| `forkedFrom` | 否 / no | 从 Git 地址 `init` 时记下的来源：`{ "source", "ref"?, "commit"? }`，地址里的账号和密码（令牌）会去掉。从本地目录复制不写这个字段，避免把可能含用户名的本机路径带出去 | Recorded when `init` copies a Git URL: `{ "source", "ref"?, "commit"? }`, with any user name and password (token) removed from the URL. A local directory does not set it, so a path that may contain a user name is never stored |
 | `inputs` | 否 / no | 流程级参数，见下 | Flow-level parameters, see below |
 | `stages` | 是 / yes | 阶段数组，至少一个 | Array of stages, at least one |
 

@@ -409,12 +409,13 @@ A template and a project are the same format. To share the flow, keep `flow.json
 - `flowgit.local.json`：你填的输入值 / your input values
 - 各阶段的产物（`notes.md`、`report.md`、`check.json`）/ the stage outputs
 
-别人拿到这个文件夹后，用它新建自己的流程：
+别人拿到这个文件夹后，用它新建自己的流程。从本地目录或 Git 地址复制时，默认不带上各阶段的产物；要连产物一起拿，加 `--with-outputs`。从 Git 复制时，新的 `flow.json` 会记下 `forkedFrom`（地址、分支、提交号）；从本地目录复制不写，免得把本机路径带出去。
 
-Others start their own copy from the folder:
+Others start their own copy from the folder. Copying a local directory or a Git URL leaves stage outputs behind unless you pass `--with-outputs`. A Git copy records `forkedFrom` (URL, branch, commit) in the new `flow.json`; a local directory does not, so a path that may contain a user name is never stored.
 
 ```bash
 flowgit init ~/my-report -t path/to/weekly-report
+flowgit init ~/their-flow -t https://github.com/example/their-flow.git --ref main
 ```
 
 还可以生成一个 `SKILL.md`，让 Claude Code 这类会读 Skill 的工具不用界面也能按阶段跑：

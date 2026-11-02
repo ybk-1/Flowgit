@@ -33,6 +33,7 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 ### 命令行 / CLI
 
 - `init`、`templates`、`validate`、`status`（终端看板）、`board`（网页看板）、`inputs`、`run`、`log`、`diff`、`restore`、`providers`、`doctor`、`graph`、`export-skill`。
+- `init -t` 可以是 Git 地址（`git clone --depth 1`，可加 `--ref` 和 `--path`）。从本地目录或 Git 复制时默认不带产物，`--with-outputs` 才带上；Git 来源会把 `forkedFrom` 写进新的 `flow.json`。没有安装 git 时会说明怎么装。
 - `stage add` / `stage rm`：用命令加、删阶段。llm 和 agent 没给提示词时会建一个中英双语骨架，已有文件不覆盖。删阶段不删文件，也不动 `runs/`；还有别的阶段依赖它时要 `--force`。
 - `doctor` 在运行前检查 Node、流程输入、密钥、代理设置，以及脚本和 agent 要用的命令。
 - `export-skill` 把流程导出成 `SKILL.md`，AI 工具不用界面也能按步骤运行。
@@ -44,6 +45,7 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 - `inputs set` 保存前就检查名字和值（数字、`true`/`false`、可选值），写错了不会存进去。
 - 提示、报错和 `--help` 都是中英双语（包括输错命令、少写参数这类报错，会提示“是不是想输入 …”），并针对余额不足、限流、连不上（包括代理）给出具体建议。
 - `init`, `templates`, `validate`, `status` (terminal board), `board` (web board), `inputs`, `run`, `log`, `diff`, `restore`, `providers`, `doctor`, `graph`, `export-skill`.
+- `init -t` accepts a Git URL (`git clone --depth 1`, with `--ref` and `--path`). Copying a local directory or a Git URL leaves outputs behind unless `--with-outputs` is set, and a Git source writes `forkedFrom` into the new `flow.json`. If git is not installed, the error says how to install it.
 - `stage add` / `stage rm`: add or remove a stage from the command line. An llm or agent stage without a prompt gets a bilingual skeleton, and an existing file is never overwritten. Removing a stage deletes no files and leaves `runs/` alone; `--force` is required when other stages depend on it.
 - `doctor` checks Node, flow inputs, keys, proxy settings, and the programs script and agent stages use, before a run.
 - `export-skill` exports a flow as a `SKILL.md`, so AI tools can run it step by step without the UI.

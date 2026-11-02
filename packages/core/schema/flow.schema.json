@@ -63,6 +63,17 @@
         "type": "string"
       }
     },
+    "forkedFrom": {
+      "type": "object",
+      "description": "Where this flow was copied from, when init cloned a Git URL. Not set for a local directory, so a path that may contain a user name is never stored.",
+      "additionalProperties": false,
+      "required": ["source"],
+      "properties": {
+        "source": { "type": "string", "minLength": 1, "description": "The Git URL that was cloned." },
+        "ref": { "type": "string", "minLength": 1, "description": "Branch or tag, when --ref was passed." },
+        "commit": { "type": "string", "minLength": 1, "description": "Commit that was cloned (git rev-parse HEAD)." }
+      }
+    },
     "inputs": {
       "type": "object",
       "description": "Flow-level parameters the user fills in once (e.g. topic). Values live in flowgit.local.json or are passed with --input key=value.",

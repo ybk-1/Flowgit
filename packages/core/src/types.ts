@@ -112,6 +112,13 @@ export interface Stage {
   outputs: Output[];
 }
 
+/** Where a flow was copied from, when `init` cloned a Git URL. Never a local path. */
+export interface ForkedFrom {
+  source: string;
+  ref?: string;
+  commit?: string;
+}
+
 export interface Flow {
   format: "flowgit";
   version: string;
@@ -123,6 +130,8 @@ export interface Flow {
   author?: FlowAuthor;
   license?: string;
   tags?: string[];
+  /** Set when the flow was initialized from a Git URL. */
+  forkedFrom?: ForkedFrom;
   inputs?: Record<string, FlowInput>;
   stages: Stage[];
 }
