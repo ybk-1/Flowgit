@@ -53,6 +53,7 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 - 看板换了新造型：亮色是粗网格加大号阶段编号，可以运行的那一步整块变蓝；暗色是深色卡片，状态用发光圆点标出。跟着系统的深浅色自动切换，不用联网加载字体。
 - 看板上可以新增和删除阶段。校验不通过就什么都不写，并返回双语错误列表；llm / agent 没有提示词文件时会建骨架，已有文件不覆盖。删除不碰产物和 `runs/`，还有依赖时会说明并可以一起断开。运行中不能改阶段。
 - 看板上可以在「卡片 / Cards」和「流程图 / Graph」之间切换，选择记在浏览器里。流程图按依赖从左到右分列，阶段是圆角框，颜色和卡片一样表示状态；点一个阶段，侧栏里可以看产物、运行和历史。布局来自 `GET /api/graph`（`layoutFlow`）。
+- 看板上有「预演 / Preview」：在日志里列出每个阶段会跳过、运行、等你还是不能运行，最后写最多调用几次模型，什么都不运行。全部运行前，如果这次会调用真实模型（`FLOWGIT_LLM_MOCK_DIR` 的固定回复不算），会先确认。每张卡片和流程图方框的提示显示这个阶段用过的 token，页面顶部显示合计。`GET /api/plan` 和 `GET /api/usage`。
 - `run all --dry-run` 预演：每个阶段会跳过、运行还是停下等你，最多调用几次模型，什么都不运行。`doctor` 通过后和导出的 `SKILL.md` 里都会提到它。
 - `inputs set` 保存前就检查名字和值（数字、`true`/`false`、可选值），写错了不会存进去。
 - `board` 打印和打开的链接带着令牌（`?token=…`）。直接打开 `http://127.0.0.1:4747/` 只会看到提示、拿不到令牌，所以同一台电脑上的其他账号或程序没法操作你的看板。
@@ -75,6 +76,7 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 - The board has a new look: in light mode a bold grid with large stage numbers, and the stage you can run now in a solid blue block; in dark mode graphite cards with glowing status dots. It follows the system light/dark setting and loads no web fonts.
 - Stages can be added and removed on the board. A stage that fails validation is not written, and the error list is bilingual; an llm or agent stage without a prompt file gets a skeleton, and an existing file is left as it is. Removing a stage leaves outputs and `runs/` in place, names any stages that still depend on it, and can detach those links. Stages cannot be changed while a run is in progress.
 - The board switches between "卡片 / Cards" and "流程图 / Graph", and the choice is remembered in the browser. The graph lays stages out left to right by dependency, as rounded boxes colored the same way as the cards; click a stage for its outputs, run, and history in the side panel. Layout comes from `GET /api/graph` (`layoutFlow`).
+- The board has "预演 / Preview": the log lists whether each stage would be skipped, run, wait for you or cannot run, and ends with at most how many model calls, without running anything. Run all asks first when the run would call a real model (canned replies from `FLOWGIT_LLM_MOCK_DIR` do not count). Each card and the graph box tooltip show the tokens that stage has used, and the top of the page shows the total. `GET /api/plan` and `GET /api/usage`.
 - `run all --dry-run` shows whether each stage would be skipped, run or stop for you, and at most how many model calls it would make, without running anything. `doctor` points to it when nothing blocks, and so does the exported `SKILL.md`.
 - `inputs set` checks names and values (numbers, `true`/`false`, allowed values) before saving, so a typo is never stored.
 - The link `board` prints and opens carries the token (`?token=…`). Opening `http://127.0.0.1:4747/` by itself shows a note and no token, so other accounts or programs on the same computer can't drive your board.

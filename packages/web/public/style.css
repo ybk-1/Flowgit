@@ -482,7 +482,7 @@ body {
   gap: 8px;
 }
 
-#add-stage, .ghost {
+#add-stage, #preview, .ghost {
   font: inherit;
   font-weight: 700;
   cursor: pointer;
@@ -493,9 +493,9 @@ body {
   color: var(--ink);
 }
 
-#add-stage { padding: 12px 20px; font-size: 15px; }
+#add-stage, #preview { padding: 12px 20px; font-size: 15px; }
 
-#add-stage:hover:not(:disabled), .ghost:hover:not(:disabled) { background: var(--ink); color: var(--bg); }
+#add-stage:hover:not(:disabled), #preview:hover:not(:disabled), .ghost:hover:not(:disabled) { background: var(--ink); color: var(--bg); }
 
 #stage-save, .danger {
   font: inherit;
@@ -510,7 +510,7 @@ body {
 
 #stage-save:hover:not(:disabled), .danger:hover:not(:disabled) { filter: brightness(1.1); }
 
-#add-stage:disabled, #stage-save:disabled, .ghost:disabled, .danger:disabled, .menu-button:disabled {
+#add-stage:disabled, #preview:disabled, #stage-save:disabled, .ghost:disabled, .danger:disabled, .menu-button:disabled {
   opacity: 0.4;
   cursor: default;
 }
@@ -610,19 +610,39 @@ body {
 
 .dialog-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 
-#add-stage:focus-visible, #stage-save:focus-visible, .ghost:focus-visible, .danger:focus-visible,
+#add-stage:focus-visible, #preview:focus-visible, #stage-save:focus-visible, .ghost:focus-visible, .danger:focus-visible,
 .menu-button:focus-visible, .menu button:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) :is(#add-stage, .ghost) { border-width: 1px; border-color: var(--rule); }
-  :root:not([data-theme="light"]) :is(#add-stage, .ghost):hover:not(:disabled) { background: var(--surface-2); color: var(--ink); }
+  :root:not([data-theme="light"]) :is(#add-stage, #preview, .ghost) { border-width: 1px; border-color: var(--rule); }
+  :root:not([data-theme="light"]) :is(#add-stage, #preview, .ghost):hover:not(:disabled) { background: var(--surface-2); color: var(--ink); }
 }
 
-:root[data-theme="dark"] :is(#add-stage, .ghost) { border-width: 1px; border-color: var(--rule); }
-:root[data-theme="dark"] :is(#add-stage, .ghost):hover:not(:disabled) { background: var(--surface-2); color: var(--ink); }
+:root[data-theme="dark"] :is(#add-stage, #preview, .ghost) { border-width: 1px; border-color: var(--rule); }
+:root[data-theme="dark"] :is(#add-stage, #preview, .ghost):hover:not(:disabled) { background: var(--surface-2); color: var(--ink); }
+
+/* ---------- Token usage ---------- */
+
+.usage-total {
+  margin: 6px 0 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.usage {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.card[data-state="never-run"] .usage { color: color-mix(in srgb, var(--accent-ink) 78%, transparent); }
 
 /* ---------- Cards / graph switch and the graph view ---------- */
 
@@ -732,7 +752,7 @@ body {
 #panel-body .badge[data-state="never-run"] { --state: var(--never); }
 #panel-body .badge[data-state="waiting-upstream"] { --state: var(--wait); }
 
-#panel-body :is(.executor, .runs, .outputs-label, .instructions) { color: var(--code-muted); }
+#panel-body :is(.executor, .runs, .usage, .outputs-label, .instructions) { color: var(--code-muted); }
 #panel-body .edit-note { color: color-mix(in srgb, var(--edited) 55%, var(--code-ink)); }
 
 .stage-actions { display: flex; flex-wrap: wrap; gap: 8px; }
