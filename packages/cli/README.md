@@ -26,6 +26,7 @@ flowgit log                       # 整个流程的历史和 token 合计 / the 
 | `short-video`（默认 / default） | 竖屏短视频：脚本 → 分镜 → 素材 → 剪辑 → 导出 | A vertical short video: script → storyboard → assets → edit → export |
 | `weekly-report` | 周报入门示例：随手记（人）→ 草稿（模型）→ 检查（脚本） | Starter: a weekly report from rough notes (person → model → script) |
 | `article` | 图文帖子（小红书、公众号、博客）：大纲 → 正文 → 配图方案 → 照片 → 导出 | An illustrated post (Xiaohongshu, WeChat, blog): outline → draft → image plan → photos → export |
+| `support-sop` | 客服 SOP：资料 → 汇总 → 规程 → 用例 → 检查 → 打包成 Skill | Customer-support SOP: knowledge → collect → SOP → cases → review → packaged as a Skill |
 
 ```bash
 flowgit templates                 # 列出模板和它们的阶段 / list templates and their stages
