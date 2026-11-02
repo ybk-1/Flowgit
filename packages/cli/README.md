@@ -43,6 +43,7 @@ flowgit log                       # 整个流程的历史和 token 合计 / the 
 | `landing-page` | 落地页：简报 → 结构 → 文案 → 照片（可空）→ 生成网页 → 检查 | Landing page: brief → structure → copy → photos (optional) → build → check |
 | `social-posts` | 多平台帖子：角度 → 挑选 → 按平台写帖 → 检查 → 导出 | Social posts: angles → pick → one post per platform → check → export |
 | `data-report` | 数据报告：表格 → 列画像 → 图表规格 → 手写 SVG → 结论在前的分析 → 报告和数字核对 | Data report: table → column profile → chart spec → hand-drawn SVG → answer-first analysis → report and number check |
+| `meeting-notes` | 会议纪要：转录 → 整理 → 纪要 → 待办 → 检查 → 会后邮件 | Meeting notes: transcript → clean → minutes → actions → check → follow-up |
 
 ```bash
 flowgit templates                 # 列出模板和它们的阶段 / list templates and their stages

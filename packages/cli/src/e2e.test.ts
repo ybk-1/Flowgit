@@ -75,14 +75,14 @@ describe("flowgit CLI with the short-video template", () => {
     expect(list.status).toBe(0);
     const templates = JSON.parse(list.stdout) as { id: string; default: boolean; stages: { executor: string }[] }[];
     expect(templates[0]).toMatchObject({ id: "short-video", default: true });
-    expect(templates.map((t) => t.id)).toEqual(expect.arrayContaining(["weekly-report", "article", "support-sop", "job-application", "research-report", "ecommerce-listing", "slides", "live-selling", "short-drama", "lesson-plan", "novel-serial", "business-plan", "event-plan", "hiring", "travel-guide", "online-course", "landing-page", "social-posts", "data-report"]));
+    expect(templates.map((t) => t.id)).toEqual(expect.arrayContaining(["weekly-report", "article", "support-sop", "job-application", "research-report", "ecommerce-listing", "slides", "live-selling", "short-drama", "lesson-plan", "novel-serial", "business-plan", "event-plan", "hiring", "travel-guide", "online-course", "landing-page", "social-posts", "data-report", "meeting-notes"]));
     const listed = spawnSync(process.execPath, [cli, "templates"], { encoding: "utf8", env: { ...process.env, NO_COLOR: "1" } });
     expect(listed.stdout).toMatch(/weekly-report\s+周报（入门示例）\s+随手记 human → 周报草稿 llm → 检查 script/);
     expect(listed.stdout).toMatch(/landing-page\s+落地页\s+简报 human → 结构 llm → 文案 llm → 照片 human → 生成 script → 检查 script/);
 
     const wrong = spawnSync(process.execPath, [cli, "init", path.join(work, "nope"), "-t", "no-such-template"], { encoding: "utf8" });
     expect(wrong.status).toBe(1);
-    expect(wrong.stderr).toContain("bundled templates: short-video, article, business-plan, data-report, ecommerce-listing, event-plan, hiring, job-application, landing-page, lesson-plan, live-selling, novel-serial, online-course, research-report, short-drama, slides, social-posts, support-sop, travel-guide, weekly-report");
+    expect(wrong.stderr).toContain("bundled templates: short-video, article, business-plan, data-report, ecommerce-listing, event-plan, hiring, job-application, landing-page, lesson-plan, live-selling, meeting-notes, novel-serial, online-course, research-report, short-drama, slides, social-posts, support-sop, travel-guide, weekly-report");
   });
 
   it("shows a short, quoted path when the new flow is below the current folder", () => {
@@ -1267,6 +1267,163 @@ describe("data-report template", () => {
     const bad = runIn(dir, ["run", "charts"]);
     expect(bad.code).toBe(1);
     expect(bad.out).toContain("里没有数字");
+  });
+});
+
+describe("meeting-notes template", () => {
+  let root: string;
+
+  function runIn(dir: string, args: string[], env: Record<string, string> = {}) {
+    const r = spawnSync(process.execPath, [cli, "-C", dir, ...args], {
+      encoding: "utf8",
+      env: { ...process.env, NO_COLOR: "1", ...env },
+    });
+    return { code: r.status, out: `${r.stdout}${r.stderr}` };
+  }
+
+  beforeAll(() => {
+    if (!fs.existsSync(cli)) throw new Error("Build the CLI first: pnpm -r run build");
+    root = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-meeting-"));
+  });
+
+  afterAll(() => {
+    if (root) fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  it("runs the Chinese sample and the check report matches", () => {
+    const dir = path.join(root, "zh");
+    const init = spawnSync(process.execPath, [cli, "init", dir, "-t", "meeting-notes"], { encoding: "utf8" });
+    expect(init.status, `${init.stdout}${init.stderr}`).toBe(0);
+    expect(runIn(dir, ["inputs", "set", "meeting=轻杯 Mini 产品周会", "date=2026-03-04", "attendees=林夏、周衡、沈予", "style=brief", "language=zh"]).code).toBe(0);
+    const ran = runIn(dir, ["run", "all"], { FLOWGIT_LLM_MOCK_DIR: path.join(dir, "demo-replies", "zh") });
+    expect(ran.code, ran.out).toBe(0);
+    const clean = fs.readFileSync(path.join(dir, "clean.md"), "utf8");
+    expect(clean).toContain("来源：transcript/weekly-zh.srt");
+    expect(clean).toContain("[0:20] 林夏：");
+    expect(clean).toContain("出席的是我、周衡和沈予");
+    expect(clean).not.toContain("[0:48]");
+    expect(clean).not.toContain("-->");
+    const minutes = fs.readFileSync(path.join(dir, "minutes.md"), "utf8");
+    expect(minutes).toContain("[12:30]");
+    expect(minutes).toContain("[7:30]");
+    const actions = JSON.parse(fs.readFileSync(path.join(dir, "actions.json"), "utf8")) as { owner: string; due: string; source: string }[];
+    expect(actions.map((item) => item.owner)).toEqual(["周衡", "林夏", "沈予", "沈予"]);
+    expect(actions.map((item) => item.due)).toEqual(["2026-03-11", "2026-03-11", "2026-03-09", ""]);
+    expect(actions.map((item) => item.source)).toEqual(["8:50", "16:40", "22:15", "28:50"]);
+    const report = fs.readFileSync(path.join(dir, "check-report.md"), "utf8");
+    expect(report).toContain("待办 4 条。");
+    expect(report).toContain("周衡：交出下一版 380 克结构草图，只给下一版；做不到就写上实际估重（2026-03-11，出处 8:50）");
+    expect(report).toContain("林夏：锁上架清单（标题、详情、7 天无理由退换、电机保修 1 年）并发到群里（2026-03-11，出处 16:40）");
+    expect(report).toContain("沈予：写 5 条客服问答（重量、榨冰、充电、退换、保修），每条对应已有资料，不新增承诺（2026-03-09，出处 22:15）");
+    // the sample's last promise names no day: kept, and the check asks for a date
+    expect(report).toContain("沈予：把问答草稿先发给林夏看一眼（日期待定，出处 28:50）");
+    expect(report).toContain("#4 把问答草稿先发给林夏看一眼：会上没说什么时候做完，请补上日期。");
+    expect(report).toContain("没有。");
+    expect(report).toContain("有 1 处要看一下。");
+    const followUp = fs.readFileSync(path.join(dir, "follow-up.md"), "utf8");
+    expect(followUp).toContain("完整转录不附在这封邮件里");
+    expect(followUp).toContain("日期待定");
+  });
+
+  it("runs the English sample and the check report matches", () => {
+    const dir = path.join(root, "en");
+    const init = spawnSync(process.execPath, [cli, "init", dir, "-t", "meeting-notes"], { encoding: "utf8" });
+    expect(init.status, `${init.stdout}${init.stderr}`).toBe(0);
+    expect(runIn(dir, ["inputs", "set", "meeting=Lightcup Mini product weekly", "date=2026-03-04", "attendees=Lin Xia, Zhou Heng, Shen Yu", "style=brief", "language=en"]).code).toBe(0);
+    const ran = runIn(dir, ["run", "all"], { FLOWGIT_LLM_MOCK_DIR: path.join(dir, "demo-replies", "en") });
+    expect(ran.code, ran.out).toBe(0);
+    const clean = fs.readFileSync(path.join(dir, "clean.md"), "utf8");
+    expect(clean).toContain("Source: transcript/weekly-en.srt");
+    expect(clean).toContain("[0:20] Lin Xia:");
+    expect(clean).toContain("Here today: Lin Xia, Zhou Heng, and Shen Yu.");
+    expect(clean).not.toContain("[0:48]");
+    const report = fs.readFileSync(path.join(dir, "check-report.md"), "utf8");
+    expect(report).toContain("4 action(s).");
+    expect(report).toContain("Zhou Heng: Deliver the 380 gram structure sketch for the next version only, and write the real estimate if 380 grams is missed (2026-03-11, source 8:50)");
+    expect(report).toContain("Lin Xia: Lock the launch list (title, detail page, 7-day returns, 1-year motor warranty) and send it to the group (2026-03-11, source 16:40)");
+    expect(report).toContain("Shen Yu: Write 5 support answers (weight, ice, charging, returns, warranty) from facts already on record, with no new promises (2026-03-09, source 22:15)");
+    expect(report).toContain("Shen Yu: Send the draft answers to Lin Xia for a quick look (date TBD, source 28:50)");
+    expect(report).toContain("#4 Send the draft answers to Lin Xia for a quick look: no date was named; add one.");
+    expect(report).toContain("None.");
+    expect(report).toContain("1 thing(s) to look at.");
+  });
+
+  it("reads a GBK .txt with a name-and-time line above the words, and keeps an action nobody took", () => {
+    const dir = path.join(root, "txt");
+    const init = spawnSync(process.execPath, [cli, "init", dir, "-t", "meeting-notes"], { encoding: "utf8" });
+    expect(init.status, `${init.stdout}${init.stderr}`).toBe(0);
+    for (const name of fs.readdirSync(path.join(dir, "transcript"))) fs.rmSync(path.join(dir, "transcript", name));
+    // GBK bytes, as many Windows tools save a .txt. "会议改到 10:30" ends with a time but is words, not a speaker line.
+    const gbk: Record<string, number[]> = { 林: [0xc1, 0xd6], 夏: [0xcf, 0xc4], 先: [0xcf, 0xc8], 对: [0xb6, 0xd4], 上: [0xc9, 0xcf], 架: [0xbc, 0xdc], "。": [0xa1, 0xa3], 会: [0xbb, 0xe1], 议: [0xd2, 0xe9], 改: [0xb8, 0xc4], 到: [0xb5, 0xbd], 周: [0xd6, 0xdc], 衡: [0xba, 0xe2], 寄: [0xbc, 0xc4], 出: [0xb3, 0xf6], 个: [0xb8, 0xf6], 不: [0xb2, 0xbb], 材: [0xb2, 0xc4], 料: [0xc1, 0xcf] };
+    const toGbk = (text: string) => Buffer.from([...text].flatMap((ch) => gbk[ch] ?? [...Buffer.from(ch)]));
+    const transcript = ["林夏  00:00:20", "先对上架。", "会议改到 10:30", "", "周衡  00:01:10", "寄出 20 个。", "", "林夏  00:07:30", "不改材料。", ""].join("\r\n");
+    fs.writeFileSync(path.join(dir, "transcript", "meeting.txt"), toGbk(transcript));
+    const replies = path.join(root, "txt-replies");
+    fs.mkdirSync(replies, { recursive: true });
+    fs.writeFileSync(path.join(replies, "summary.md"), "# 周会\n\n## 议题\n\n### 材料\n- 决定：不改材料。[7:30]\n");
+    fs.writeFileSync(
+      path.join(replies, "actions.json"),
+      `${JSON.stringify([{ owner: "", task: "问物流报价", due: "", source: "7:30" }, { owner: "周衡", task: "再寄 20 个试用", due: "2026-03-11", source: "1:10" }], null, 2)}\n`,
+    );
+    fs.writeFileSync(path.join(replies, "email.md"), "# 会后跟进：周会\n\n- 负责人待定：问物流报价。日期待定，请确认。\n");
+    expect(runIn(dir, ["inputs", "set", "meeting=周会", "date=2026-03-04", "language=zh"]).code).toBe(0);
+    const ran = runIn(dir, ["run", "all"], { FLOWGIT_LLM_MOCK_DIR: replies });
+    expect(ran.code, ran.out).toBe(0);
+    const clean = fs.readFileSync(path.join(dir, "clean.md"), "utf8");
+    expect(clean).toContain("[0:20] 林夏：先对上架。会议改到 10:30");
+    expect(clean).toContain("[1:10] 周衡：寄出 20 个。");
+    expect(clean).toContain("[7:30] 林夏：不改材料。");
+    const report = fs.readFileSync(path.join(dir, "check-report.md"), "utf8");
+    expect(report).toContain("（负责人待定）：问物流报价（日期待定，出处 7:30）");
+    expect(report).toContain("#1 问物流报价：会上没人接下，请指定一个负责人。");
+    expect(report).toContain("#1 问物流报价：会上没说什么时候做完，请补上日期。");
+    // 周衡 is found inside the words, so no "not in the transcript" warning
+    expect(report).toContain("## 负责人不在记录里\n没有。");
+    expect(report).toContain("有 2 处要看一下。");
+  });
+
+  it("keeps a time in the words out of the speaker name and groups unlabeled subtitles by the minute", () => {
+    const dir = path.join(root, "srt");
+    const init = spawnSync(process.execPath, [cli, "init", dir, "-t", "meeting-notes"], { encoding: "utf8" });
+    expect(init.status, `${init.stdout}${init.stderr}`).toBe(0);
+    for (const name of fs.readdirSync(path.join(dir, "transcript"))) fs.rmSync(path.join(dir, "transcript", name));
+    const cues = [
+      ["00:00:01,000", "我们约在 10:30 开会"],
+      ["00:00:20,000", "比例是 3:1"],
+      ["00:01:05,000", "下一段从这里开始"],
+    ];
+    const srt = cues.map(([start, text], index) => `${index + 1}\n${start} --> 00:01:30,000\n${text}\n`).join("\n");
+    fs.writeFileSync(path.join(dir, "transcript", "subs.srt"), srt);
+    expect(runIn(dir, ["inputs", "set", "meeting=周会", "date=2026-03-04"]).code).toBe(0);
+    expect(runIn(dir, ["run", "transcript"]).code).toBe(0);
+    const ran = runIn(dir, ["run", "clean"]);
+    expect(ran.code, ran.out).toBe(0);
+    expect(ran.out).toContain("记录里没有发言人");
+    const clean = fs.readFileSync(path.join(dir, "clean.md"), "utf8");
+    expect(clean).toContain("[0:01] 我们约在 10:30 开会比例是 3:1");
+    expect(clean).toContain("[1:05] 下一段从这里开始");
+    expect(clean).not.toContain("我们约在 10：");
+  });
+
+  it("warns on a due date before the meeting and stops only on a format error", () => {
+    const dir = path.join(root, "zh");
+    const actionsPath = path.join(dir, "actions.json");
+    const original = fs.readFileSync(actionsPath, "utf8");
+    const actions = JSON.parse(original) as { due: string }[];
+    actions[0].due = "2026-03-01";
+    fs.writeFileSync(actionsPath, `${JSON.stringify(actions, null, 2)}\n`);
+    const warned = runIn(dir, ["run", "check"]);
+    expect(warned.code, warned.out).toBe(0);
+    const warning = fs.readFileSync(path.join(dir, "check-report.md"), "utf8");
+    expect(warning).toContain("2026-03-01 早于会议 2026-03-04");
+    expect(warning).not.toContain("检查通过。");
+
+    fs.writeFileSync(actionsPath, "{\"owner\":\"林夏\"}\n");
+    const broken = runIn(dir, ["run", "check"]);
+    expect(broken.code).not.toBe(0);
+    const format = fs.readFileSync(path.join(dir, "check-report.md"), "utf8");
+    expect(format).toContain("## 格式错误");
+    expect(format).toContain("actions.json 必须是数组。");
   });
 });
 
