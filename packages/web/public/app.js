@@ -19,6 +19,7 @@ const inputsForm = document.getElementById("inputs-form");
 const inputsStatus = document.getElementById("inputs-status");
 const inputsSave = document.getElementById("inputs-save");
 const noticeEl = document.getElementById("notice");
+const hintEl = document.getElementById("refresh-hint");
 const panelEl = document.getElementById("panel");
 const panelTitle = document.getElementById("panel-title");
 const panelBody = document.getElementById("panel-body");
@@ -32,6 +33,15 @@ let currentBlob = null;
 let runBusy = false;
 let runGen = 0;
 const modelDrafts = new Map();
+
+const LIVE_LOST = "实时更新已断开，改为每 3 秒刷新 / live updates lost, refreshing every 3 seconds";
+/** "connecting" until the first open or error, then "live" or "down". */
+let eventsState = "connecting";
+let pollTimer = 0;
+let reconnectTimer = 0;
+let eventSource = null;
+/** Id of the last stream event handled. A reconnect replays the run log, so older ids are skipped. */
+let lastEventId = 0;
 
 function headers() {
   return { "X-Flowgit-Token": token };
@@ -897,6 +907,10 @@ async function saveInputs(event) {
 }
 
 function onStreamEvent(type, data) {
+  if (type === "flow:changed") {
+    void refreshNow();
+    return;
+  }
   if (type === "stage:start") appendLog(`▶ ${data.name || data.stage} (${data.stage})`);
   else if (type === "stage:log") appendLog(`    ${data.line ?? ""}`);
   else if (type === "stage:done") appendLog(`✓ ${data.name || data.stage} → v${data.n}`);
@@ -913,11 +927,88 @@ function onStreamEvent(type, data) {
   }
 }
 
+function setLiveHint(live) {
+  if (!hintEl) return;
+  hintEl.textContent = live ? "实时更新 / live updates" : "每 3 秒刷新 / refreshes every 3s";
+}
+
+function showLiveLost() {
+  noticeEl.hidden = false;
+  noticeEl.textContent = LIVE_LOST;
+}
+
+function hideLiveLost() {
+  if (noticeEl.textContent !== LIVE_LOST) return;
+  noticeEl.textContent = "";
+  noticeEl.hidden = true;
+}
+
+function startPolling() {
+  if (pollTimer) return;
+  pollTimer = setInterval(refresh, 3000);
+}
+
+function stopPolling() {
+  if (!pollTimer) return;
+  clearInterval(pollTimer);
+  pollTimer = 0;
+}
+
+function scheduleReconnect() {
+  if (reconnectTimer) return;
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = 0;
+    connectEvents();
+  }, 5000);
+}
+
 function connectEvents() {
-  if (!token || typeof EventSource === "undefined") return;
+  if (!token || typeof EventSource === "undefined") {
+    eventsState = "down";
+    showLiveLost();
+    setLiveHint(false);
+    startPolling();
+    return;
+  }
+  if (eventSource) {
+    eventSource.close();
+    eventSource = null;
+  }
   const source = new EventSource(`/api/events?token=${encodeURIComponent(token)}`);
-  for (const type of ["stage:start", "stage:log", "stage:done", "stage:error", "stage:skip", "run:end"]) {
+  eventSource = source;
+  let settled = false;
+  source.addEventListener("open", () => {
+    if (eventSource !== source) return;
+    const wasDown = eventsState === "down";
+    eventsState = "live";
+    stopPolling();
+    hideLiveLost();
+    setLiveHint(true);
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = 0;
+    }
+    // Catch up on anything that changed between the last poll and the reconnect.
+    if (wasDown) void refreshNow();
+  });
+  source.addEventListener("error", () => {
+    if (settled || eventSource !== source) return;
+    settled = true;
+    eventsState = "down";
+    source.close();
+    if (eventSource === source) eventSource = null;
+    showLiveLost();
+    setLiveHint(false);
+    startPolling();
+    scheduleReconnect();
+  });
+  for (const type of ["stage:start", "stage:log", "stage:done", "stage:error", "stage:skip", "run:end", "flow:changed"]) {
     source.addEventListener(type, (event) => {
+      const id = Number(event.lastEventId);
+      if (id) {
+        if (id <= lastEventId) return;
+        lastEventId = id;
+      }
       let data = {};
       try {
         data = JSON.parse(event.data);
@@ -949,7 +1040,8 @@ async function refresh() {
       return;
     }
     const text = await res.text();
-    noticeEl.hidden = true;
+    if (eventsState === "down") showLiveLost();
+    else noticeEl.hidden = true;
     if (text === lastJson) return;
     lastJson = text;
     const data = JSON.parse(text);
@@ -985,4 +1077,3 @@ inputsForm.addEventListener("submit", (event) => {
 
 connectEvents();
 refresh();
-setInterval(refresh, 3000);
