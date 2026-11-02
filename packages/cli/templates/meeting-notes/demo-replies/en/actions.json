@@ -1,0 +1,20 @@
+[
+  {
+    "owner": "Zhou Heng",
+    "task": "Deliver the 380 gram structure sketch for the next version only, and write the real estimate if 380 grams is missed",
+    "due": "2026-03-11",
+    "source": "8:50"
+  },
+  {
+    "owner": "Lin Xia",
+    "task": "Lock the launch list (title, detail page, 7-day returns, 1-year motor warranty) and send it to the group",
+    "due": "2026-03-11",
+    "source": "16:40"
+  },
+  {
+    "owner": "Shen Yu",
+    "task": "Write 5 support answers (weight, ice, charging, returns, warranty) from facts already on record, with no new promises",
+    "due": "2026-03-09",
+    "source": "22:15"
+  }
+]

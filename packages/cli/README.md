@@ -34,6 +34,7 @@ flowgit log                       # 整个流程的历史和 token 合计 / the 
 | `live-selling` | 直播带货脚本：商品资料 → 流程表 → 话术和弹幕问答并行 → 检查 | Live-selling script: product facts → rundown → script and chat Q&A in parallel → check |
 | `short-drama` | 竖屏微短剧：设定和人物 → 分集节拍 → 逐集剧本 → 审读 → 检查 | Vertical micro-drama: bible → episode beats → scripts → review → check |
 | `lesson-plan` | 老师备课（逆向设计）：教学目标 → 评价任务 → 教案和分层练习并行 → 练习单和答案 | Lesson prep (backward design): objectives → assessment → plan and tiered exercises in parallel → worksheet and answer key |
+| `meeting-notes` | 会议纪要：转录 → 整理 → 纪要 → 待办 → 检查 → 会后邮件 | Meeting notes: transcript → clean → minutes → actions → check → follow-up |
 
 ```bash
 flowgit templates                 # 列出模板和它们的阶段 / list templates and their stages

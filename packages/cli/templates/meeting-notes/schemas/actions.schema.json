@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Meeting actions",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["owner", "task", "due", "source"],
+    "properties": {
+      "owner": { "type": "string", "minLength": 1 },
+      "task": { "type": "string", "minLength": 1 },
+      "due": { "type": "string", "minLength": 1 },
+      "source": { "type": "string", "minLength": 1 }
+    }
+  }
+}

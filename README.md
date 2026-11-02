@@ -173,6 +173,7 @@ Every command accepts `-C <dir>` for the flow directory. `run` also takes `--inp
 | `live-selling` | `flowgit init -t live-selling` | 商品资料（人）→ 流程表 → 话术和弹幕问答（模型，并行）→ 检查（脚本）/ product facts (person) → rundown → script and chat Q&A (model, in parallel) → check (script) |
 | `short-drama` | `flowgit init -t short-drama` | 设定和人物 → 分集节拍 → 逐集剧本 → 审读（模型）→ 检查（脚本）/ bible and characters → episode beats → scripts → review (model) → check (script) |
 | `lesson-plan` | `flowgit init -t lesson-plan` | 教学目标 → 评价任务 → 教案和分层练习（模型，并行）→ 练习单、答案和检查（脚本）/ objectives → assessment → plan and tiered exercises (model, in parallel) → worksheet, answer key and check (script) |
+| `meeting-notes` | `flowgit init -t meeting-notes` | 转录（人）→ 整理 → 纪要 → 待办（模型）→ 检查（脚本）→ 会后邮件 / transcript (person) → clean → minutes → actions (model) → check (script) → follow-up |
 
 图文模板按平台（小红书、公众号、博客）决定篇幅和语气，导出 `post.md` 和 `post.html`。说明见 [`packages/cli/templates/article/README.md`](packages/cli/templates/article/README.md)。客服 SOP 模板把你的资料整理成规程和测试用例，最后打包成 `skill/SKILL.md`，说明见 [`packages/cli/templates/support-sop/README.md`](packages/cli/templates/support-sop/README.md)。短视频见 [`packages/cli/templates/short-video/README.md`](packages/cli/templates/short-video/README.md)，周报入门见 [教程](docs/guide.md)。
 
@@ -305,7 +306,7 @@ To build your own flow from scratch, follow [docs/guide.md](docs/guide.md) (abou
 packages/
   core/   @flowgit/core  格式、校验、版本记录、执行器 / format, validation, runs, executors
   cli/    flowgit        命令行工具和模板 / CLI and templates
-    templates/             自带模板：short-video（短视频）、weekly-report（周报入门）、article（图文）、support-sop（客服 SOP）、job-application（求职材料）、research-report（调研报告）、ecommerce-listing（电商上架）、slides（演示稿）、live-selling（直播带货）、short-drama（短剧）、lesson-plan（备课）/ bundled templates: short-video, weekly-report (starter), article, support-sop, job-application, research-report, ecommerce-listing, slides, live-selling, short-drama, lesson-plan
+    templates/             自带模板：short-video（短视频）、weekly-report（周报入门）、article（图文）、support-sop（客服 SOP）、job-application（求职材料）、research-report（调研报告）、ecommerce-listing（电商上架）、slides（演示稿）、live-selling（直播带货）、short-drama（短剧）、lesson-plan（备课）、meeting-notes（会议纪要）/ bundled templates: short-video, weekly-report (starter), article, support-sop, job-application, research-report, ecommerce-listing, slides, live-selling, short-drama, lesson-plan, meeting-notes
   web/    @flowgit/web   本机网页看板：查看、修改、运行、填写输入、看历史、对比和回退 / local web board: view, edit, run, fill in inputs, browse history, compare and restore
 docs/
   spec.md                  格式规范 / format spec
