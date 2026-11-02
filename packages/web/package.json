@@ -1,7 +1,7 @@
 {
   "name": "@flowgit/web",
   "version": "0.1.0",
-  "description": "Flowgit local web board: view, edit and run stages, fill in flow inputs, and browse, compare and restore history, served by node:http on 127.0.0.1. 本机网页看板：查看、修改、运行阶段，填写流程输入，查看历史、对比和回退。",
+  "description": "Flowgit local web board: view, edit, add and remove stages, run them, fill in flow inputs, and browse, compare and restore history, served by node:http on 127.0.0.1. 本机网页看板：查看、修改、新增和删除阶段，运行阶段，填写流程输入，查看历史、对比和回退。",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",

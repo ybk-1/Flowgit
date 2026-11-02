@@ -380,9 +380,9 @@ flowgit run all                  # 下游会重跑 / downstream re-runs
 
 Before a restore, if `report.md` holds a new edit that matches no version, Flowgit saves it as a version first. The restored version is already saved, so the draft doesn't show as edited and `run all` re-runs only the downstream check.
 
-**也可以在浏览器里做。** `flowgit board` 打开本机看板（只监听 `127.0.0.1`）：每个阶段一张卡，可以看和改产物、填流程输入、运行、看历史、对比和回退，和上面的命令效果一样。
+**也可以在浏览器里做。** `flowgit board` 打开本机看板（只监听 `127.0.0.1`）：每个阶段一张卡，可以看和改产物、填流程输入、运行、看历史、对比和回退，也可以新增和删除阶段，和上面的命令效果一样。
 
-**Or do it in the browser.** `flowgit board` opens a local board (listening on `127.0.0.1` only): one card per stage, where you can view and edit outputs, fill in flow inputs, run, browse history, compare and restore, with the same effect as the commands above.
+**Or do it in the browser.** `flowgit board` opens a local board (listening on `127.0.0.1` only): one card per stage, where you can view and edit outputs, fill in flow inputs, run, browse history, compare and restore, and add or remove stages, with the same effect as the commands above.
 
 ```bash
 flowgit board                    # 加 --no-open 不自动打开浏览器 / add --no-open to skip opening a browser

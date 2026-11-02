@@ -473,6 +473,157 @@ body {
 .card[data-state="never-run"] .history { border-color: var(--accent-ink); color: var(--accent-ink); }
 .card[data-state="never-run"] .history:hover { background: var(--accent-ink); color: var(--never); }
 
+/* ---------- Adding and removing stages ---------- */
+
+.top-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+#add-stage, .ghost {
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  border: 2px solid var(--ink);
+  border-radius: var(--btn-radius);
+  padding: 8px 14px;
+  background: transparent;
+  color: var(--ink);
+}
+
+#add-stage { padding: 12px 20px; font-size: 15px; }
+
+#add-stage:hover:not(:disabled), .ghost:hover:not(:disabled) { background: var(--ink); color: var(--bg); }
+
+#stage-save, .danger {
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  border-radius: var(--btn-radius);
+  padding: 8px 14px;
+}
+
+#stage-save { border: 2px solid var(--accent); background: var(--accent); color: var(--accent-ink); }
+.danger { border: 2px solid var(--error); background: var(--error); color: var(--bg); }
+
+#stage-save:hover:not(:disabled), .danger:hover:not(:disabled) { filter: brightness(1.1); }
+
+#add-stage:disabled, #stage-save:disabled, .ghost:disabled, .danger:disabled, .menu-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.card-head h2 { min-width: 0; overflow-wrap: anywhere; }
+
+.card-menu { position: relative; flex: 0 0 auto; }
+
+.menu-button {
+  width: 32px;
+  height: 32px;
+  font: inherit;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  border: 1px solid var(--hair);
+  border-radius: var(--btn-radius);
+  background: transparent;
+  color: inherit;
+}
+
+.menu-button:hover:not(:disabled), .card[data-state="never-run"] .menu-button { border-color: currentColor; }
+
+.menu {
+  position: fixed;
+  z-index: 4;
+  min-width: 200px;
+  padding: 6px;
+  background: var(--surface);
+  border: var(--rule-w) solid var(--rule);
+  border-radius: var(--card-radius);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+}
+
+.menu button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  border: 0;
+  border-radius: var(--btn-radius);
+  padding: 8px 10px;
+  background: transparent;
+  color: var(--error);
+}
+
+.menu button:hover { background: color-mix(in srgb, var(--error) 12%, transparent); }
+
+.stage-dialog {
+  width: min(480px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  padding: 0;
+  border: var(--rule-w) solid var(--rule);
+  border-radius: var(--card-radius);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.28);
+}
+
+.stage-dialog::backdrop { background: color-mix(in srgb, var(--code-bg) 60%, transparent); }
+
+.stage-dialog form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 18px 20px 16px;
+}
+
+.stage-dialog h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+}
+
+.stage-dialog p { margin: 0; line-height: 1.5; }
+
+.stage-fields { display: flex; flex-direction: column; gap: 12px; }
+
+.field select[multiple] { min-height: 96px; }
+
+.stage-status { font-size: 13px; line-height: 1.45; white-space: pre-wrap; color: var(--error); }
+
+#remove-deps { color: var(--muted); font-size: 13px; line-height: 1.45; }
+
+.dialog-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+
+#add-stage:focus-visible, #stage-save:focus-visible, .ghost:focus-visible, .danger:focus-visible,
+.menu-button:focus-visible, .menu button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) :is(#add-stage, .ghost) { border-width: 1px; border-color: var(--rule); }
+  :root:not([data-theme="light"]) :is(#add-stage, .ghost):hover:not(:disabled) { background: var(--surface-2); color: var(--ink); }
+}
+
+:root[data-theme="dark"] :is(#add-stage, .ghost) { border-width: 1px; border-color: var(--rule); }
+:root[data-theme="dark"] :is(#add-stage, .ghost):hover:not(:disabled) { background: var(--surface-2); color: var(--ink); }
+
 /* ---------- Side panel (dark in both themes) ---------- */
 
 .panel {

@@ -32,6 +32,8 @@ let refreshing = false;
 let currentBlob = null;
 let runBusy = false;
 let runGen = 0;
+let boardStages = [];
+let removeId = "";
 const modelDrafts = new Map();
 
 const LIVE_LOST = "实时更新已断开，改为每 3 秒刷新 / live updates lost, refreshing every 3 seconds";
@@ -82,9 +84,10 @@ function render(data) {
   }
 
   captureModelDrafts();
+  boardStages = Array.isArray(data.stages) ? data.stages : [];
   const scroll = boardEl.scrollLeft;
   boardEl.replaceChildren();
-  for (const stage of data.stages ?? []) boardEl.append(renderCard(stage));
+  for (const stage of boardStages) boardEl.append(renderCard(stage));
   boardEl.scrollLeft = scroll;
   syncRunButtons();
 }
@@ -99,8 +102,10 @@ function renderCard(stage) {
   card.dataset.state = stage.state || "";
   const label = STATES[stage.state] ?? { icon: "•", zh: stage.state || "未知", en: stage.state || "unknown" };
 
+  const head = el("div", "card-head");
+  head.append(el("h2", null, stage.name || stage.id || ""), cardMenu(stage));
   card.append(
-    el("h2", null, stage.name || stage.id || ""),
+    head,
     el("p", "stage-id", stage.id || ""),
     el("p", "executor", `执行 / executor · ${stage.executor || ""}`),
     el("p", "badge", `${label.icon} ${label.zh} ${label.en}`),
@@ -196,8 +201,13 @@ function modelForAll() {
 
 function syncRunButtons() {
   if (runAllButton) runAllButton.disabled = runBusy;
+  const addStageButton = document.getElementById("add-stage");
+  if (addStageButton) addStageButton.disabled = runBusy;
   for (const button of document.querySelectorAll("button.run")) {
     button.disabled = runBusy || button.dataset.waiting === "1";
+  }
+  for (const button of document.querySelectorAll("button.menu-button")) {
+    button.disabled = runBusy;
   }
 }
 
@@ -1059,9 +1069,239 @@ async function refresh() {
   }
 }
 
+function closeMenus() {
+  let closed = false;
+  for (const menu of document.querySelectorAll(".card-menu .menu")) {
+    if (!menu.hidden) {
+      menu.hidden = true;
+      closed = true;
+    }
+  }
+  return closed;
+}
+
+function cardMenu(stage) {
+  const wrap = el("div", "card-menu");
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "menu-button";
+  button.setAttribute("aria-haspopup", "menu");
+  button.setAttribute("aria-label", `菜单 / Menu · ${stage.id || ""}`);
+  button.textContent = "⋯";
+  const menu = el("div", "menu");
+  menu.hidden = true;
+  menu.setAttribute("role", "menu");
+  const remove = document.createElement("button");
+  remove.type = "button";
+  remove.className = "menu-remove";
+  remove.setAttribute("role", "menuitem");
+  remove.textContent = "删除阶段 / Remove stage";
+  remove.addEventListener("click", () => {
+    menu.hidden = true;
+    openRemove(stage);
+  });
+  button.addEventListener("click", (event) => {
+    event.stopPropagation();
+    const willOpen = menu.hidden;
+    closeMenus();
+    if (!willOpen) return;
+    const rect = button.getBoundingClientRect();
+    menu.style.top = `${Math.round(rect.bottom + 4)}px`;
+    menu.style.right = `${Math.round(window.innerWidth - rect.right)}px`;
+    menu.hidden = false;
+  });
+  menu.append(remove);
+  wrap.append(button, menu);
+  return wrap;
+}
+
+function outputFromPath(p) {
+  const normalized = String(p).replaceAll("\\", "/");
+  if (normalized.endsWith("/")) return { type: "dir", path: normalized };
+  const dot = normalized.lastIndexOf(".");
+  const slash = normalized.lastIndexOf("/");
+  const ext = dot > slash ? normalized.slice(dot).toLowerCase() : "";
+  if (ext === ".md" || ext === ".markdown") return { type: "text/markdown", path: normalized };
+  if (ext === ".json") return { type: "application/json", path: normalized };
+  if (ext === ".txt") return { type: "text/plain", path: normalized };
+  if (ext === ".html" || ext === ".htm") return { type: "text/html", path: normalized };
+  return { type: "application/octet-stream", path: normalized };
+}
+
+function issueLines(data, fallback) {
+  if (data && Array.isArray(data.issues) && data.issues.length) {
+    return data.issues.map((issue) => `${issue.path || "/"}: ${issue.message || ""}`).join("\n");
+  }
+  if (data && typeof data.error === "string" && data.error) return data.error;
+  return fallback;
+}
+
+function fillStageChoices() {
+  const after = document.getElementById("stage-after");
+  const inputs = document.getElementById("stage-inputs");
+  after.replaceChildren(new Option("加在最后 / at the end", ""));
+  inputs.replaceChildren();
+  for (const stage of boardStages) {
+    const label = stage.name && stage.name !== stage.id ? `${stage.name} (${stage.id})` : stage.id || "";
+    after.append(new Option(label, stage.id || ""));
+    inputs.append(new Option(label, stage.id || ""));
+  }
+}
+
+function syncStageFields() {
+  const type = document.getElementById("stage-type").value;
+  document.getElementById("stage-prompt-field").hidden = type !== "llm" && type !== "agent";
+  document.getElementById("stage-run-field").hidden = type !== "script";
+  document.getElementById("stage-agent-field").hidden = type !== "agent";
+  document.getElementById("stage-run").required = type === "script";
+  document.getElementById("stage-outputs").required = type === "script";
+  document.getElementById("stage-outputs-hint").textContent =
+    type === "script"
+      ? "script 阶段必须写产物路径和命令。一行一个路径。 / A script stage needs an output path and a command. One path per line."
+      : "一行一个路径。不填就用默认产物。 / One path per line. Leave empty for the default output.";
+}
+
+function openAddStage() {
+  closeMenus();
+  stageForm.reset();
+  fillStageChoices();
+  syncStageFields();
+  stageStatus.hidden = true;
+  stageStatus.textContent = "";
+  stageDialog.showModal();
+  document.getElementById("stage-id").focus();
+}
+
+async function submitStage(event) {
+  event.preventDefault();
+  const type = document.getElementById("stage-type").value;
+  const payload = { id: document.getElementById("stage-id").value.trim(), type };
+  const name = document.getElementById("stage-name").value.trim();
+  if (name) payload.name = name;
+  const after = document.getElementById("stage-after").value;
+  if (after) payload.after = after;
+  const inputs = [...document.getElementById("stage-inputs").selectedOptions].map((option) => option.value).filter(Boolean);
+  if (inputs.length) payload.inputs = inputs;
+  const outputLines = document.getElementById("stage-outputs").value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  if (outputLines.length) payload.outputs = outputLines.map(outputFromPath);
+  if (type === "llm" || type === "agent") {
+    const prompt = document.getElementById("stage-prompt").value.trim();
+    if (prompt) payload.prompt = prompt;
+  }
+  if (type === "script") payload.run = document.getElementById("stage-run").value.trim();
+  if (type === "agent") payload.agent = document.getElementById("stage-agent").value;
+  stageSave.disabled = true;
+  stageStatus.hidden = true;
+  try {
+    const res = await fetch("/api/stage", {
+      method: "POST",
+      headers: { ...headers(), "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      cache: "no-store",
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      stageStatus.hidden = false;
+      stageStatus.textContent = issueLines(data, `没有添加 / not added (${res.status})`);
+      return;
+    }
+    stageDialog.close();
+    await refreshNow();
+  } catch {
+    stageStatus.hidden = false;
+    stageStatus.textContent = "没有添加 / not added";
+  } finally {
+    stageSave.disabled = false;
+  }
+}
+
+function openRemove(stage) {
+  removeId = stage.id || "";
+  const label = stage.name || stage.id || "";
+  removeText.textContent = `删除阶段「${label}」（${removeId}）？产物和 runs/ 都会留下。 / Remove stage "${label}" (${removeId})? Its outputs and runs/ stay.`;
+  removeDeps.hidden = true;
+  removeDeps.textContent = "";
+  removeStatus.hidden = true;
+  removeStatus.textContent = "";
+  removeForce.hidden = true;
+  removeConfirm.hidden = false;
+  removeDialog.showModal();
+}
+
+async function requestRemove(force) {
+  if (!removeId) return;
+  removeConfirm.disabled = true;
+  removeForce.disabled = true;
+  removeStatus.hidden = true;
+  try {
+    const query = `id=${encodeURIComponent(removeId)}${force ? "&force=1" : ""}`;
+    const res = await fetch(`/api/stage?${query}`, { method: "DELETE", headers: headers(), cache: "no-store" });
+    const data = await res.json().catch(() => ({}));
+    if (res.status === 409 && !force && Array.isArray(data.dependents) && data.dependents.length) {
+      const names = data.dependents.join(", ");
+      removeDeps.hidden = false;
+      removeDeps.textContent =
+        data.error ||
+        (names
+          ? `这些阶段还把「${removeId}」当作输入：${names} / These stages still use "${removeId}" as an input: ${names}`
+          : "还有阶段依赖它 / other stages still depend on it");
+      removeForce.hidden = false;
+      removeConfirm.hidden = true;
+      return;
+    }
+    if (!res.ok) {
+      removeStatus.hidden = false;
+      removeStatus.textContent = issueLines(data, `没有删除 / not removed (${res.status})`);
+      return;
+    }
+    removeDialog.close();
+    await refreshNow();
+  } catch {
+    removeStatus.hidden = false;
+    removeStatus.textContent = "没有删除 / not removed";
+  } finally {
+    removeConfirm.disabled = false;
+    removeForce.disabled = false;
+  }
+}
+
+const stageDialog = document.getElementById("stage-dialog");
+const stageForm = document.getElementById("stage-form");
+const stageStatus = document.getElementById("stage-status");
+const stageSave = document.getElementById("stage-save");
+const removeDialog = document.getElementById("remove-dialog");
+const removeText = document.getElementById("remove-text");
+const removeDeps = document.getElementById("remove-deps");
+const removeStatus = document.getElementById("remove-status");
+const removeConfirm = document.getElementById("remove-confirm");
+const removeForce = document.getElementById("remove-force");
+
 document.getElementById("panel-close").addEventListener("click", closePanel);
 document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape") closePanel();
+  if (event.key !== "Escape") return;
+  if (event.target instanceof Element && event.target.closest("dialog")) return;
+  if (closeMenus()) return;
+  closePanel();
+});
+document.addEventListener("click", (event) => {
+  if (event.target instanceof Element && event.target.closest(".card-menu")) return;
+  closeMenus();
+});
+boardEl.addEventListener("scroll", closeMenus, { passive: true });
+window.addEventListener("resize", closeMenus);
+document.getElementById("add-stage").addEventListener("click", openAddStage);
+document.getElementById("stage-type").addEventListener("change", syncStageFields);
+document.getElementById("stage-cancel").addEventListener("click", () => stageDialog.close());
+stageForm.addEventListener("submit", (event) => {
+  void submitStage(event);
+});
+document.getElementById("remove-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  void requestRemove(false);
+});
+document.getElementById("remove-cancel").addEventListener("click", () => removeDialog.close());
+removeForce.addEventListener("click", () => {
+  void requestRemove(true);
 });
 runAllButton.addEventListener("click", () => {
   const picked = modelForAll();

@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadFlow, resolveFlowInputs, statusAll } from "@flowgit/core";
+import { loadFlow, parseFlowMd, promptSkeleton, renderFlowMd, resolveFlowInputs, statusAll, type Flow } from "@flowgit/core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { startBoard, type BoardServer } from "./server.js";
 
@@ -332,6 +332,12 @@ describe("read-only board", () => {
     expect(put.status).toBe(401);
     const events = await httpGet(server.port, "/api/events");
     expect(events.status).toBe(401);
+    const add = await httpCall(server.port, "POST", "/api/stage", JSON.stringify({ id: "extra", type: "human" }), {
+      "Content-Type": "application/json",
+    });
+    expect(add.status).toBe(401);
+    const del = await httpCall(server.port, "DELETE", "/api/stage?id=script");
+    expect(del.status).toBe(401);
     const wrong = await httpGet(server.port, "/api/events?token=nope");
     expect(wrong.status).toBe(401);
   });
@@ -376,6 +382,11 @@ describe("read-only board", () => {
     const app = await httpGet(server.port, "/app.js");
     expect(page.body).toContain("全部运行 Run all");
     expect(page.body).toContain("保存输入 Save inputs");
+    expect(page.body).toContain("新增阶段 / Add stage");
+    expect(page.body).toContain("删除阶段 / Remove stage");
+    expect(page.body).toContain("一起断开依赖 / detach downstream");
+    expect(app.body).toContain("删除阶段 / Remove stage");
+    expect(app.body).toContain('"/api/stage"');
     expect(app.body).toContain("运行这一步 Run");
     expect(app.body).toContain("全部运行 Run all");
     expect(app.body).toContain('stage.state === "waiting-upstream"');
@@ -609,6 +620,23 @@ describe("run and inputs on the board", () => {
       });
       expect(edit.status).toBe(409);
       expect(edit.body).toMatch(/正在运行/);
+      const flowFile = path.join(work, "flow.json");
+      const beforeFlow = fs.readFileSync(flowFile);
+      const addDuring = await httpCall(
+        board.port,
+        "POST",
+        "/api/stage",
+        JSON.stringify({ id: "extra", type: "human" }),
+        headers,
+      );
+      expect(addDuring.status).toBe(409);
+      expect(addDuring.body).toMatch(/正在运行/);
+      const deleteDuring = await httpCall(board.port, "DELETE", "/api/stage?id=slow", undefined, {
+        "X-Flowgit-Token": board.token,
+      });
+      expect(deleteDuring.status).toBe(409);
+      expect(deleteDuring.body).toMatch(/正在运行/);
+      expect(fs.readFileSync(flowFile)).toEqual(beforeFlow);
       fs.writeFileSync(path.join(work, "go"), "1");
       const done = await first;
       expect(done.status, done.body).toBe(200);
@@ -817,4 +845,239 @@ describe("live board updates", () => {
     await delay(50);
     expect(handlesNamed("FSWatcher")).toBeLessThan(watchersDuring);
   }, 20_000);
+});
+
+describe("add and remove stages on the board", () => {
+  function writeFlow(dir: string, flow: unknown): string {
+    const text = `${JSON.stringify(flow, null, 2)}\n`;
+    fs.writeFileSync(path.join(dir, "flow.json"), text);
+    return text;
+  }
+
+  function human(id: string, name: string, inputs?: string[]) {
+    return {
+      id,
+      name,
+      ...(inputs ? { inputs } : {}),
+      executor: { type: "human", instructions: `写 ${id}.md / write ${id}.md` },
+      outputs: [{ type: "text/markdown", path: `${id}.md` }],
+    };
+  }
+
+  it("adds an llm stage to flow.json, creates the prompt, and rejects a duplicate id", async () => {
+    const work = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-web-add-"));
+    const flowFile = path.join(work, "flow.json");
+    writeFlow(work, {
+      format: "flowgit",
+      version: "0.1",
+      name: "stages",
+      description: "keep me",
+      inputs: { topic: { type: "string", required: true } },
+      stages: [human("notes", "笔记")],
+    });
+    const board = await startBoard({ dir: work, port: 0, open: false });
+    const headers = { "X-Flowgit-Token": board.token, "Content-Type": "application/json" };
+    const live = await openEvents(board.port, board.token);
+    try {
+      const before = fs.readFileSync(flowFile);
+      const denied = await httpCall(board.port, "POST", "/api/stage", JSON.stringify({ id: "polish", type: "llm" }), {
+        "Content-Type": "application/json",
+      });
+      expect(denied.status).toBe(401);
+      expect(fs.readFileSync(flowFile)).toEqual(before);
+
+      const cursor = live.events.length;
+      const added = await httpCall(
+        board.port,
+        "POST",
+        "/api/stage",
+        JSON.stringify({ id: "polish", type: "llm", name: "润色", after: "notes" }),
+        headers,
+      );
+      expect(added.status, added.body).toBe(200);
+      expect(JSON.parse(added.body)).toMatchObject({ ok: true, id: "polish", prompt: "prompts/polish.md" });
+      await live.waitFor("flow:changed", 2000, cursor);
+
+      const prompt = path.join(work, "prompts", "polish.md");
+      expect(fs.readFileSync(prompt, "utf8")).toBe(promptSkeleton("polish", "topic"));
+      const text = fs.readFileSync(flowFile, "utf8");
+      expect(text).toBe(`${JSON.stringify(JSON.parse(text), null, 2)}\n`);
+      const saved = JSON.parse(text) as {
+        description?: string;
+        stages: Array<{ id: string; name?: string; inputs?: string[]; executor?: { type?: string; prompt?: string }; outputs?: Array<{ path: string }> }>;
+      };
+      expect(saved.description).toBe("keep me");
+      expect(saved.stages.map((stage) => stage.id)).toEqual(["notes", "polish"]);
+      expect(saved.stages[1]).toMatchObject({
+        name: "润色",
+        inputs: ["notes"],
+        executor: { type: "llm", prompt: "prompts/polish.md" },
+        outputs: [{ type: "text/markdown", path: "polish.md" }],
+      });
+      expect(Object.keys(saved.stages[0] ?? {})).toEqual(["id", "name", "executor", "outputs"]);
+
+      const duplicate = await httpCall(board.port, "POST", "/api/stage", JSON.stringify({ id: "notes", type: "human" }), headers);
+      expect(duplicate.status).toBe(400);
+      expect(duplicate.body).toContain("已经有阶段");
+      expect(duplicate.body).toContain("already exists");
+      expect(fs.readFileSync(flowFile, "utf8")).toBe(text);
+      expect(fs.existsSync(path.join(work, "prompts", "notes.md"))).toBe(false);
+
+      fs.writeFileSync(prompt, "KEEP\n");
+      const removed = await httpCall(board.port, "DELETE", "/api/stage?id=polish", undefined, {
+        "X-Flowgit-Token": board.token,
+      });
+      expect(removed.status, removed.body).toBe(200);
+      const again = await httpCall(
+        board.port,
+        "POST",
+        "/api/stage",
+        JSON.stringify({ id: "polish", type: "llm", name: "润色", after: "notes" }),
+        headers,
+      );
+      expect(again.status, again.body).toBe(200);
+      expect(JSON.parse(again.body).prompt).toBeUndefined();
+      expect(fs.readFileSync(prompt, "utf8")).toBe("KEEP\n");
+
+      const agent = await httpCall(
+        board.port,
+        "POST",
+        "/api/stage",
+        JSON.stringify({ id: "page", type: "agent", after: "polish" }),
+        headers,
+      );
+      expect(agent.status, agent.body).toBe(200);
+      expect(fs.readFileSync(path.join(work, "prompts", "page.md"), "utf8")).toBe(promptSkeleton("page", "topic"));
+      const withAgent = JSON.parse(fs.readFileSync(flowFile, "utf8")) as { stages: Array<{ id: string }> };
+      expect(withAgent.stages.map((stage) => stage.id)).toEqual(["notes", "polish", "page"]);
+    } finally {
+      live.close();
+      await board.close();
+      fs.rmSync(work, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps a flow.md flow as flow.md when a stage is added or removed", async () => {
+    const work = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-web-add-md-"));
+    const mdFile = path.join(work, "flow.md");
+    const flow: Flow = {
+      format: "flowgit",
+      version: "0.1",
+      name: "markdown",
+      description: "写成 Markdown 的流程 / a flow written as Markdown",
+      stages: [human("notes", "笔记") as Flow["stages"][number]],
+    };
+    fs.writeFileSync(mdFile, renderFlowMd(flow));
+    const board = await startBoard({ dir: work, port: 0, open: false });
+    const headers = { "X-Flowgit-Token": board.token, "Content-Type": "application/json" };
+    try {
+      const added = await httpCall(board.port, "POST", "/api/stage", JSON.stringify({ id: "draft", type: "human", after: "notes" }), headers);
+      expect(added.status, added.body).toBe(200);
+      expect(fs.existsSync(path.join(work, "flow.json"))).toBe(false);
+      const text = fs.readFileSync(mdFile, "utf8");
+      const saved = parseFlowMd(text) as unknown as Flow;
+      expect(text).toBe(renderFlowMd(saved));
+      expect(saved.description).toBe(flow.description);
+      expect(saved.stages.map((stage) => stage.id)).toEqual(["notes", "draft"]);
+      expect(loadFlow(work).file).toBe(mdFile);
+
+      const removed = await httpCall(board.port, "DELETE", "/api/stage?id=draft", undefined, { "X-Flowgit-Token": board.token });
+      expect(removed.status, removed.body).toBe(200);
+      expect(fs.existsSync(path.join(work, "flow.json"))).toBe(false);
+      expect((parseFlowMd(fs.readFileSync(mdFile, "utf8")) as unknown as Flow).stages.map((stage) => stage.id)).toEqual(["notes"]);
+    } finally {
+      await board.close();
+      fs.rmSync(work, { recursive: true, force: true });
+    }
+  });
+
+  it("returns 400 with a bilingual list and writes nothing", async () => {
+    const work = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-web-add-bad-"));
+    const flowFile = path.join(work, "flow.json");
+    const before = writeFlow(work, {
+      format: "flowgit",
+      version: "0.1",
+      name: "stages",
+      inputs: { topic: { type: "string", required: true } },
+      stages: [human("notes", "笔记")],
+    });
+    const board = await startBoard({ dir: work, port: 0, open: false });
+    const headers = { "X-Flowgit-Token": board.token, "Content-Type": "application/json" };
+    try {
+      const res = await httpCall(
+        board.port,
+        "POST",
+        "/api/stage",
+        JSON.stringify({ id: "extra", type: "human", inputs: ["missing"] }),
+        headers,
+      );
+      expect(res.status).toBe(400);
+      const body = JSON.parse(res.body) as { error: string; issues: Array<{ path: string; message: string }> };
+      expect(body.issues.length).toBeGreaterThan(0);
+      expect(body.error).toContain("没有这个阶段");
+      expect(body.error).toContain("unknown stage");
+      expect(body.issues.some((issue) => issue.message.includes("没有这个阶段") && issue.message.includes("unknown stage"))).toBe(true);
+      expect(fs.readFileSync(flowFile, "utf8")).toBe(before);
+      expect(fs.existsSync(path.join(work, "prompts"))).toBe(false);
+    } finally {
+      await board.close();
+      fs.rmSync(work, { recursive: true, force: true });
+    }
+  });
+
+  it("refuses to remove a stage with dependents unless force=1, and leaves files in place", async () => {
+    const work = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-web-rm-"));
+    const flowFile = path.join(work, "flow.json");
+    const before = writeFlow(work, {
+      format: "flowgit",
+      version: "0.1",
+      name: "remove",
+      stages: [
+        human("notes", "笔记"),
+        human("draft", "草稿", ["notes"]),
+        {
+          id: "check",
+          name: "检查",
+          inputs: ["notes", "draft"],
+          executor: { type: "script", run: "node check.cjs" },
+          outputs: [{ type: "text/plain", path: "check.txt" }],
+        },
+      ],
+    });
+    fs.writeFileSync(path.join(work, "draft.md"), "keep draft\n");
+    const runFile = path.join(work, "runs", "draft", "1", "run.json");
+    fs.mkdirSync(path.dirname(runFile), { recursive: true });
+    fs.writeFileSync(runFile, "{}\n");
+    const board = await startBoard({ dir: work, port: 0, open: false });
+    const token = { "X-Flowgit-Token": board.token };
+    try {
+      const denied = await httpCall(board.port, "DELETE", "/api/stage?id=draft");
+      expect(denied.status).toBe(401);
+      expect(fs.readFileSync(flowFile, "utf8")).toBe(before);
+
+      const blocked = await httpCall(board.port, "DELETE", "/api/stage?id=draft", undefined, token);
+      expect(blocked.status).toBe(409);
+      const body = JSON.parse(blocked.body) as { error: string; dependents: string[] };
+      expect(body.dependents).toEqual(["check"]);
+      expect(body.error).toContain("check");
+      expect(body.error).toContain("draft");
+      expect(fs.readFileSync(flowFile, "utf8")).toBe(before);
+      expect(fs.readFileSync(path.join(work, "draft.md"), "utf8")).toBe("keep draft\n");
+      expect(fs.readFileSync(runFile, "utf8")).toBe("{}\n");
+
+      const removed = await httpCall(board.port, "DELETE", "/api/stage?id=draft&force=1", undefined, token);
+      expect(removed.status, removed.body).toBe(200);
+      const text = fs.readFileSync(flowFile, "utf8");
+      expect(text).toBe(`${JSON.stringify(JSON.parse(text), null, 2)}\n`);
+      const saved = JSON.parse(text) as { stages: Array<{ id: string; inputs?: string[] }> };
+      expect(saved.stages.map((stage) => stage.id)).toEqual(["notes", "check"]);
+      expect(saved.stages.find((stage) => stage.id === "check")?.inputs).toEqual(["notes"]);
+      expect(saved.stages.find((stage) => stage.id === "draft")).toBeUndefined();
+      expect(fs.readFileSync(path.join(work, "draft.md"), "utf8")).toBe("keep draft\n");
+      expect(fs.readFileSync(runFile, "utf8")).toBe("{}\n");
+    } finally {
+      await board.close();
+      fs.rmSync(work, { recursive: true, force: true });
+    }
+  });
 });
