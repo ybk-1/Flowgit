@@ -162,6 +162,7 @@ describe("read-only board", () => {
     expect(graph.nodes.map((node) => node.state)).toEqual(flowBody.stages.map((stage) => stage.state));
     expect(Object.fromEntries(graph.nodes.map((node) => [node.id, node.layer]))).toEqual({
       script: 0,
+      voice: 1,
       storyboard: 1,
       assets: 2,
       edit: 3,
