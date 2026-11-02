@@ -38,7 +38,7 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 
 ### 命令行 / CLI
 
-- `init`、`templates`、`validate`、`status`（终端看板）、`board`（网页看板）、`inputs`、`run`、`log`、`diff`、`restore`、`providers`、`doctor`、`graph`、`export-skill`。
+- `init`、`templates`、`validate`、`status`（终端看板）、`board`（网页看板）、`inputs`、`run`、`batch`、`log`、`diff`、`restore`、`providers`、`doctor`、`graph`、`export-skill`。
 - `init -t` 可以是 Git 地址（`git clone --depth 1`，可加 `--ref` 和 `--path`）。从本地目录或 Git 复制时默认不带产物，`--with-outputs` 才带上；Git 来源会把 `forkedFrom` 写进新的 `flow.json`。没有安装 git 时会说明怎么装。
 - `convert --to md|json` 在 `flow.json` 和 `flow.md` 之间转换，内容不变；`init --format md` 新建时直接用 `flow.md`。`stage add`、`stage rm` 写回时保持原来的格式。
 - `stage add` / `stage rm`：用命令加、删阶段。llm 和 agent 没给提示词时会建一个中英双语骨架，已有文件不覆盖。删阶段不删文件，也不动 `runs/`；还有别的阶段依赖它时要 `--force`。
@@ -52,13 +52,14 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 - `board` 在浏览器打开本机看板（新包 `@flowgit/web`）：每个阶段一张卡，显示状态、最新版本和产物，点产物在侧栏预览文本、JSON、图片、视频和目录。文件一变就通过 SSE 的 `flow:changed` 刷新（约 300 毫秒合并一次）；保存产物、上传、运行结束、回退和保存输入也会推送。连接着的时候不再每 3 秒轮询，断开时提示并改回每 3 秒刷新，每 5 秒重连。文本产物可以直接修改保存（JSON 先检查格式），人工阶段的文件夹可以上传文件；改过的产物下次运行前会先存成一个版本。可以填写流程输入，运行单个阶段或全部阶段，日志实时显示；同时只跑一个，运行中不能保存产物。每张卡可以看历史版本、对比两个版本（或和当前文件比）并回退。只监听 `127.0.0.1`，接口要令牌并检查 `Host`。
 - 看板换了新造型：亮色是粗网格加大号阶段编号，可以运行的那一步整块变蓝；暗色是深色卡片，状态用发光圆点标出。跟着系统的深浅色自动切换，不用联网加载字体。
 - `run all --dry-run` 预演：每个阶段会跳过、运行还是停下等你，最多调用几次模型，什么都不运行。`doctor` 通过后和导出的 `SKILL.md` 里都会提到它。
+- `batch <file.csv>`：用一份 CSV 一次做很多份。表头是流程输入的名字，每一行复制一份流程（不带产物、`runs/`、`flowgit.local.json`、`.env*`）再跑完。空单元格用默认值；必填是空的，这一行失败，其他行继续。停在人工阶段记为等待。结束时列出每行的状态和 token，以及合计。退出码：全部完成是 0，有等待且没有失败是 2，有失败是 1。再跑一次不会重新复制已有的文件夹。`--concurrency` 默认 1、最大 4；`--rows a-b` 只跑其中几行。输出目录在流程里面时（默认 `batch/`），复制会跳过它。
 - `inputs set` 保存前就检查名字和值（数字、`true`/`false`、可选值），写错了不会存进去。
 - `board` 打印和打开的链接带着令牌（`?token=…`）。直接打开 `http://127.0.0.1:4747/` 只会看到提示、拿不到令牌，所以同一台电脑上的其他账号或程序没法操作你的看板。
 - 从 Git 地址或别的文件夹 `init` 时，会列出这个流程要运行的命令、要启动的 agent 和要调用的服务（以及请求头里带的环境变量），运行前先看一眼。
 - 提示词文件，以及要发给模型或服务的上游产物，如果是指向流程目录外面的链接，就不读取（`validate` 也会报出来），免得下载来的流程把 `~/.ssh` 这类文件发出去。脚本和 agent 阶段不受影响。
 - 流程自己的 `flowgit.local.json` 改了某个带密钥的模型服务的地址时，`doctor` 会警告，运行日志也会写出来，因为密钥会发到那个地址。
 - 提示、报错和 `--help` 都是中英双语（包括输错命令、少写参数这类报错，会提示“是不是想输入 …”），并针对余额不足、限流、连不上（包括代理）给出具体建议。
-- `init`, `templates`, `validate`, `status` (terminal board), `board` (web board), `inputs`, `run`, `log`, `diff`, `restore`, `providers`, `doctor`, `graph`, `export-skill`.
+- `init`, `templates`, `validate`, `status` (terminal board), `board` (web board), `inputs`, `run`, `batch`, `log`, `diff`, `restore`, `providers`, `doctor`, `graph`, `export-skill`.
 - `init -t` accepts a Git URL (`git clone --depth 1`, with `--ref` and `--path`). Copying a local directory or a Git URL leaves outputs behind unless `--with-outputs` is set, and a Git source writes `forkedFrom` into the new `flow.json`. If git is not installed, the error says how to install it.
 - `stage add` / `stage rm`: add or remove a stage from the command line. An llm or agent stage without a prompt gets a bilingual skeleton, and an existing file is never overwritten. Removing a stage deletes no files and leaves `runs/` alone; `--force` is required when other stages depend on it.
 - `share` copies a flow into a directory that is safe to hand to someone else. A secret blocks the write entirely; emails and local paths are listed afterwards. `runs/`, `flowgit.local.json` and `.env*` are never copied.
@@ -72,6 +73,7 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 - `board` opens a local board in the browser (new package `@flowgit/web`): one card per stage with its state, latest version and outputs; click an output to preview text, JSON, images, video or a folder in a side panel. A file change refreshes it through the SSE event `flow:changed` (debounced by about 300 ms); saving an output, an upload, the end of a run, a restore and saving inputs push it too. While that stream is connected it no longer polls every 3 seconds; if the stream drops it says so, polls every 3 seconds again, and retries every 5 seconds. Text outputs can be edited and saved (JSON is checked first), and files can be uploaded into a human stage's folder; an edited output is saved as a version before the next run. Flow inputs can be filled in, and one stage or the whole flow can be run with a live log; one run at a time, and outputs cannot be saved while it runs. Each card can list its versions, compare two of them (or one with the current files) and restore one. It listens on `127.0.0.1` only, and its API needs a token and checks `Host`.
 - The board has a new look: in light mode a bold grid with large stage numbers, and the stage you can run now in a solid blue block; in dark mode graphite cards with glowing status dots. It follows the system light/dark setting and loads no web fonts.
 - `run all --dry-run` shows whether each stage would be skipped, run or stop for you, and at most how many model calls it would make, without running anything. `doctor` points to it when nothing blocks, and so does the exported `SKILL.md`.
+- `batch <file.csv>` runs many copies from one CSV. The header row names the flow inputs; each data row is a copy of the flow (without outputs, `runs/`, `flowgit.local.json` or `.env*`) that then runs. Empty cells use defaults; an empty required input fails that row and the others still run. A row that stops at a human stage is waiting. The command ends with each row's state and tokens, then a total. Exit 0 when all are done, 2 when some are waiting and none failed, 1 when any failed. Running it again does not recopy folders that already exist. `--concurrency` defaults to 1 and is at most 4; `--rows a-b` runs only that range. When the output directory is inside the flow (the default `batch/`), the copy skips it.
 - `inputs set` checks names and values (numbers, `true`/`false`, allowed values) before saving, so a typo is never stored.
 - The link `board` prints and opens carries the token (`?token=…`). Opening `http://127.0.0.1:4747/` by itself shows a note and no token, so other accounts or programs on the same computer can't drive your board.
 - `init` from a Git URL or another folder lists the commands the flow runs, the agents it starts and the services it calls (with the environment variables their headers send), so you can look before you run it.

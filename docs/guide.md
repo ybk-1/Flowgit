@@ -484,6 +484,48 @@ To save it to a file, use `--out` (`-o`). A `.md` file gets the code block autom
 flowgit graph --status --out graph.md
 ```
 
+## 9. 一次做很多份 / Many at once
+
+同一份流程，换几组输入各做一份，不用复制文件夹。准备一个 CSV，第一行写流程输入的名字，下面每一行是一份：
+
+One flow, several sets of inputs, without copying the folder by hand. Write a CSV whose first row names the flow inputs, and put one copy on each row below:
+
+```csv
+name,team
+小林,产品组
+阿宁,
+```
+
+```bash
+flowgit batch names.csv
+# 默认写到流程目录里的 batch/ / defaults to batch/ inside the flow directory
+flowgit batch names.csv --out out --rows 1-20 --concurrency 2
+```
+
+每一行会复制到 `001-小林/` 这样的文件夹里（名字来自第一列，去掉文件名里不能用的字符，最多 40 个字符），把这一行写进那份的 `flowgit.local.json`，然后跑完。复制规则和 `init -t <目录>` 一样：不带各阶段的产物、`runs/`、`flowgit.local.json`、`.env*`。输出目录如果就在流程里面（默认的 `batch/` 就是这样），复制时会跳过它，免得把上一份拷进下一份。
+
+Each row is copied to a folder like `001-小林/` (the name comes from the first column, with characters a file name cannot contain removed, at most 40 characters), that row is written into the copy's `flowgit.local.json`, and the copy runs. Copying follows `init -t <directory>`: no stage outputs, no `runs/`, no `flowgit.local.json`, no `.env*`. When the output directory sits inside the flow (the default `batch/` does), the copy skips it, so one row is never nested inside the next.
+
+空单元格用 `flow.json` 里的默认值。上面的「阿宁」没填 `team`，就用默认的「团队同事」。必填是空的，只有这一行失败，别的行照样跑。第一列空着时，文件夹名用 `row`（`002-row`）。不认识的列会直接报错，并列出这个流程可以填的输入。单元格里的逗号、换行用引号包起来，例如 `"王,小明"`，引号本身写成 `""`。
+
+An empty cell uses the default from `flow.json`. 阿宁 left `team` blank above, so it stays at the default 「团队同事」. An empty required input fails that row only; the other rows still run. An empty first cell is named `row` (`002-row`). An unknown column stops the command and lists the inputs this flow accepts. Commas and newlines inside a cell are wrapped in quotes, for example `"王,小明"`, and a quote itself is written `""`.
+
+周报的第一阶段是人写的，所以这两行都会停在「随手记」，状态是 `waiting: notes`，命令以退出码 2 结束。某一行失败时退出码是 1；全部跑完是 0。表的前面是每一行自己的运行日志，行首是文件夹名，格式和 `flowgit run` 一样。表有四列：编号、文件夹、状态（`done`、`waiting: 阶段`、`failed: 错误的第一行`）、这次用掉的 token，最后是合计。这一步还没调用模型，所以 token 是 0；`FLOWGIT_LLM_MOCK_DIR` 的固定回复也不报告用量。
+
+The weekly report's first stage is written by a person, so both rows stop at 「随手记」 with state `waiting: notes` and the command exits 2. Exit 1 when any row failed, and 0 when every row finished. Above the table, each row prints its own run log, prefixed with the folder name, in the same shape as `flowgit run`. The table has four columns: number, folder, state (`done`, `waiting: stage`, `failed: the first line of the error`), and the tokens used this time, then a total. This step never called a model, so the tokens are 0; canned replies from `FLOWGIT_LLM_MOCK_DIR` report no usage either.
+
+```text
+#  文件夹 folder  状态 state      用量 tokens
+1  001-小林       waiting: notes  0
+2  002-阿宁       waiting: notes  0
+
+用量合计 / total usage: 0 输入 input + 0 输出 output tokens（0 次模型调用 / model calls）
+```
+
+再跑一次时，已经有的文件夹不会重新复制，没变的阶段会跳过。`--concurrency` 默认 1，最大 4。`--rows 2-10` 只跑第 2 到第 10 行数据（从 1 开始数，不含表头），文件夹仍按原来的行号，第 2 行还是 `002`。
+
+Running it again leaves folders that already exist in place, and stages that are unchanged are skipped. `--concurrency` defaults to 1 and is at most 4. `--rows 2-10` runs data rows 2 through 10 (1-based, the header is not counted), and the folders keep their original numbers, so row 2 is still `002`.
+
 ## 常见问题 / Troubleshooting
 
 | 看到 / You see | 怎么办 | What to do |

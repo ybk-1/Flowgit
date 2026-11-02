@@ -66,6 +66,7 @@ import {
   type RunOptions,
 } from "@flowgit/core";
 import { openBrowser, startBoard } from "@flowgit/web";
+import { runBatch } from "./batch.js";
 import { bilingualCliError, c, colorizeUnifiedDiff, nextHint, statusBoard, table, width } from "./format.js";
 import { restoreProxyChild, routeThroughProxy } from "./proxy.js";
 
@@ -242,9 +243,9 @@ program
   .version(VERSION, "-V, --version", "显示版本号 / show the version number")
   .option("-C, --dir <dir>", "流程目录（含 flow.json 或 flow.md）/ flow directory (contains flow.json or flow.md)", ".");
 
-// run and board call models and services: send those through the user's proxy, if there is one.
+// run, batch and board call models and services: send those through the user's proxy, if there is one.
 program.hook("preAction", async (_program, action) => {
-  if (action.name() !== "run" && action.name() !== "board") return;
+  if (action.name() !== "run" && action.name() !== "batch" && action.name() !== "board") return;
   const code = await routeThroughProxy();
   if (code !== undefined) process.exit(code);
 });
@@ -944,6 +945,28 @@ program
       }
     } catch (err) {
       fail(err, { inputFlags: opts.input });
+    }
+  });
+
+program
+  .command("batch")
+  .description("用 CSV 一次跑很多份：每行一份，表头是流程输入 / run many copies from a CSV: one row each, headers are flow inputs")
+  .argument("<file.csv>", "CSV 文件，第一行是流程输入名 / CSV file whose first row names the flow inputs")
+  .option("--out <dir>", "输出目录，相对流程目录 / output directory, relative to the flow directory", "batch")
+  .option("--concurrency <n>", "同时跑几行（1 到 4）/ how many rows to run at once (1 to 4)", "1")
+  .option("--rows <a-b>", "只跑这几行数据（从 1 开始，不含表头）/ only these data rows (1-based, the header is not counted)")
+  .action(async (file: string, opts: { out: string; concurrency: string; rows?: string }) => {
+    try {
+      const code = await runBatch({
+        flowDir: dirOf(),
+        csvPath: path.resolve(file),
+        out: opts.out,
+        concurrency: opts.concurrency,
+        rows: opts.rows,
+      });
+      if (code !== 0) process.exit(code);
+    } catch (err) {
+      fail(err);
     }
   });
 

@@ -146,6 +146,7 @@ CLI messages and errors are bilingual. What a template produces (script, caption
 | `flowgit run <stage\|all>` | 跑一个阶段，或按顺序跑完所有需要跑的阶段 | Run one stage, or every stage that needs it, in order |
 | `flowgit run all --dry-run` | 预演：列出每个阶段会跳过、运行还是停下等你，以及最多调用几次模型；什么都不运行 | Dry run: whether each stage would be skipped, run or stop for you, and at most how many model calls; nothing runs |
 | `flowgit run <stage> --from <path>` | 人工阶段：把文件或文件夹放进产物位置 | Human stage: put a file or folder in place as the output |
+| `flowgit batch <file.csv> [--out 目录] [--concurrency n] [--rows a-b]` | 用一份 CSV 一次做很多份。表头是流程输入，每行复制一份再跑；空单元格用默认值。某一行失败或停在人工阶段，其余行继续。退出码 0 全完成、2 有等待、1 有失败 | Run many copies from one CSV. Headers are flow inputs; each row is copied and run, and empty cells use defaults. A row that fails or stops at a human stage does not stop the others. Exit 0 when all are done, 2 when some are waiting, 1 when any failed |
 | `flowgit log [stage]` | 这个阶段的历史版本；不写阶段就按时间列出整个流程的，并合计 token 用量 | The stage's version history; without a stage, the whole flow's by time, with a token total |
 | `flowgit diff <stage> <a> [b] [--json]` | 对比两个版本的产物；省略 `b` 则和当前文件比 | Diff one version against another, or against the current files when `b` is omitted |
 | `flowgit restore <stage> <n>` | 回退到某个版本 | Roll back to a version |
