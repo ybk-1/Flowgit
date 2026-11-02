@@ -475,6 +475,8 @@ describe("flowgit diff", () => {
 
 describe("flowgit init from a directory or a Git URL", () => {
   const hasGit = spawnSync("git", ["--version"]).status === 0;
+  // git init, commit and clone plus several CLI starts: a slow Windows runner once took 36s for the clone test alone.
+  const GIT_TEST_TIMEOUT = 120_000;
   let root: string;
   let source: string;
 
@@ -524,7 +526,10 @@ describe("flowgit init from a directory or a Git URL", () => {
     expect(fs.existsSync(path.join(withOutputs, ".env"))).toBe(false);
   });
 
-  it.skipIf(!hasGit)("records forkedFrom.commit when init clones a file:// repository", () => {
+  /** The source flow as a local Git repository, made once. */
+  let gitRepo: { url: string; commit: string } | undefined;
+  function makeGitRepo(): { url: string; commit: string } {
+    if (gitRepo) return gitRepo;
     const repo = path.join(root, "repo");
     fs.cpSync(source, repo, { recursive: true, filter: (p) => !p.split(path.sep).includes("runs") && path.basename(p) !== "flowgit.local.json" && path.basename(p) !== ".env" });
     const git = (args: string[]) => {
@@ -536,7 +541,12 @@ describe("flowgit init from a directory or a Git URL", () => {
     git(["add", "-A"]);
     git(["commit", "-m", "init flow"]);
     const commit = spawnSync("git", ["rev-parse", "HEAD"], { cwd: repo, encoding: "utf8" }).stdout.trim();
-    const url = pathToFileURL(repo).href;
+    gitRepo = { url: pathToFileURL(repo).href, commit };
+    return gitRepo;
+  }
+
+  it.skipIf(!hasGit)("records forkedFrom.commit when init clones a file:// repository", () => {
+    const { url, commit } = makeGitRepo();
     const dest = path.join(root, "from-git");
     const cloned = run(["init", dest, "-t", url, "--ref", "main"]);
     expect(cloned.code, cloned.out).toBe(0);
@@ -551,7 +561,67 @@ describe("flowgit init from a directory or a Git URL", () => {
     expect(escape.code).toBe(1);
     expect(escape.out).toContain("--path must stay inside the repository");
     expect(fs.existsSync(path.join(root, "escape", "flow.json"))).toBe(false);
-  });
+  }, GIT_TEST_TIMEOUT);
+
+  it.skipIf(!hasGit)("asks once before the first run of a flow cloned from a Git URL, and again only when its commands change", () => {
+    const { url } = makeGitRepo();
+    const home = path.join(root, "trust-home");
+    const env = { FLOWGIT_HOME: home };
+    const flowgit = (args: string[]) => {
+      // spawnSync has no terminal, so nothing can be asked: the run stops and says how to confirm
+      const r = spawnSync(process.execPath, [cli, ...args], { encoding: "utf8", env: { ...process.env, NO_COLOR: "1", ...env } });
+      return { code: r.status, out: `${r.stdout}${r.stderr}` };
+    };
+    const dest = path.join(root, "trusted-copy");
+    const cloned = flowgit(["init", dest, "-t", url]);
+    expect(cloned.code, cloned.out).toBe(0);
+    expect(cloned.out).toContain("the first run asks you to confirm these; or run flowgit trust first");
+    const notes = path.join(root, "my-notes.md");
+    fs.writeFileSync(notes, "- shipped the board\n");
+
+    const refused = flowgit(["-C", dest, "run", "notes", "--from", notes]);
+    expect(refused.code, refused.out).toBe(1);
+    expect(refused.out).toContain(`This flow was copied from ${url} and does this on your computer:`);
+    expect(refused.out).toMatch(/script\s+check\s+node scripts\/check-report\.mjs/);
+    expect(refused.out).toContain("run flowgit trust to see what it does on your computer and confirm");
+    expect(refused.out).toContain("or add --yes to run to confirm and run");
+    expect(fs.existsSync(path.join(dest, "notes.md"))).toBe(false);
+    expect(fs.existsSync(path.join(dest, "runs"))).toBe(false);
+
+    const doctor = flowgit(["-C", dest, "doctor"]);
+    expect(doctor.out).toContain("what it does hasn't been confirmed yet");
+
+    const trusted = flowgit(["-C", dest, "trust"]);
+    expect(trusted.code, trusted.out).toBe(0);
+    expect(trusted.out).toMatch(/script\s+check\s+node scripts\/check-report\.mjs/);
+    expect(trusted.out).toContain("You won't be asked again unless the commands change.");
+    // remembered under FLOWGIT_HOME, not in the flow
+    expect(fs.existsSync(path.join(home, "trusted.json"))).toBe(true);
+    expect(fs.readdirSync(dest)).not.toContain("trusted.json");
+    expect(flowgit(["-C", dest, "trust"]).out).toContain("Already confirmed; the commands haven't changed.");
+
+    const named = flowgit(["-C", dest, "inputs", "set", "name=Cyrus"]);
+    expect(named.code, named.out).toBe(0);
+    const ran = flowgit(["-C", dest, "run", "notes", "--from", notes]);
+    expect(ran.code, ran.out).toBe(0);
+    expect(ran.out).not.toContain("copied from");
+    expect(fs.readFileSync(path.join(dest, "notes.md"), "utf8")).toBe("- shipped the board\n");
+
+    // a changed command is asked about again; --yes confirms it without a prompt
+    const flowFile = path.join(dest, "flow.json");
+    const flow = JSON.parse(fs.readFileSync(flowFile, "utf8")) as { stages: Array<{ id: string; executor: { run?: string } }> };
+    const check = flow.stages.find((stage) => stage.id === "check");
+    if (!check) throw new Error("weekly-report has a check stage");
+    check.executor.run = "node scripts/check-report.mjs --strict";
+    fs.writeFileSync(flowFile, `${JSON.stringify(flow, null, 2)}\n`);
+    const again = flowgit(["-C", dest, "run", "notes", "--from", notes]);
+    expect(again.code, again.out).toBe(1);
+    expect(again.out).toContain("This flow's commands changed since you confirmed them.");
+    expect(again.out).toContain("node scripts/check-report.mjs --strict");
+    const yes = flowgit(["-C", dest, "run", "notes", "--from", notes, "--yes"]);
+    expect(yes.code, yes.out).toBe(0);
+    expect(yes.out).toContain("You won't be asked again unless the commands change.");
+  }, GIT_TEST_TIMEOUT);
 
   it.skipIf(!hasGit)("never prints the credentials in a Git URL", () => {
     const r = spawnSync(process.execPath, [cli, "init", path.join(root, "secret"), "-t", "https://someone:s3cr3tTOKEN@127.0.0.1:1/flow.git"], {

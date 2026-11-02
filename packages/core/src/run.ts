@@ -25,6 +25,7 @@ import {
   writeRunRecord,
 } from "./runs.js";
 import { schemaFailure, schemaProblems } from "./schema-check.js";
+import { assertTrusted } from "./trust.js";
 import { isDirOutput, isTextType, listFiles, nowIso, staysInside, truncate } from "./util.js";
 
 export class UpstreamNotReadyError extends Error {
@@ -110,12 +111,15 @@ export function restoreStage(loaded: LoadedFlow, stageId: string, n: number): { 
  * Run one stage: check upstream, execute, verify outputs, snapshot them as
  * runs/<stage>/<n>/ and write run.json. A failed execution is recorded too.
  * A human stage that is still waiting throws HumanInputNeededError and records nothing.
+ * A copied flow that hasn't been confirmed here throws TrustNeededError before anything runs.
  */
 export async function runStage(loaded: LoadedFlow, stageId: string, options: RunOptions = {}): Promise<RunRecord> {
   const { dir, flow } = loaded;
   const stage = requireStage(flow, stageId);
   const emit = options.onEvent ?? (() => {});
   const flowInputs = loadFlowInputs(dir, flow, options.inputs);
+  // A sub-flow runs under its parent's confirmation, which already lists what the sub-flow does.
+  if (!options.flowStack?.length) assertTrusted(loaded);
   const executor = getExecutor(stage.executor.type);
 
   const missingUpstream = (stage.inputs ?? []).filter((dep) => {
@@ -200,10 +204,13 @@ export async function runStage(loaded: LoadedFlow, stageId: string, options: Run
 /**
  * Run every stage in dependency order. Stages that are already ok are skipped
  * unless options.force is set. Stops at the first human stage that is waiting.
+ * A copied flow that hasn't been confirmed here throws TrustNeededError first.
  */
 export async function runAll(loaded: LoadedFlow, options: RunOptions = {}): Promise<RunRecord[]> {
   const emit = options.onEvent ?? (() => {});
   const flowInputs = loadFlowInputs(loaded.dir, loaded.flow, options.inputs);
+  // before anything runs, not halfway through
+  if (!options.flowStack?.length) assertTrusted(loaded);
   const records: RunRecord[] = [];
   for (const sid of topoOrder(loaded.flow)) {
     const status = stageStatus(loaded, sid, flowInputs);

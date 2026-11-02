@@ -450,6 +450,7 @@ describe("read-only board", () => {
     expect(page.body).toContain("模型用量合计 / total model usage");
     expect(app.body).toContain('"/api/graph"');
     expect(app.body).toContain('"/api/plan"');
+    expect(app.body).toContain('"/api/trust"');
     expect(app.body).toContain('"/api/usage"');
     expect(app.body).toContain("最多调用 ");
     expect(app.body).toContain("at most ");
@@ -1156,6 +1157,62 @@ describe("add and remove stages on the board", () => {
     } finally {
       await board.close();
       fs.rmSync(work, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("confirming a copied flow on the board", () => {
+  it("won't run a flow copied from a Git URL until the list it was shown is confirmed", async () => {
+    const work = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-web-trust-"));
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-web-trust-home-"));
+    const flowWith = (run: string) => ({
+      format: "flowgit",
+      version: "0.1",
+      name: "copied",
+      forkedFrom: { source: "https://example.com/someone/flow.git" },
+      stages: [{ id: "make", name: "做", executor: { type: "script", run }, outputs: [{ type: "text/plain", path: "out.txt" }] }],
+    });
+    fs.writeFileSync(path.join(work, "make.cjs"), `require("node:fs").writeFileSync("out.txt", "made\\n");\n`);
+    fs.writeFileSync(path.join(work, "flow.json"), `${JSON.stringify(flowWith("node make.cjs"), null, 2)}\n`);
+    const previousHome = process.env.FLOWGIT_HOME;
+    process.env.FLOWGIT_HOME = home;
+    const board = await startBoard({ dir: work, port: 0, open: false });
+    const json = { "X-Flowgit-Token": board.token, "Content-Type": "application/json" };
+    type TrustBody = { error: string; trust: { reason: string; source: string | null; fingerprint: string; actions: Array<{ stage: string; kind: string; detail: string }> } };
+    try {
+      const refused = await httpCall(board.port, "POST", "/api/run", JSON.stringify({ stage: "make" }), json);
+      expect(refused.status, refused.body).toBe(409);
+      const body = JSON.parse(refused.body) as TrustBody;
+      expect(body.error).toContain("flowgit trust");
+      expect(body.trust).toMatchObject({ reason: "new", source: "https://example.com/someone/flow.git", actions: [{ stage: "make", kind: "script", detail: "node make.cjs" }] });
+      expect(fs.existsSync(path.join(work, "out.txt"))).toBe(false);
+      expect(fs.existsSync(path.join(work, "runs"))).toBe(false);
+      // refusing is not a run in progress
+      expect((await httpCall(board.port, "POST", "/api/run", JSON.stringify({ stage: "all" }), json)).status).toBe(409);
+
+      expect((await httpCall(board.port, "POST", "/api/trust", JSON.stringify({ fingerprint: body.trust.fingerprint }), { "Content-Type": "application/json" })).status).toBe(401);
+      expect((await httpCall(board.port, "POST", "/api/trust", JSON.stringify({}), json)).status).toBe(400);
+
+      // the flow changes after the list was shown: nothing is confirmed, the new list comes back
+      fs.writeFileSync(path.join(work, "flow.json"), `${JSON.stringify(flowWith("node make.cjs --twice"), null, 2)}\n`);
+      const stale = await httpCall(board.port, "POST", "/api/trust", JSON.stringify({ fingerprint: body.trust.fingerprint }), json);
+      expect(stale.status, stale.body).toBe(409);
+      const fresh = JSON.parse(stale.body) as TrustBody;
+      expect(fresh.trust.actions[0]?.detail).toBe("node make.cjs --twice");
+      expect(fs.existsSync(path.join(home, "trusted.json"))).toBe(false);
+
+      const confirmed = await httpCall(board.port, "POST", "/api/trust", JSON.stringify({ fingerprint: fresh.trust.fingerprint }), json);
+      expect(confirmed.status, confirmed.body).toBe(200);
+      expect(fs.existsSync(path.join(home, "trusted.json"))).toBe(true);
+      const ran = await httpCall(board.port, "POST", "/api/run", JSON.stringify({ stage: "make" }), json);
+      expect(ran.status, ran.body).toBe(200);
+      expect(fs.readFileSync(path.join(work, "out.txt"), "utf8")).toBe("made\n");
+    } finally {
+      if (previousHome === undefined) delete process.env.FLOWGIT_HOME;
+      else process.env.FLOWGIT_HOME = previousHome;
+      await board.close();
+      fs.rmSync(work, { recursive: true, force: true });
+      fs.rmSync(home, { recursive: true, force: true });
     }
   });
 });

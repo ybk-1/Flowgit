@@ -152,6 +152,7 @@ CLI messages and errors are bilingual. What a template produces (script, caption
 | `flowgit run <stage\|all>` | 跑一个阶段，或按顺序跑完所有需要跑的阶段 | Run one stage, or every stage that needs it, in order |
 | `flowgit run all --dry-run` | 预演：列出每个阶段会跳过、运行还是停下等你，以及最多调用几次模型；什么都不运行 | Dry run: whether each stage would be skipped, run or stop for you, and at most how many model calls; nothing runs |
 | `flowgit run <stage> --from <path>` | 人工阶段：把文件或文件夹放进产物位置 | Human stage: put a file or folder in place as the output |
+| `flowgit trust` | 确认从 Git 地址复制来的流程会在你电脑上做的事。第一次运行这种流程时 `run` 也会列出来再问，`run --yes` 不问直接确认；命令变了会再问 | Confirm what a flow copied from a Git URL does on your computer. The first run of such a flow lists it and asks too, and `run --yes` confirms without asking; you are asked again when its commands change |
 | `flowgit log [stage]` | 这个阶段的历史版本；不写阶段就按时间列出整个流程的，并合计 token 用量 | The stage's version history; without a stage, the whole flow's by time, with a token total |
 | `flowgit diff <stage> <a> [b] [--json]` | 对比两个版本的产物；省略 `b` 则和当前文件比 | Diff one version against another, or against the current files when `b` is omitted |
 | `flowgit restore <stage> <n>` | 回退到某个版本 | Roll back to a version |
@@ -367,14 +368,14 @@ Everything on GitHub (commit messages, PRs, docs) is bilingual, Chinese first.
 
 1. **格式 + 命令行**（本仓库现状，0.1.0 准备发布）：Flow 规范 v0.1，JSON 产物可以带 schema；十八个自带模板（短视频、周报入门、图文、客服 SOP、求职材料、调研报告、电商上架、PPT 演示稿、直播带货、竖屏短剧、老师备课、网文连载、商业计划书、活动策划、招聘、旅行攻略、知识付费课程、落地页）；llm 阶段接任何模型，agent 阶段接 Claude Code、Codex、Cursor、Gemini，service 阶段调用 HTTP 服务，`workflow` 阶段用 `engine: "flowgit"` 运行子流程；script、agent 和 service 阶段可以设超时；`stage add` / `stage rm`、`diff`（版本对比）、`doctor`、`templates`、`graph`（流程图）等命令。更新记录见 [CHANGELOG.md](CHANGELOG.md)。
 2. **阶段看板**：本机看板已经有了（`flowgit board`）：每张卡能看产物、改、运行、看历史、对比和回退；可以新增和删除阶段，在卡片和流程图之间切换；文件一变就实时刷新（SSE 的 `flow:changed`）。「预演 / Preview」列出每个阶段会跳过、运行、等你还是不能运行，以及最多调用几次模型；全部运行要按住 1 秒，按住时卡片和流程图上先标出预演结果，提前松手就不运行。状态解码、跟着运行滚动、侧栏圆形展开和唱片式的历史版本这些动效，系统打开“减少动态效果”时都会关掉。每张卡显示用过的 token，页面顶部是合计。下一步是网站：在网上打开一个流程就是一块看板。
-3. **发布与复用**：已经能从别人的流程开始（`flowgit init -t <Git 地址>`，默认不带产物），分享前自动去隐私（`flowgit share`）。下一步是画廊。
+3. **发布与复用**：已经能从别人的流程开始（`flowgit init -t <Git 地址>`，默认不带产物，第一次运行前先确认它会做的事），分享前自动去隐私（`flowgit share`）。下一步是画廊。
 4. **更多领域**：落地页已经是自带模板；用 agent 做网页仍见 `examples/agent-page`。接下来让作者把流程变成 MCP 服务供别人调用。
 
 English:
 
 1. **Format + CLI** (this repo today, 0.1.0 getting ready to ship): Flow spec v0.1, with optional schemas for JSON outputs; eighteen bundled templates (short video, weekly-report starter, article posts, support SOP, job application, research report, e-commerce listing, slide deck, live selling, vertical short drama, lesson prep, web novel serial, business plan, event plan, hiring, travel guide, online course, landing page); llm stages on any model, agent stages on Claude Code, Codex, Cursor or Gemini, service stages that call HTTP services, and `workflow` stages that run a sub-flow with `engine: "flowgit"`; timeouts for script, agent and service stages; commands such as `stage add` / `stage rm`, `diff` (compare versions), `doctor`, `templates` and `graph` (a diagram of the flow). See [CHANGELOG.md](CHANGELOG.md) for details.
 2. **Stage board**: the local board is here (`flowgit board`). Each card lets you see its outputs, edit them, run, browse history, compare and restore; stages can be added and removed, the view switches between cards and a flow graph, and it refreshes as soon as files change (the SSE event `flow:changed`). "预演 / Preview" lists whether each stage would be skipped, run, wait for you or cannot run, and at most how many model calls; Run all is held for a second, the cards and the graph show that preview while you hold, and letting go early runs nothing. The motion (states that decode into place, scrolling to the running stage, a side panel that opens as a circle, and history as a stack of discs) turns off when the system asks for reduced motion. Each card shows the tokens its stage has used, and the top of the page shows the total. Next is the web app: open a flow online and it is a board.
-3. **Publish and reuse**: you can already start from someone else's flow (`flowgit init -t <Git URL>`, without their outputs by default) and strip private data before sharing (`flowgit share`). Next is a gallery.
+3. **Publish and reuse**: you can already start from someone else's flow (`flowgit init -t <Git URL>`, without their outputs by default, and confirmed once before its first run) and strip private data before sharing (`flowgit share`). Next is a gallery.
 4. **More domains**: the landing page is now a bundled template; building a page with an agent is still `examples/agent-page`. Next, authors can expose a flow as an MCP service for others to call.
 
 ## 许可证 / License

@@ -61,6 +61,7 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 - `inputs set` 保存前就检查名字和值（数字、`true`/`false`、可选值），写错了不会存进去。
 - `board` 打印和打开的链接带着令牌（`?token=…`）。直接打开 `http://127.0.0.1:4747/` 只会看到提示、拿不到令牌，所以同一台电脑上的其他账号或程序没法操作你的看板。
 - 从 Git 地址或别的文件夹 `init` 时，会列出这个流程要运行的命令、要启动的 agent 和要调用的服务（以及请求头里带的环境变量），运行前先看一眼。
+- 从 Git 地址复制来的流程，第一次运行前要在这台电脑上确认一次它会做的事（包括子流程里的命令）：`run` 会列出来再问，`flowgit trust` 可以先确认，`run --yes` 不问直接确认，看板上会弹窗。确认记在 `~/.flowgit/trusted.json`，不在流程目录里；这些命令变了会再问。
 - 提示词文件，以及要发给模型或服务的上游产物，如果是指向流程目录外面的链接，就不读取（`validate` 也会报出来），免得下载来的流程把 `~/.ssh` 这类文件发出去。脚本和 agent 阶段不受影响。
 - 流程自己的 `flowgit.local.json` 改了某个带密钥的模型服务的地址时，`doctor` 会警告，运行日志也会写出来，因为密钥会发到那个地址。
 - 提示、报错和 `--help` 都是中英双语（包括输错命令、少写参数这类报错，会提示“是不是想输入 …”），并针对余额不足、限流、连不上（包括代理）给出具体建议。
@@ -85,6 +86,7 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 - `inputs set` checks names and values (numbers, `true`/`false`, allowed values) before saving, so a typo is never stored.
 - The link `board` prints and opens carries the token (`?token=…`). Opening `http://127.0.0.1:4747/` by itself shows a note and no token, so other accounts or programs on the same computer can't drive your board.
 - `init` from a Git URL or another folder lists the commands the flow runs, the agents it starts and the services it calls (with the environment variables their headers send), so you can look before you run it.
+- A flow copied from a Git URL must be confirmed once on each computer before its first run, with what it does (sub-flow commands included) listed: `run` lists it and asks, `flowgit trust` confirms ahead of time, `run --yes` confirms without asking, and the board asks in a dialog. The confirmation lives in `~/.flowgit/trusted.json`, never in the flow directory, and is asked again when those commands change.
 - A prompt file, or an upstream output on its way to a model or a service, that is a link to a file outside the flow directory is not read (`validate` reports it too), so a downloaded flow can't send files like `~/.ssh` anywhere. Script and agent stages are not affected.
 - When a flow's own `flowgit.local.json` changes the address of a model provider that sends a key, `doctor` warns and the run log says so, because the key goes to that address.
 - Messages, errors and `--help` are bilingual (including typos in commands and missing arguments, with a “did you mean …”), with specific advice for an empty balance, rate limits and connection problems (including proxies).

@@ -12,6 +12,10 @@ import {
   flowLog,
   planModelCalls,
   planRunAll,
+  TrustChangedError,
+  TrustNeededError,
+  trustFlow,
+  trustState,
   FLOW_FILE,
   FLOW_MD_FILE,
   findFlowFile,
@@ -42,10 +46,12 @@ import {
   type AddStageSpec,
   type AgentName,
   type Flow,
+  type FlowAction,
   type PlanStep,
   type FlowInput,
   type Output,
   type RunEvent,
+  type TrustState,
   type ValidationIssue,
 } from "@flowgit/core";
 
@@ -362,6 +368,11 @@ function handle(req: http.IncomingMessage, res: http.ServerResponse, ctx: Handle
     void postRun(req, res, ctx).catch((err) => sendError(res, err));
     return;
   }
+  if (req.method === "POST" && pathname === "/api/trust") {
+    if (!authorized(req, res, ctx)) return;
+    void postTrust(req, res, ctx).catch((err) => sendError(res, err));
+    return;
+  }
   if (req.method === "POST" && pathname === "/api/restore") {
     if (!authorized(req, res, ctx)) return;
     if (busy(req, res, ctx)) return;
@@ -675,6 +686,31 @@ async function postRestore(req: http.IncomingMessage, res: http.ServerResponse, 
   }
 }
 
+/** What the page shows before it asks to confirm a copied flow. */
+function trustPayload(state: TrustState): { reason: string; source: string | null; fingerprint: string; actions: FlowAction[] } {
+  return { reason: state.reason, source: state.source ?? null, fingerprint: state.fingerprint, actions: state.actions };
+}
+
+/**
+ * Confirm a copied flow, like `flowgit trust`. The body carries the fingerprint of the list
+ * the person was shown; if the flow changed since, nothing is recorded and the new list comes back.
+ */
+async function postTrust(req: http.IncomingMessage, res: http.ServerResponse, ctx: HandlerCtx): Promise<void> {
+  const body = await readJsonObject(req);
+  if (typeof body.fingerprint !== "string" || !body.fingerprint) throw new HttpError(400, "缺少 fingerprint / missing fingerprint");
+  const loaded = loadFlow(ctx.dir);
+  try {
+    const state = trustFlow(loaded, body.fingerprint);
+    sendJson(res, 200, { ok: true, reason: state.reason });
+  } catch (err) {
+    if (err instanceof TrustChangedError) {
+      sendJson(res, 409, { error: err.message, trust: trustPayload(err.state) });
+      return;
+    }
+    throw coreHttpError(err);
+  }
+}
+
 function optionalString(body: Record<string, unknown>, key: string): string | undefined {
   const value = body[key];
   if (value === undefined || value === null) return undefined;
@@ -871,6 +907,12 @@ async function postRun(req: http.IncomingMessage, res: http.ServerResponse, ctx:
   }
   if (ctx.running) {
     sendJson(res, 409, { error: "已有运行在进行 / a run is already in progress" });
+    return;
+  }
+  // A flow copied from a Git URL runs only after the person has seen what it does.
+  const trust = trustState(loaded);
+  if (trust.needed) {
+    sendJson(res, 409, { error: new TrustNeededError(loaded, trust).message, trust: trustPayload(trust) });
     return;
   }
   ctx.running = true;

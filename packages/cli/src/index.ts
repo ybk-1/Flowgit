@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import readline from "node:readline/promises";
 import { fileURLToPath } from "node:url";
 import { isDeepStrictEqual } from "node:util";
 import { Command, Help } from "commander";
@@ -43,14 +44,20 @@ import {
   resolveFlowInputs,
   renderSkillMd,
   resolveFlowDir,
+  requireStage,
   restoreStage,
   runAll,
   runStage,
   saveFlowInputs,
   stageStatus,
   statusAll,
+  TrustNeededError,
+  trustFlow,
+  trustState,
   validateFlow,
   usageTokens,
+  type FlowAction,
+  type TrustState,
   type AddableStageType,
   type AgentName,
   type Finding,
@@ -165,6 +172,11 @@ function fail(err: unknown, ctx: { inputFlags?: string[] } = {}): never {
     console.error(`${c.red("✗")} ${e.message}`);
     console.error(`  新建一个 / create one: flowgit init <目录 dir>`);
     console.error(`  已经有了 / have one: 先 cd 进流程目录，或者加 / cd into it, or add: -C <流程目录 flow dir>`);
+    return exit(1);
+  }
+  if (e instanceof TrustNeededError) {
+    console.error(`${c.red("✗")} ${e.message}`);
+    console.error(`  也可以在 run 后面加 --yes，确认并运行 / or add --yes to run to confirm and run`);
     return exit(1);
   }
   if (e instanceof UpstreamNotReadyError) {
@@ -430,16 +442,60 @@ function convertFlowFile(dir: string, to: FlowFormat): { from: string; to: strin
   return { from: path.basename(from), to: path.basename(target) };
 }
 
-/** For a flow copied from somewhere else: the commands it runs, the agents it starts and the services it calls. */
-function printActions(flow: Flow, dir: string): void {
-  const actions = flowActions(flow, dir);
-  if (!actions.length) return;
-  console.log(`${c.yellow("!")} 运行前请看一眼，这个流程会在你的电脑上做这些事 / Before you run it, look at what this flow does on your computer:`);
+/** One line per command, agent, service or sub-flow. */
+function printActionRows(actions: FlowAction[]): void {
   const width = Math.max(...actions.map((a) => a.stage.length));
   for (const a of actions) {
     const env = a.env?.length ? `  · 请求头里带上 / sends in headers: ${a.env.join(", ")}` : "";
     console.log(`  ${a.kind.padEnd(8)} ${a.stage.padEnd(width)}  ${a.detail}${env}`);
   }
+}
+
+/** For a flow copied from somewhere else: the commands it runs, the agents it starts and the services it calls. */
+function printActions(flow: Flow, dir: string): FlowAction[] {
+  const actions = flowActions(flow, dir);
+  if (!actions.length) return actions;
+  console.log(`${c.yellow("!")} 运行前请看一眼，这个流程会在你的电脑上做这些事 / Before you run it, look at what this flow does on your computer:`);
+  printActionRows(actions);
+  return actions;
+}
+
+/** What a copied flow would be confirmed for. */
+function printTrustList(state: TrustState): void {
+  console.log(
+    state.reason === "changed"
+      ? `${c.yellow("!")} 这个流程要运行的命令和你上次确认的不一样了，现在是 / This flow's commands changed since you confirmed them. Now it does:`
+      : `${c.yellow("!")} 这个流程是从 ${state.source ?? "?"} 复制来的，会在你的电脑上做这些事 / This flow was copied from ${state.source ?? "?"} and does this on your computer:`,
+  );
+  printActionRows(state.actions);
+}
+
+const TRUST_REMEMBERED = "已确认。命令不变就不会再问 / Confirmed. You won't be asked again unless the commands change.";
+
+/**
+ * Before a run: a flow copied from a Git URL that hasn't been confirmed on this computer
+ * shows what it does and asks once. --yes confirms without asking; with no terminal to
+ * ask in, it stops and says how to confirm.
+ */
+async function ensureTrusted(loaded: LoadedFlow, yes?: boolean): Promise<void> {
+  const state = trustState(loaded);
+  if (!state.needed) return;
+  printTrustList(state);
+  if (!yes) {
+    if (!process.stdin.isTTY || !process.stdout.isTTY) throw new TrustNeededError(loaded, state);
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    let answer = "";
+    try {
+      answer = (await rl.question("确认后运行吗？/ Confirm and run? [y/N] ")).trim().toLowerCase();
+    } catch {
+      // input closed (Ctrl+D): treat as no
+    } finally {
+      rl.close();
+    }
+    if (!["y", "yes", "是"].includes(answer)) throw new Error("没有确认，什么都没运行 / Not confirmed; nothing ran");
+  }
+  trustFlow(loaded, state.fingerprint);
+  console.log(`${c.green("✓")} ${TRUST_REMEMBERED}\n`);
 }
 
 // Two lines rather than `cd … && flowgit status`: Windows PowerShell 5.1 has no `&&`.
@@ -540,7 +596,10 @@ program
         console.log(`  来源 / source: ${isGitUrl(opts.template) ? publicGitUrl(opts.template) : opts.template}${opts.path ? ` (${opts.path})` : ""}`);
         console.log(`  复制了 ${rels.length} 个文件 / copied ${rels.length} file(s)`);
         console.log(skipped.length ? `  跳过的产物 / skipped outputs: ${skipped.join(", ")}` : `  没有跳过产物 / no outputs skipped`);
-        printActions(sourceFlow, src);
+        const actions = printActions(sourceFlow, src);
+        if (forked && actions.length) {
+          console.log(c.dim("  第一次运行前会请你确认这些，也可以先运行 flowgit trust / the first run asks you to confirm these; or run flowgit trust first"));
+        }
         console.log(nextStepLine(target));
       } finally {
         if (cleanup) fs.rmSync(cleanup, { recursive: true, force: true });
@@ -924,7 +983,8 @@ program
   .option("--model <model>", "llm 阶段用的模型，可写 provider/model，如 glm/glm-5.3 / model for llm stages, optionally provider/model, e.g. glm/glm-5.3")
   .option("--force", "配合 all：已是最新的阶段也重跑 / with all: re-run stages that are already up to date")
   .option("--dry-run", "配合 all：只说会做什么，不运行、不调用模型 / with all: show what would happen, without running anything or calling a model")
-  .action(async (stageId: string, opts: { input?: string[]; from?: string[]; model?: string; force?: boolean; dryRun?: boolean }) => {
+  .option("-y, --yes", "从 Git 地址复制来的流程：不再询问，确认它会做的事并运行 / for a flow copied from a Git URL: confirm what it does and run, without asking")
+  .action(async (stageId: string, opts: { input?: string[]; from?: string[]; model?: string; force?: boolean; dryRun?: boolean; yes?: boolean }) => {
     try {
       const loaded = loadFlow(dirOf());
       if (opts.dryRun) {
@@ -940,6 +1000,8 @@ program
         force: opts.force,
         onEvent: printEvent,
       };
+      if (stageId !== "all") requireStage(loaded.flow, stageId);
+      await ensureTrusted(loaded, opts.yes);
       if (stageId === "all") {
         const records = await runAll(loaded, options);
         printUsageTotal();
@@ -952,6 +1014,33 @@ program
       }
     } catch (err) {
       fail(err, { inputFlags: opts.input });
+    }
+  });
+
+program
+  .command("trust")
+  .description("确认从 Git 地址复制来的流程会做的事，之后运行就不再问 / confirm what a flow copied from a Git URL does, so runs stop asking")
+  .action(() => {
+    try {
+      const loaded = loadFlow(dirOf());
+      const state = trustState(loaded);
+      if (state.reason === "not-forked") {
+        console.log("这个流程不是从 Git 地址复制来的，不用确认 / This flow wasn't copied from a Git URL; there is nothing to confirm.");
+        return;
+      }
+      if (state.reason === "no-actions") {
+        console.log("这个流程只调用模型或等人，不在你的电脑上运行命令，不用确认 / This flow only calls models or waits for people and runs nothing on your computer; there is nothing to confirm.");
+        return;
+      }
+      printTrustList(state);
+      if (state.reason === "trusted") {
+        console.log(`${c.green("✓")} 已经确认过，命令没变 / Already confirmed; the commands haven't changed.`);
+        return;
+      }
+      trustFlow(loaded, state.fingerprint);
+      console.log(`${c.green("✓")} ${TRUST_REMEMBERED}`);
+    } catch (err) {
+      fail(err);
     }
   });
 

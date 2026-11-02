@@ -992,6 +992,7 @@ async function startRun(stage, model) {
   clearPlan();
   clearLog();
   appendLog(stage === "all" ? "全部运行 Run all" : `运行 / run ${stage}${model ? ` · ${model}` : ""}`);
+  let trust = null;
   try {
     const body = { stage };
     if (model) body.model = model;
@@ -1002,7 +1003,8 @@ async function startRun(stage, model) {
       cache: "no-store",
     });
     const data = await res.json().catch(() => ({}));
-    if (res.status === 409) appendLog(data.error || "已有运行在进行 / a run is already in progress");
+    if (res.status === 409 && data.trust) trust = data.trust;
+    else if (res.status === 409) appendLog(data.error || "已有运行在进行 / a run is already in progress");
     else if (!res.ok) appendLog(data.error || `运行失败 / run failed (${res.status})`);
   } catch {
     appendLog("运行失败 / run failed");
@@ -1011,8 +1013,40 @@ async function startRun(stage, model) {
       runBusy = false;
       syncRunButtons();
     }
-    await refresh();
+    if (!trust) await refresh();
   }
+  // A flow copied from a Git URL: show what it does, confirm once, then run.
+  if (trust && (await confirmTrust(trust))) await startRun(stage, model);
+}
+
+/** Lists what a copied flow does on this computer and asks once; true when confirmed and saved. */
+async function confirmTrust(trust) {
+  const lines = (Array.isArray(trust.actions) ? trust.actions : []).map((a) => `  ${a.kind}  ${a.stage}  ${a.detail}`);
+  const head =
+    trust.reason === "changed"
+      ? "这个流程要运行的命令和你上次确认的不一样了，现在是 / This flow's commands changed since you confirmed them. Now it does:"
+      : `这个流程是从 ${trust.source || "?"} 复制来的，会在你的电脑上做这些事 / This flow was copied from ${trust.source || "?"} and does this on your computer:`;
+  const ok = window.confirm(`${head}\n\n${lines.join("\n")}\n\n确认后运行吗？命令不变就不会再问 / Confirm and run? You won't be asked again unless the commands change.`);
+  if (!ok) {
+    appendLog("没有确认，什么都没运行 / Not confirmed; nothing ran");
+    return false;
+  }
+  try {
+    const res = await fetch("/api/trust", {
+      method: "POST",
+      headers: { ...headers(), "Content-Type": "application/json" },
+      body: JSON.stringify({ fingerprint: trust.fingerprint }),
+      cache: "no-store",
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) return true;
+    // the flow changed after the list was shown: show the new list
+    if (res.status === 409 && data.trust) return confirmTrust(data.trust);
+    appendLog(data.error || `确认失败 / could not confirm (${res.status})`);
+  } catch {
+    appendLog("确认失败 / could not confirm");
+  }
+  return false;
 }
 
 function closePanel() {
