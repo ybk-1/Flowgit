@@ -6,6 +6,8 @@ dist/
 .DS_Store
 coverage/
 *.log
+playwright-report/
+test-results/
 
 # Working files if someone runs a flow inside the bundled templates
 packages/cli/templates/*/runs/

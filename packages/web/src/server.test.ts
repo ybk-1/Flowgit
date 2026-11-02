@@ -236,6 +236,11 @@ describe("read-only board", () => {
     }
     const viaLocalhost = await httpGet(server.port, "/api/flow", authed({ Host: `localhost:${server.port}` }));
     expect(viaLocalhost.status).toBe(200);
+    // "//" is not a path Node can parse against the board's origin. It must not be a 500.
+    const odd = await httpGet(server.port, "//");
+    expect(odd.status).toBe(400);
+    expect(odd.body).toContain("请求路径不合法");
+    expect(odd.body).toContain("invalid request path");
   });
 
   it("reports missing required inputs without running", async () => {

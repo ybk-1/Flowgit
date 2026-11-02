@@ -58,6 +58,8 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 - 看板上有「预演 / Preview」：在日志里列出每个阶段会跳过、运行、等你还是不能运行，最后写最多调用几次模型，什么都不运行。全部运行前，如果这次会调用真实模型（`FLOWGIT_LLM_MOCK_DIR` 的固定回复不算），会先确认。每张卡片和流程图方框的提示显示这个阶段用过的 token，页面顶部显示合计。`GET /api/plan` 和 `GET /api/usage`。
 - 看板卡片显示产物缩略图（最高 120px）：图片原样显示，视频用 ffmpeg 抽第 1 秒的一帧（没有 ffmpeg 就显示视频图标，帧缓存在 `.flowgit/thumbs/`），音频显示波形和时长，文本和 Markdown 显示去掉语法后的前三行，JSON 显示顶层键和数组长度（例如 `shots: 12 项 / 12 items`），文件夹显示前四张图和「共 N 个文件 / N files」。点缩略图打开原来的产物侧栏。说明超过三行收在「展开 / more」后面。`GET /api/thumb?stage=&output=`。
 - 看板顶部可以在「中文」「EN」「双语」之间切换，选择记在浏览器里。「双语」同时显示中文和英文（中文 / English）。接口返回的「中文 / English」报错按当前语言只显示一半。切换语言不刷新页面，也不打断正在跑的阶段。
+- 看板端到端测试：`pnpm test:e2e` 用 Playwright 打开真实看板（不包含在 `pnpm test` 里）。CI 在 Ubuntu 上单独跑。
+- 看板收到无法解析的请求路径（例如 `//`）时返回 400，不再是 500。
 - `run all --dry-run` 预演：每个阶段会跳过、运行还是停下等你，最多调用几次模型，什么都不运行。`doctor` 通过后和导出的 `SKILL.md` 里都会提到它。
 - `inputs set` 保存前就检查名字和值（数字、`true`/`false`、可选值），写错了不会存进去。
 - `board` 打印和打开的链接带着令牌（`?token=…`）。直接打开 `http://127.0.0.1:4747/` 只会看到提示、拿不到令牌，所以同一台电脑上的其他账号或程序没法操作你的看板。
@@ -83,6 +85,8 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 - The board has "预演 / Preview": the log lists whether each stage would be skipped, run, wait for you or cannot run, and ends with at most how many model calls, without running anything. Run all asks first when the run would call a real model (canned replies from `FLOWGIT_LLM_MOCK_DIR` do not count). Each card and the graph box tooltip show the tokens that stage has used, and the top of the page shows the total. `GET /api/plan` and `GET /api/usage`.
 - Board cards show an output thumbnail (120px tall at most): the image itself, a frame from 1 second into a video when ffmpeg is available (a video icon when it is not; frames are cached in `.flowgit/thumbs/`), a waveform and duration for audio, the first three lines of text and Markdown with the syntax removed, top-level keys and array lengths for JSON (for example `shots: 12 项 / 12 items`), and the first four images plus "共 N 个文件 / N files" for a folder. Clicking a thumbnail opens the existing output panel. Instructions longer than three lines fold behind "展开 / more". `GET /api/thumb?stage=&output=`.
 - The board has a 中文 / EN / 双语 switch at the top, remembered in the browser. 双语 shows Chinese and English together (中文 / English). An API error written as 中文 / English shows only the half for the current language. Switching language does not reload the page or interrupt a run.
+- Board end-to-end tests: `pnpm test:e2e` opens the real board with Playwright (not part of `pnpm test`). CI runs them on Ubuntu in their own job.
+- A request path the board cannot parse (for example `//`) returns 400 instead of 500.
 - `run all --dry-run` shows whether each stage would be skipped, run or stop for you, and at most how many model calls it would make, without running anything. `doctor` points to it when nothing blocks, and so does the exported `SKILL.md`.
 - `inputs set` checks names and values (numbers, `true`/`false`, allowed values) before saving, so a typo is never stored.
 - The link `board` prints and opens carries the token (`?token=…`). Opening `http://127.0.0.1:4747/` by itself shows a note and no token, so other accounts or programs on the same computer can't drive your board.

@@ -41,6 +41,7 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
+    "test:e2e": "playwright test",
     "prepack": "node ../../scripts/copy-license.mjs"
   },
   "dependencies": {
@@ -48,5 +49,8 @@
   },
   "publishConfig": {
     "access": "public"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.1"
   }
 }
