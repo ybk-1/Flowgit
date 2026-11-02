@@ -1,0 +1,14 @@
+{
+  "outcomes": [
+    "把 40 个会员群整理成按门店分的 12 个活跃群，每月群内复购率从 8% 提到 15%",
+    "每月策划 2 场线下活动，每场到场 50 人以上",
+    "建好会员问题答复手册，客服响应时间从 2 小时降到 30 分钟"
+  ],
+  "competencies": [
+    { "id": "c1", "name": "社群运营", "definition": "能设计群内节奏（内容、活动、福利），并根据数据调整，让群里的人愿意说话和复购", "must": true, "assess": "interview" },
+    { "id": "c2", "name": "数据分析", "definition": "能用表格算出复购率、活跃度这类指标，从数据里找出下一步该改什么", "must": true, "assess": "interview" },
+    { "id": "c3", "name": "活动执行", "definition": "能独立把一场 50 人的线下活动从方案做到复盘，预算和时间不出大错", "must": true, "assess": "work-sample" },
+    { "id": "c4", "name": "服务流程", "definition": "能把零散的会员问题归类，写成别人照着就能回答的手册", "must": false, "assess": "interview" },
+    { "id": "c5", "name": "餐饮或零售经验", "definition": "在餐饮或零售行业做过和顾客直接打交道的工作", "must": false, "assess": "resume" }
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "days": [
+    {
+      "day": 1, "area": "西街片区",
+      "items": [
+        { "time": "09:00", "place": "p1", "minutes": 120, "transport": { "mode": "步行", "minutes": 10 } },
+        { "time": "11:10", "place": "p2", "minutes": 90, "transport": { "mode": "步行", "minutes": 5 } },
+        { "time": "12:45", "place": "p3", "minutes": 60, "transport": { "mode": "打车", "minutes": 15 } },
+        { "time": "14:00", "place": "p4", "minutes": 90, "transport": { "mode": "步行回住处", "minutes": 20 } }
+      ],
+      "free": 120,
+      "backup": "下雨就把西街换成府文庙旁的室内老店和茶馆"
+    },
+    {
+      "day": 2, "area": "中山路片区",
+      "items": [
+        { "time": "09:30", "place": "p5", "minutes": 60, "transport": { "mode": "步行", "minutes": 10 } },
+        { "time": "10:40", "place": "p6", "minutes": 45, "transport": { "mode": "步行", "minutes": 5 } },
+        { "time": "11:30", "place": "p7", "minutes": 60, "transport": { "mode": "步行", "minutes": 10 } },
+        { "time": "12:40", "place": "p8", "minutes": 60, "transport": { "mode": "步行回住处", "minutes": 15 } }
+      ],
+      "free": 180,
+      "backup": "太热就下午回住处休息，傍晚再去中山路"
+    },
+    {
+      "day": 3, "area": "东湖片区和蟳埔",
+      "items": [
+        { "time": "09:00", "place": "p9", "minutes": 150, "transport": { "mode": "打车", "minutes": 30 } },
+        { "time": "12:00", "place": "p10", "minutes": 150, "transport": { "mode": "步行", "minutes": 10 } },
+        { "time": "14:40", "place": "p11", "minutes": 60, "transport": { "mode": "打车回住处", "minutes": 35 } }
+      ],
+      "free": 90,
+      "backup": "博物馆约满就换成泉州府文庙，蟳埔下雨就改去中山路骑楼"
+    }
+  ],
+  "budget": [
+    { "item": "住宿（2 晚，两人一间）", "perPerson": 300 },
+    { "item": "餐饮", "perPerson": 450 },
+    { "item": "门票和体验", "perPerson": 100 },
+    { "item": "市内交通", "perPerson": 150 },
+    { "item": "其他", "perPerson": 300 }
+  ]
+}

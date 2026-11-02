@@ -1,0 +1,141 @@
+{
+  "format": "flowgit",
+  "version": "0.1",
+  "id": "business-plan",
+  "name": "商业计划书",
+  "description": "按红杉的商业计划书结构，从你的真实数据写一份融资 BP：公司资料（人）→ 市场和竞争（自下而上算市场规模）→ 单位经济和财务预测 → BP 正文 → 检查结构、算术、单位经济、资料外的数字和收益承诺。 / Write a fundraising business plan on Sequoia's outline from your real numbers: company facts (person) → market and competition (bottom-up sizing) → unit economics and projections → the plan → checks on structure, arithmetic, unit economics, numbers not in your facts, and promised returns.",
+  "language": "zh",
+  "author": {
+    "name": "Flowgit"
+  },
+  "license": "Apache-2.0",
+  "tags": [
+    "startup",
+    "fundraising",
+    "business"
+  ],
+  "inputs": {
+    "company": {
+      "type": "string",
+      "description": "公司或项目名，例如：店小算 / The company or project, e.g. ShopTally",
+      "required": true
+    },
+    "round": {
+      "type": "string",
+      "default": "天使轮",
+      "description": "融资阶段，例如：天使轮、Pre-A、A 轮 / The round, e.g. angel, seed, Series A"
+    },
+    "ask": {
+      "type": "number",
+      "default": 0,
+      "description": "这轮想融多少（和资料里的货币单位一致）。0 = 让模型从资料里读 / How much this round raises, in the same currency as your facts. 0 reads it from the facts"
+    },
+    "language": {
+      "type": "string",
+      "enum": [
+        "zh",
+        "en"
+      ],
+      "default": "zh",
+      "description": "输出语言：zh 中文，en English / Output language: zh or en"
+    }
+  },
+  "stages": [
+    {
+      "id": "materials",
+      "name": "公司资料",
+      "description": "写下真实的产品、客户、数据、价格、成本、团队和融资需求。BP 里的每个数字都只能来自这里。 / Write down the real product, customers, numbers, pricing, costs, team and funding need. Every number in the plan must come from here.",
+      "executor": {
+        "type": "human",
+        "instructions": "把 materials/company.md 换成你公司的真实资料：做什么、给谁、现在的数据（用户、收入、留存）、价格和成本、获客花了多少、团队、想融多少和怎么花。示例是虚构的公司。 / Replace materials/company.md with your company's real facts: what you do and for whom, current numbers (users, revenue, retention), pricing and costs, what acquisition costs, the team, and how much you are raising and for what. The sample is a fictional company."
+      },
+      "outputs": [
+        {
+          "type": "text/markdown",
+          "path": "materials/company.md"
+        }
+      ]
+    },
+    {
+      "id": "market",
+      "name": "市场和竞争",
+      "description": "一句话公司定位、为什么是现在、自下而上的市场规模（客户数 × 客单价，每个数字写出处）、直接和间接竞争对手以及你怎么赢。 / The one-sentence company purpose, why now, bottom-up market size (customers × price, each number sourced), direct and indirect competitors, and how you win.",
+      "inputs": [
+        "materials"
+      ],
+      "executor": {
+        "type": "llm",
+        "prompt": "prompts/market.md",
+        "effort": "medium"
+      },
+      "outputs": [
+        {
+          "type": "application/json",
+          "path": "market.json"
+        }
+      ]
+    },
+    {
+      "id": "financials",
+      "name": "单位经济和财务",
+      "description": "每个客户的收入、毛利、获客成本、流失率、生命周期价值和回本月数，三年预测和它的假设，以及这轮钱怎么花。 / Revenue, gross margin, acquisition cost, churn, lifetime value and payback per customer, a three-year projection with its assumptions, and the use of funds.",
+      "inputs": [
+        "materials",
+        "market"
+      ],
+      "executor": {
+        "type": "llm",
+        "prompt": "prompts/financials.md",
+        "effort": "medium"
+      },
+      "outputs": [
+        {
+          "type": "application/json",
+          "path": "financials.json"
+        }
+      ]
+    },
+    {
+      "id": "plan",
+      "name": "BP 正文",
+      "description": "按红杉的顺序写：公司定位、问题、解决方案、为什么是现在、市场、竞争、产品、商业模式、团队、财务、融资计划。每页标题写成一句结论。 / In Sequoia's order: purpose, problem, solution, why now, market, competition, product, business model, team, financials, the ask. Every section title is a one-line claim.",
+      "inputs": [
+        "materials",
+        "market",
+        "financials"
+      ],
+      "executor": {
+        "type": "llm",
+        "prompt": "prompts/plan.md",
+        "effort": "high"
+      },
+      "outputs": [
+        {
+          "type": "text/markdown",
+          "path": "business-plan.md"
+        }
+      ]
+    },
+    {
+      "id": "check",
+      "name": "检查",
+      "description": "检查有没有缺的部分、“为什么是现在”是不是放在前面、市场规模的乘法对不对、LTV:CAC 和回本月数、增长假设、资金用途加起来对不对、资料里找不到的数字，以及有没有承诺投资回报。 / Checks missing sections, whether \"why now\" comes early, the market-size multiplication, LTV:CAC and payback, growth assumptions, whether the use of funds adds up, numbers not in your facts, and promised returns.",
+      "inputs": [
+        "materials",
+        "market",
+        "financials",
+        "plan"
+      ],
+      "executor": {
+        "type": "script",
+        "run": "node scripts/check.mjs"
+      },
+      "outputs": [
+        {
+          "type": "text/markdown",
+          "path": "check-report.md"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "chapters": [
+    { "n": 1, "title": "超时三分钟", "goal": "保住这个月的全勤奖", "conflict": "周站长故意把最远的单派给他，还要扣他超时罚款", "payoff": "", "hook": "他在电梯里捡到一副眼镜，戴上后看见站长头上飘着 -62", "edge": true, "promises": ["p1"] },
+    { "n": 2, "title": "负六十二", "goal": "弄清眼镜是什么", "conflict": "眼镜每天只能戴一小时，规则要自己试出来", "payoff": "他靠好感度挑客户，一晚上拿到五个好评", "hook": "眼镜里第一次出现一行字：上一个主人已死亡", "edge": false, "promises": ["p2"] },
+    { "n": 3, "title": "三天", "goal": "在站长出手前留下证据", "conflict": "站长的好感度跌破 -50，三天内一定会出手", "payoff": "他提前录下站长私改配送费的对话", "hook": "第三天晚上，一个穿灰外套的男人在楼下问：眼镜呢？", "edge": false, "promises": ["p1", "p2"] },
+    { "n": 4, "title": "灰外套", "goal": "甩掉灰外套男人", "conflict": "对方看不见好感度，却知道他戴过眼镜", "payoff": "", "hook": "男人留下一张写着妹妹病房号的纸条", "edge": false, "promises": ["p2", "p3"] },
+    { "n": 5, "title": "病房", "goal": "确认妹妹安全", "conflict": "医院催缴费，站长又停了他的单", "payoff": "", "hook": "护士说：今天有人替你妹妹交了一万块", "edge": false, "promises": ["p3"] },
+    { "n": 6, "title": "谁交的钱", "goal": "找到替他交钱的人", "conflict": "交钱的人留的是假名", "payoff": "", "hook": "监控里交钱的人，就是死去的上一个主人", "edge": false, "promises": ["p2"] }
+  ]
+}

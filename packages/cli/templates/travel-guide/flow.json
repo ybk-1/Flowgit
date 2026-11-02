@@ -1,0 +1,140 @@
+{
+  "format": "flowgit",
+  "version": "0.1",
+  "id": "travel-guide",
+  "name": "旅行攻略",
+  "description": "从目的地和天数做出一份能照着走的旅行攻略：备选地点（标出要预约、要核实的信息）→ 按天排的行程（交通衔接、留白、雨天备选）→ 小红书式攻略笔记 → 检查每天的节奏、时间衔接、预算和出发前要核实的清单。 / Turn a destination and a number of days into a guide you can actually follow: candidate places (flagging bookings and facts to verify) → a day-by-day itinerary (transfers, free time, rainy-day backups) → a shareable guide note → checks on daily pace, timing, budget and the pre-trip verification list.",
+  "language": "zh",
+  "author": {
+    "name": "Flowgit"
+  },
+  "license": "Apache-2.0",
+  "tags": [
+    "travel",
+    "itinerary",
+    "lifestyle"
+  ],
+  "inputs": {
+    "destination": {
+      "type": "string",
+      "description": "目的地，例如：泉州 / Where to, e.g. Quanzhou",
+      "required": true
+    },
+    "days": {
+      "type": "number",
+      "default": 3,
+      "description": "玩几天 / How many days"
+    },
+    "month": {
+      "type": "string",
+      "default": "",
+      "description": "几月去，例如：10 月 / When, e.g. October"
+    },
+    "travelers": {
+      "type": "string",
+      "default": "两个成年人",
+      "description": "谁去，例如：带 6 岁孩子的一家三口 / Who is going, e.g. a family with a 6-year-old"
+    },
+    "budget": {
+      "type": "number",
+      "default": 3000,
+      "description": "每人预算（不含往返大交通）/ Budget per person, excluding getting there and back"
+    },
+    "pace": {
+      "type": "string",
+      "enum": [
+        "relaxed",
+        "normal",
+        "packed"
+      ],
+      "default": "normal",
+      "description": "节奏：relaxed 悠闲（每天 2 个主要景点），normal 正常（3 个），packed 紧凑（4 个）/ Pace: relaxed (2 main sights a day), normal (3), packed (4)"
+    },
+    "language": {
+      "type": "string",
+      "enum": [
+        "zh",
+        "en"
+      ],
+      "default": "zh",
+      "description": "输出语言：zh 中文，en English / Output language: zh or en"
+    }
+  },
+  "stages": [
+    {
+      "id": "places",
+      "name": "备选地点",
+      "description": "景点、吃饭和住宿的备选，每个写区域、建议游玩时长、大概花费、要不要预约，以及出发前必须自己核实的信息。 / Candidate sights, food and stays, each with its area, suggested time, rough cost, whether booking is needed, and what you must verify yourself before going.",
+      "executor": {
+        "type": "llm",
+        "prompt": "prompts/places.md",
+        "effort": "medium"
+      },
+      "outputs": [
+        {
+          "type": "application/json",
+          "path": "places.json"
+        }
+      ]
+    },
+    {
+      "id": "itinerary",
+      "name": "按天行程",
+      "description": "按区域排每天的行程：每站的时间、时长和到下一站的交通，每天留出空闲时间和一个雨天备选，再列出每人的预算。 / Each day grouped by area: times, durations and the transfer to the next stop, free time every day and a rainy-day backup, plus the budget per person.",
+      "inputs": [
+        "places"
+      ],
+      "executor": {
+        "type": "llm",
+        "prompt": "prompts/itinerary.md",
+        "effort": "medium"
+      },
+      "outputs": [
+        {
+          "type": "application/json",
+          "path": "itinerary.json"
+        }
+      ]
+    },
+    {
+      "id": "guide",
+      "name": "攻略笔记",
+      "description": "写成可以直接发的攻略：标题、行程概览、每天怎么走、交通、预算表、避坑和出发前核实清单。 / A guide ready to post: title, overview, each day, transport, budget table, pitfalls and the pre-trip checklist.",
+      "inputs": [
+        "places",
+        "itinerary"
+      ],
+      "executor": {
+        "type": "llm",
+        "prompt": "prompts/guide.md",
+        "effort": "medium"
+      },
+      "outputs": [
+        {
+          "type": "text/markdown",
+          "path": "guide.md"
+        }
+      ]
+    },
+    {
+      "id": "check",
+      "name": "检查",
+      "description": "检查每天主要景点是不是超过节奏、有没有留白和雨天备选、时间加交通接不接得上、行程里的地点是不是都在备选里、预算有没有超，以及要预约的地方有没有进核实清单。 / Checks main sights per day against the pace, free time and rainy-day backups, whether times plus transfers fit, that every stop is a known place, the budget, and that places needing a booking are on the checklist.",
+      "inputs": [
+        "places",
+        "itinerary",
+        "guide"
+      ],
+      "executor": {
+        "type": "script",
+        "run": "node scripts/check.mjs"
+      },
+      "outputs": [
+        {
+          "type": "text/markdown",
+          "path": "check-report.md"
+        }
+      ]
+    }
+  ]
+}

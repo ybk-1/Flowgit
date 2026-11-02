@@ -1,0 +1,31 @@
+{
+  "currency": "元",
+  "unit": {
+    "arpa": 100,
+    "grossMargin": 0.8,
+    "cac": 600,
+    "monthlyChurn": 0.03,
+    "ltv": 2666.67,
+    "paybackMonths": 7.5
+  },
+  "years": [
+    { "year": 1, "customers": 1200, "revenue": 900000, "costs": 2000000, "profit": -1100000 },
+    { "year": 2, "customers": 3000, "revenue": 2500000, "costs": 2800000, "profit": -300000 },
+    { "year": 3, "customers": 6000, "revenue": 6000000, "costs": 4800000, "profit": 1200000 }
+  ],
+  "assumptions": [
+    "现在 420 家付费门店，月流失 3%，按现有获客成本 600 元，地推团队扩到 10 人后每月新增约 150 家",
+    "价格保持每店每月 100 元，毛利率 80%",
+    "第 3 年靠老板转介绍降低获客成本，成本增长慢于收入"
+  ],
+  "ask": 3000000,
+  "useOfFunds": [
+    { "item": "产品研发", "amount": 1200000 },
+    { "item": "地推团队", "amount": 1200000 },
+    { "item": "运营和其他", "amount": 600000 }
+  ],
+  "milestones": [
+    "18 个月后付费门店 3000 家",
+    "月流失率保持在 3% 以内"
+  ]
+}

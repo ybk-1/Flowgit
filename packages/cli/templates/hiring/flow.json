@@ -1,0 +1,138 @@
+{
+  "format": "flowgit",
+  "version": "0.1",
+  "id": "hiring",
+  "name": "招聘流程",
+  "description": "为一个岗位做好结构化招聘：岗位需求（人）→ 岗位分析（要做成的事和能力项）→ 招聘启事和面试题（并行，行为面试题带 1/3/5 分评分锚点）→ 面试评分表，并检查启事和面试题里的就业歧视风险、能力项覆盖和脑筋急转弯。 / Set up structured hiring for one role: the need (person) → job analysis (outcomes and competencies) → the job ad and interview questions in parallel (behavioral questions with 1/3/5 scoring anchors) → an interview scorecard, with checks for discrimination risk in the ad and questions, competency coverage, and brainteasers.",
+  "language": "zh",
+  "author": {
+    "name": "Flowgit"
+  },
+  "license": "Apache-2.0",
+  "tags": [
+    "hr",
+    "recruiting",
+    "interview"
+  ],
+  "inputs": {
+    "role": {
+      "type": "string",
+      "description": "岗位名称，例如：社群运营 / The role, e.g. community manager",
+      "required": true
+    },
+    "company": {
+      "type": "string",
+      "default": "",
+      "description": "公司名，写进招聘启事 / The company, used in the job ad"
+    },
+    "language": {
+      "type": "string",
+      "enum": [
+        "zh",
+        "en"
+      ],
+      "default": "zh",
+      "description": "输出语言：zh 中文，en English / Output language: zh or en"
+    }
+  },
+  "stages": [
+    {
+      "id": "need",
+      "name": "岗位需求",
+      "description": "写下这个人来了以后半年到一年要做成什么、在什么团队、必须会什么、薪资范围和工作地点。 / Write down what this person must get done in their first six to twelve months, the team, what they must already know, the pay range and the location.",
+      "executor": {
+        "type": "human",
+        "instructions": "把 materials/role.md 换成这个岗位的真实需求：要做成的事、团队、必须会的、加分项、薪资范围、地点和工作方式。只写和工作有关的要求，不写性别、年龄、婚育、户籍这类条件。示例是虚构的岗位。 / Replace materials/role.md with the real need: what must get done, the team, must-haves, nice-to-haves, pay range, location and way of working. Only job-related requirements; nothing about gender, age, marriage, children or household registration. The sample is a fictional role."
+      },
+      "outputs": [
+        {
+          "type": "text/markdown",
+          "path": "materials/role.md"
+        }
+      ]
+    },
+    {
+      "id": "analysis",
+      "name": "岗位分析",
+      "description": "从要做成的事推出 4 到 6 个能力项：每项的定义、是必须还是加分、用什么方式评估（面试、工作样本、简历）。 / From the outcomes, derive 4 to 6 competencies: a definition for each, must-have or nice-to-have, and how it is assessed (interview, work sample, resume).",
+      "inputs": [
+        "need"
+      ],
+      "executor": {
+        "type": "llm",
+        "prompt": "prompts/analysis.md",
+        "effort": "medium"
+      },
+      "outputs": [
+        {
+          "type": "application/json",
+          "path": "competencies.json"
+        }
+      ]
+    },
+    {
+      "id": "ad",
+      "name": "招聘启事",
+      "description": "先写这个岗位要做成什么，再写必须具备和加分的能力、薪资和地点。只写和工作有关的要求。 / What the role must achieve first, then must-have and nice-to-have skills, pay and location. Only job-related requirements.",
+      "inputs": [
+        "need",
+        "analysis"
+      ],
+      "executor": {
+        "type": "llm",
+        "prompt": "prompts/ad.md",
+        "effort": "low"
+      },
+      "outputs": [
+        {
+          "type": "text/markdown",
+          "path": "job-ad.md"
+        }
+      ]
+    },
+    {
+      "id": "interview",
+      "name": "面试题",
+      "description": "用面试考察的能力项每项 2 道题、用工作样本考察的每项 1 道（行为题为主，情景题为辅），每题带追问和 1、3、5 分的行为锚点，再加一个工作样本任务。 / Two questions per competency assessed in interview and one per competency assessed by work sample (mostly behavioral, some situational), each with follow-up probes and behavioral anchors for scores 1, 3 and 5, plus a work-sample task.",
+      "inputs": [
+        "need",
+        "analysis"
+      ],
+      "executor": {
+        "type": "llm",
+        "prompt": "prompts/interview.md",
+        "effort": "medium"
+      },
+      "outputs": [
+        {
+          "type": "application/json",
+          "path": "interview.json"
+        }
+      ]
+    },
+    {
+      "id": "scorecard",
+      "name": "评分表",
+      "description": "生成面试官用的评分表，并检查：启事和面试题里有没有性别、年龄、婚育、户籍、健康等歧视风险，每个能力项有没有题和锚点，有没有脑筋急转弯。 / Build the interviewer's scorecard and check the ad and questions for discrimination risk (gender, age, marriage and children, household registration, health), that every competency has questions and anchors, and for brainteasers.",
+      "inputs": [
+        "analysis",
+        "ad",
+        "interview"
+      ],
+      "executor": {
+        "type": "script",
+        "run": "node scripts/scorecard.mjs"
+      },
+      "outputs": [
+        {
+          "type": "text/markdown",
+          "path": "scorecard.md"
+        },
+        {
+          "type": "text/markdown",
+          "path": "check-report.md"
+        }
+      ]
+    }
+  ]
+}

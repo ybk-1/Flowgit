@@ -46,7 +46,7 @@ const absolute = [
 const medical = ["治疗", "治愈", "疗效", "根治", "包治", "药效", "消炎", "杀菌", "抗癌", "降血压", "降血糖", "预防疾病", "医用级", "cures", "treats", "heals", "medical grade", "prevents disease"];
 const priceCompare = ["原价", "划线价", "专柜价", "市场价", "吊牌价", "立省", "比别家便宜", "was $", "retail price", "regular price"];
 
-const numbersIn = (text) => text.replace(/^##\s+\S+/gm, "").replace(/[（(]\s*\d+\s*(分钟|min)\s*[)）]/g, "").match(/\d+(?:\.\d+)?/g) ?? [];
+const numbersIn = (text) => text.replace(/(\d),(?=\d{3}(?!\d))/g, "$1").replace(/^##\s+\S+/gm, "").replace(/[（(]\s*\d+\s*(分钟|min)\s*[)）]/g, "").match(/\d+(?:\.\d+)?/g) ?? [];
 const known = new Set(numbersIn(`${facts}\n${flowInputs.price ?? ""}`));
 const unknownNumbers = [...new Set(numbersIn(all))].filter((n) => !known.has(n));
 

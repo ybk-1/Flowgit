@@ -1,0 +1,11 @@
+{
+  "risks": [
+    { "category": "crowd", "risk": "抽奖时人群聚集在舞台前", "likelihood": 4, "impact": 4, "prevention": "场地容量 1500 人，两个出入口；抽奖区拉隔离带，入口计数，超过 1200 人限流", "response": "暂停抽奖，广播引导分散，安保打开第二出口", "owner": "安保组长" },
+    { "category": "fire", "risk": "小吃摊用电用火", "likelihood": 2, "impact": 5, "prevention": "只允许电加热，每 5 个摊位一个灭火器，消防通道不摆摊", "response": "断电，灭火器处置，疏散相邻摊位，必要时报警", "owner": "场务组长" },
+    { "category": "weather", "risk": "下雨或高温", "likelihood": 3, "impact": 3, "prevention": "提前三天看天气，帐篷防雨，准备饮水点", "response": "小雨照常，大雨把抽奖和手工区移到店内，必要时改期并群发通知", "owner": "现场总负责" },
+    { "category": "tech", "risk": "音响或供电故障", "likelihood": 2, "impact": 3, "prevention": "彩排时全部测试，备用发电机和手持扩音器", "response": "切到备用电源，主持改用扩音器", "owner": "场务组长" },
+    { "category": "medical", "risk": "儿童摔伤或中暑", "likelihood": 3, "impact": 3, "prevention": "医疗点设在入口旁，手工区地面铺垫子", "response": "急救员处理，严重时拨打 120，安保引导救护车", "owner": "医疗点负责人" },
+    { "category": "schedule", "risk": "摊主迟到或缺席", "likelihood": 3, "impact": 2, "prevention": "前一天确认，09:30 前到场", "response": "用咖啡店备用桌补位", "owner": "摊主对接人" },
+    { "category": "reputation", "risk": "噪音投诉", "likelihood": 2, "impact": 2, "prevention": "提前一周告知周边住户，音量控制", "response": "店长当场道歉并降低音量", "owner": "店长" }
+  ]
+}

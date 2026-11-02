@@ -1,0 +1,8 @@
+{
+  "lessons": [
+    { "n": 1, "title": "10 分钟做出你的第一张记账表", "outcomes": ["o1"], "segments": [ { "title": "为什么记账 App 坚持不下去", "minutes": 2 }, { "title": "四列就够：日期、金额、分类、备注", "minutes": 5 }, { "title": "让表格自己算分类合计", "minutes": 5 } ], "practice": "把这周的 5 笔花费填进表格，看分类合计" },
+    { "n": 2, "title": "一键导入支付宝和微信账单", "outcomes": ["o2"], "segments": [ { "title": "导出账单文件", "minutes": 4 }, { "title": "整理成四列格式", "minutes": 6 } ], "practice": "导入上个月的账单" },
+    { "n": 3, "title": "用数据透视表看清钱花在哪", "outcomes": ["o2", "o3"], "segments": [ { "title": "给每笔账归类", "minutes": 5 }, { "title": "三步做出数据透视表", "minutes": 6 }, { "title": "找出花得最多的三类", "minutes": 4 } ], "practice": "找出你上个月花得最多的三类支出" },
+    { "n": 4, "title": "定预算，月底 10 分钟复盘", "outcomes": ["o4"], "segments": [ { "title": "按上月数据定分类预算", "minutes": 5 }, { "title": "用条件格式标出超支", "minutes": 8 } ], "practice": "给下个月三类大支出各定一个预算" }
+  ]
+}

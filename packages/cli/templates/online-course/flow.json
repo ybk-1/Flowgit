@@ -1,0 +1,146 @@
+{
+  "format": "flowgit",
+  "version": "0.1",
+  "id": "online-course",
+  "name": "知识付费课程",
+  "description": "按教学设计的方法做一门线上课：学员分析和学习成果（ADDIE 的分析）→ 课程大纲（每课拆成 6 分钟以内的小段，每课有练习）→ 试听课逐字稿和课程介绍页（并行）→ 检查成果覆盖、视频分段长度、可检验的动词，以及介绍页里的保过承诺、学员证言和价格比较。 / Build an online course with instructional design: learner analysis and outcomes (the A in ADDIE) → a syllabus (each lesson cut into segments of six minutes or less, each with practice) → the trial lesson script and the course page in parallel → checks on outcome coverage, segment length, checkable verbs, and guarantees, testimonials and price comparisons on the course page.",
+  "language": "zh",
+  "author": {
+    "name": "Flowgit"
+  },
+  "license": "Apache-2.0",
+  "tags": [
+    "education",
+    "course",
+    "creator"
+  ],
+  "inputs": {
+    "topic": {
+      "type": "string",
+      "description": "课程主题，例如：用表格做个人记账 / The course topic, e.g. personal budgeting in a spreadsheet",
+      "required": true
+    },
+    "audience": {
+      "type": "string",
+      "default": "想入门的上班族",
+      "description": "给谁学 / Who it is for"
+    },
+    "lessons": {
+      "type": "number",
+      "default": 8,
+      "description": "几节课 / How many lessons"
+    },
+    "price": {
+      "type": "string",
+      "default": "",
+      "description": "售价和退款规则，例如：99 元，7 天内没看完 2 节可全额退款 / Price and refund terms"
+    },
+    "language": {
+      "type": "string",
+      "enum": [
+        "zh",
+        "en"
+      ],
+      "default": "zh",
+      "description": "输出语言：zh 中文，en English / Output language: zh or en"
+    }
+  },
+  "stages": [
+    {
+      "id": "analysis",
+      "name": "学员和成果",
+      "description": "学员是谁、现在会什么、卡在哪；学完能做到什么（3 到 6 个用可观察动词写的学习成果）；需要的基础和不适合谁。 / Who the learners are, what they can do now and where they get stuck; what they can do after (3 to 6 outcomes with observable verbs); prerequisites and who it is not for.",
+      "executor": {
+        "type": "llm",
+        "prompt": "prompts/analysis.md",
+        "effort": "medium"
+      },
+      "outputs": [
+        {
+          "type": "application/json",
+          "path": "analysis.json"
+        }
+      ]
+    },
+    {
+      "id": "outline",
+      "name": "课程大纲",
+      "description": "每节课对应哪些学习成果、拆成哪几段（每段 6 分钟以内）、课后练习是什么。 / Each lesson's outcomes, its segments (six minutes or less each) and its practice task.",
+      "inputs": [
+        "analysis"
+      ],
+      "executor": {
+        "type": "llm",
+        "prompt": "prompts/outline.md",
+        "effort": "medium"
+      },
+      "outputs": [
+        {
+          "type": "application/json",
+          "path": "outline.json"
+        }
+      ]
+    },
+    {
+      "id": "trial",
+      "name": "试听课逐字稿",
+      "description": "第一节课的逐字稿：从学员的真实问题开场，说清这节课学完能做什么，分段讲、每段有例子，最后一个马上能做的练习和小结。 / The first lesson word for word: open on the learner's real problem, say what they will be able to do, teach in segments with examples, end with a practice task and a recap.",
+      "inputs": [
+        "analysis",
+        "outline"
+      ],
+      "executor": {
+        "type": "llm",
+        "prompt": "prompts/trial.md",
+        "effort": "high"
+      },
+      "outputs": [
+        {
+          "type": "text/markdown",
+          "path": "lesson-1.md"
+        }
+      ]
+    },
+    {
+      "id": "page",
+      "name": "课程介绍页",
+      "description": "适合谁、不适合谁、学完能做什么、大纲、价格和退款规则。不承诺效果，不编学员证言，不写虚假原价。 / Who it is for and not for, what you can do after, the syllabus, the price and refund terms. No promised results, invented testimonials or fake original prices.",
+      "inputs": [
+        "analysis",
+        "outline"
+      ],
+      "executor": {
+        "type": "llm",
+        "prompt": "prompts/page.md",
+        "effort": "low"
+      },
+      "outputs": [
+        {
+          "type": "text/markdown",
+          "path": "course-page.md"
+        }
+      ]
+    },
+    {
+      "id": "check",
+      "name": "检查",
+      "description": "检查每个学习成果有没有课讲、每节课有没有练习、分段有没有超过 6 分钟、成果动词能不能检验，以及介绍页里有没有保过和收入承诺、学员证言、价格比较和制造焦虑的说法。 / Checks that every outcome is taught, every lesson has practice, no segment runs past six minutes, outcome verbs are checkable, and the course page for guarantees and income promises, testimonials, price comparisons and anxiety marketing.",
+      "inputs": [
+        "analysis",
+        "outline",
+        "trial",
+        "page"
+      ],
+      "executor": {
+        "type": "script",
+        "run": "node scripts/check.mjs"
+      },
+      "outputs": [
+        {
+          "type": "text/markdown",
+          "path": "check-report.md"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "places": [
+    { "id": "p1", "name": "开元寺", "area": "西街片区", "type": "sight", "minutes": 120, "cost": 0, "booking": false, "notes": "东西塔是泉州的标志，早上人少、光线好", "verify": ["开放时间", "是否收费和预约"] },
+    { "id": "p2", "name": "西街", "area": "西街片区", "type": "walk", "minutes": 90, "cost": 0, "booking": false, "notes": "老街和骑楼，适合慢慢走", "verify": [] },
+    { "id": "p3", "name": "西街附近的面线糊小店", "area": "西街片区", "type": "food", "minutes": 60, "cost": 30, "booking": false, "notes": "泉州早餐和午餐都常见", "verify": [] },
+    { "id": "p4", "name": "泉州府文庙", "area": "中山路片区", "type": "sight", "minutes": 90, "cost": 0, "booking": false, "notes": "庙前广场下午有老人喝茶聊天", "verify": ["开放时间", "门票价格"] },
+    { "id": "p5", "name": "天后宫", "area": "中山路片区", "type": "sight", "minutes": 60, "cost": 0, "booking": false, "notes": "了解泉州海上贸易和妈祖信仰", "verify": ["开放时间"] },
+    { "id": "p6", "name": "关岳庙", "area": "中山路片区", "type": "sight", "minutes": 45, "cost": 0, "booking": false, "notes": "香火很旺，注意礼仪", "verify": ["开放时间"] },
+    { "id": "p7", "name": "清净寺", "area": "中山路片区", "type": "sight", "minutes": 60, "cost": 0, "booking": false, "notes": "宋代伊斯兰教寺院遗址", "verify": ["开放时间", "门票价格"] },
+    { "id": "p8", "name": "中山路小吃", "area": "中山路片区", "type": "food", "minutes": 60, "cost": 50, "booking": false, "notes": "牛肉羹、润饼、四果汤", "verify": [] },
+    { "id": "p9", "name": "泉州海外交通史博物馆", "area": "东湖片区", "type": "sight", "minutes": 150, "cost": 0, "booking": true, "notes": "看懂“宋元中国的世界海洋商贸中心”最好的一站，适合带孩子", "verify": ["开放时间和闭馆日", "预约方式"] },
+    { "id": "p10", "name": "蟳埔村", "area": "蟳埔", "type": "walk", "minutes": 150, "cost": 0, "booking": false, "notes": "蚵壳厝和簪花，周末人多", "verify": ["簪花体验的价格"] },
+    { "id": "p11", "name": "蟳埔海鲜排档", "area": "蟳埔", "type": "food", "minutes": 60, "cost": 100, "booking": false, "notes": "点菜前先问清称重和价格", "verify": [] },
+    { "id": "p12", "name": "住西街或中山路附近", "area": "西街片区", "type": "stay", "minutes": 0, "cost": 300, "booking": true, "notes": "走路能到两个片区，晚上出门方便", "verify": ["旺季房价"] }
+  ]
+}

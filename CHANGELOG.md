@@ -99,6 +99,13 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 - `live-selling`：直播带货脚本。商品资料（人）→ 七段流程表（留人、痛点、塑品、信任、价格、逼单、返场）→ 逐段话术和弹幕问答（并行）→ 按《网络直播营销管理办法》检查虚构的销量、库存和数字，以及绝对化、医疗用语和价格比较。
 - `short-drama`：竖屏微短剧。设定和人物 → 分集节拍（钩子、压抑、爆发、悬念，付费卡点）→ 逐集剧本 → 按广电总局管理提示和创作标准审读 → 检查集数、估算时长、旁白开头、悬念和付费卡点。
 - `lesson-plan`：老师备课，按逆向设计。教学目标（布鲁姆层级）→ 评价任务 → 教案和分层练习（并行）→ 学生练习单和答案，并检查教学评一致性、时间和“双减”作业时长。
+- `novel-serial`：网文连载。设定和卖点（金手指和它的代价、读者会追着看的“期待”）→ 分章细纲（每章冲突、爽点和章末钩子）→ 黄金三章正文 → 检查字数、爽点断档、没推进的期待、金手指出场和背景式开头。
+- `business-plan`：商业计划书，按红杉的结构。公司资料（人）→ 自下而上的市场规模和竞争 → 单位经济和三年预测 → BP 正文 → 检查结构、市场规模乘法、LTV:CAC 和回本月数、资金用途、资料外的数字和承诺回报的说法。
+- `event-plan`：活动策划方案。SMART 目标 → 流程表、预算和风险登记表（并行）→ 完整方案 → 检查流程时间、预算算术和预备金、风险类别，以及 1000 人以上公开活动的安全许可。
+- `hiring`：招聘流程。岗位需求（人）→ 岗位分析 → 招聘启事和结构化面试题（并行，带 1/3/5 分行为锚点）→ 面试评分表，并检查启事和面试题里的就业歧视风险和脑筋急转弯。
+- `travel-guide`：旅行攻略。备选地点（标出要预约和要核实的信息）→ 按区域排的每日行程（交通、留白、雨天备选）→ 攻略笔记 → 检查节奏、时间衔接、预算和出发前核实清单。
+- `online-course`：知识付费课程，按 ADDIE。学员和学习成果 → 大纲（每段视频 6 分钟以内、每课有练习）→ 试听课逐字稿和课程介绍页（并行）→ 检查成果覆盖、分段长度，以及介绍页里的效果承诺、学员证言和价格比较。
+- 每个新模板的 README 都列出参考资料。
 - `examples/agent-page`：用 agent 做一页介绍网页（只在仓库里）。
 - `short-video` (default): script → voiceover → storyboard → assets → edit → export. FFmpeg renders a vertical video with zoom, blurred fill, gradient text cards, a title, transitions, background music and voiceover (clips follow the voice); the output language is Chinese or English.
 - The voice stage calls an OpenAI-compatible speech API and writes `voice/voice.mp3`. The key is `FLOWGIT_TTS_API_KEY` (never written to a file); `FLOWGIT_TTS_BASE_URL` points it at another compatible service. With no key the stage skips instead of failing, and a voiceover you recorded in `assets/` wins. `doctor` warns when the key is missing, and that warning is not an error.
@@ -112,6 +119,13 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 - `live-selling`: a live-selling stream script. Product facts (person) → a seven-part rundown (hook, pain, demo, trust, price, close, recap) → segment script and chat Q&A (in parallel) → checks for invented sales, stock and numbers under China's live-stream marketing rules, plus absolute and medical claims and price comparisons.
 - `short-drama`: a vertical micro-drama. Story bible and characters → episode beats (hook, suppression, payoff, cliffhanger, paywall) → scripts → a read against NRTA guidance and craft standards → checks on count, length, voice-over openings, cliffhangers and the paywall.
 - `lesson-plan`: lesson prep with backward design. Objectives (Bloom levels) → assessment tasks → lesson plan and tiered exercises (in parallel) → a student worksheet and answer key, with checks on alignment, timing and homework load under the double-reduction rules.
+- `novel-serial`: a serialized web novel. Setting and hook (the hero's edge and its cost, the expectations readers follow) → chapter outlines (conflict, payoff and closing hook for each) → the first three chapters → checks on length, payoff droughts, stalled expectations, when the edge appears, and openings that start with background.
+- `business-plan`: a business plan on Sequoia's outline. Company facts (person) → bottom-up market size and competition → unit economics and a three-year projection → the plan → checks on structure, the market-size multiplication, LTV:CAC and payback, the use of funds, numbers not in the facts, and promised returns.
+- `event-plan`: an event proposal. SMART objectives → run of show, budget and risk register (in parallel) → the full proposal → checks on timing, budget arithmetic and contingency, risk categories, and the safety permit for public events of 1,000 or more.
+- `hiring`: structured hiring. The role (person) → job analysis → job ad and structured interview questions (in parallel, with 1/3/5 behavioral anchors) → an interview scorecard, with checks for discrimination risk and brainteasers.
+- `travel-guide`: a travel guide. Candidate places (flagging bookings and facts to verify) → a day-by-day itinerary by area (transfers, free time, rainy-day backups) → the guide → checks on pace, timing, budget and the check-before-you-go list.
+- `online-course`: an online course with ADDIE. Learners and outcomes → syllabus (video segments of six minutes or less, practice in every lesson) → the trial lesson script and the course page (in parallel) → checks on outcome coverage, segment length, and promised results, testimonials and price comparisons on the page.
+- Every new template's README lists its references.
 - `examples/agent-page`: a one-page explainer made by an agent (repo only).
 
 ### 项目 / Project

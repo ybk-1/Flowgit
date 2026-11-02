@@ -74,6 +74,7 @@ const unused = keywords.filter((word) => !titleText.includes(lower(word)));
 // Numbers in the copy that the product facts never mention. List markers and "第 N 屏" are ignored.
 const numbersIn = (text) =>
   text
+    .replace(/(\d),(?=\d{3}(?!\d))/g, "$1") // 1,200 is one number
     .replace(/^\s*\d+\.\s/gm, "")
     .replace(/第\s*\d+\s*[屏张页步个]/g, "")
     .replace(/\b(screen|image|step|slide|photo)\s*\d+/gi, "")

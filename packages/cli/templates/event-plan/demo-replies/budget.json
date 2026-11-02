@@ -1,0 +1,18 @@
+{
+  "currency": "元",
+  "items": [
+    { "category": "场地", "item": "步行街广场使用费", "qty": 1, "unit": "天", "price": 8000, "total": 8000 },
+    { "category": "搭建和物料", "item": "摊位帐篷和桌椅", "qty": 20, "unit": "套", "price": 300, "total": 6000 },
+    { "category": "设备", "item": "音响和麦克风", "qty": 1, "unit": "套", "price": 5000, "total": 5000 },
+    { "category": "人员", "item": "临时工作人员", "qty": 12, "unit": "人", "price": 300, "total": 3600 },
+    { "category": "安保和保险", "item": "安保人员", "qty": 6, "unit": "人", "price": 400, "total": 2400 },
+    { "category": "安保和保险", "item": "活动公众责任险", "qty": 1, "unit": "份", "price": 1500, "total": 1500 },
+    { "category": "宣传", "item": "海报、社群推广和指示牌", "qty": 1, "unit": "批", "price": 6000, "total": 6000 },
+    { "category": "餐饮", "item": "工作人员午餐", "qty": 20, "unit": "份", "price": 30, "total": 600 },
+    { "category": "安保和保险", "item": "医疗点（急救员和药箱）", "qty": 1, "unit": "天", "price": 1200, "total": 1200 },
+    { "category": "交通和物流", "item": "物资运输", "qty": 1, "unit": "次", "price": 3000, "total": 3000 },
+    { "category": "活动内容", "item": "抽奖礼品", "qty": 100, "unit": "份", "price": 50, "total": 5000 }
+  ],
+  "contingency": 6000,
+  "notes": [ "单价是按往年活动估的，要拿供应商报价核实", "广场使用费以街道办的报价为准" ]
+}

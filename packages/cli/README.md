@@ -34,6 +34,12 @@ flowgit log                       # 整个流程的历史和 token 合计 / the 
 | `live-selling` | 直播带货脚本：商品资料 → 流程表 → 话术和弹幕问答并行 → 检查 | Live-selling script: product facts → rundown → script and chat Q&A in parallel → check |
 | `short-drama` | 竖屏微短剧：设定和人物 → 分集节拍 → 逐集剧本 → 审读 → 检查 | Vertical micro-drama: bible → episode beats → scripts → review → check |
 | `lesson-plan` | 老师备课（逆向设计）：教学目标 → 评价任务 → 教案和分层练习并行 → 练习单和答案 | Lesson prep (backward design): objectives → assessment → plan and tiered exercises in parallel → worksheet and answer key |
+| `novel-serial` | 网文连载：设定和卖点 → 分章细纲 → 黄金三章 → 检查 | Web novel serial: setting and hook → chapter outlines → first three chapters → check |
+| `business-plan` | 商业计划书（红杉结构）：公司资料 → 市场和竞争 → 单位经济和财务 → BP 正文 → 检查 | Business plan (Sequoia's outline): company facts → market and competition → unit economics and financials → the plan → check |
+| `event-plan` | 活动策划方案：活动简报 → 流程表、预算和风险预案并行 → 策划方案 → 检查 | Event proposal: brief → run of show, budget and risks in parallel → proposal → check |
+| `hiring` | 招聘流程（结构化面试）：岗位需求 → 岗位分析 → 招聘启事和面试题并行 → 评分表 | Structured hiring: the role → job analysis → job ad and interview questions in parallel → scorecard |
+| `travel-guide` | 旅行攻略：备选地点 → 按天行程 → 攻略笔记 → 检查 | Travel guide: candidate places → day-by-day itinerary → guide → check |
+| `online-course` | 知识付费课程（ADDIE）：学员和成果 → 课程大纲 → 试听课逐字稿和介绍页并行 → 检查 | Online course (ADDIE): learners and outcomes → syllabus → trial lesson and course page in parallel → check |
 
 ```bash
 flowgit templates                 # 列出模板和它们的阶段 / list templates and their stages

@@ -75,12 +75,12 @@ describe("flowgit CLI with the short-video template", () => {
     expect(list.status).toBe(0);
     const templates = JSON.parse(list.stdout) as { id: string; default: boolean; stages: { executor: string }[] }[];
     expect(templates[0]).toMatchObject({ id: "short-video", default: true });
-    expect(templates.map((t) => t.id)).toEqual(expect.arrayContaining(["weekly-report", "article", "support-sop", "job-application", "research-report", "ecommerce-listing", "slides", "live-selling", "short-drama", "lesson-plan"]));
+    expect(templates.map((t) => t.id)).toEqual(expect.arrayContaining(["weekly-report", "article", "support-sop", "job-application", "research-report", "ecommerce-listing", "slides", "live-selling", "short-drama", "lesson-plan", "novel-serial", "business-plan", "event-plan", "hiring", "travel-guide", "online-course"]));
     expect(spawnSync(process.execPath, [cli, "templates"], { encoding: "utf8", env: { ...process.env, NO_COLOR: "1" } }).stdout).toMatch(/weekly-report\s+周报（入门示例）\s+随手记 human → 周报草稿 llm → 检查 script/);
 
     const wrong = spawnSync(process.execPath, [cli, "init", path.join(work, "nope"), "-t", "no-such-template"], { encoding: "utf8" });
     expect(wrong.status).toBe(1);
-    expect(wrong.stderr).toContain("bundled templates: short-video, article, ecommerce-listing, job-application, lesson-plan, live-selling, research-report, short-drama, slides, support-sop, weekly-report");
+    expect(wrong.stderr).toContain("bundled templates: short-video, article, business-plan, ecommerce-listing, event-plan, hiring, job-application, lesson-plan, live-selling, novel-serial, online-course, research-report, short-drama, slides, support-sop, travel-guide, weekly-report");
   });
 
   it("shows a short, quoted path when the new flow is below the current folder", () => {
@@ -825,6 +825,12 @@ describe("popular templates on demo replies", () => {
     ["live-selling", ["product=便携榨汁杯", "price=直播间 99 元"], ["rundown.json", "script.md", "qa.md", "check-report.md"], "网络直播营销管理办法"],
     ["short-drama", ["premise=面馆逆袭", "episodes=3", "paywallAt=3"], ["characters.json", "episodes.json", "script.md", "review.md", "check-report.md"], "付费卡点在第 3 集结尾"],
     ["lesson-plan", ["topic=分数的初步认识"], ["objectives.json", "assessment.json", "lesson-plan.md", "exercises.json", "worksheet.md", "answer-key.md", "check-report.md"], "没有评价任务的目标"],
+    ["novel-serial", ["premise=好感度眼镜", "chapterWords=160"], ["setting.json", "outline.json", "chapters.md", "check-report.md"], "第 4–6 章连续 3 章没有爽点"],
+    ["business-plan", ["company=店小算"], ["market.json", "financials.json", "business-plan.md", "check-report.md"], "LTV:CAC = 4.44，回本 7.50 个月"],
+    ["event-plan", ["event=咖啡馆五周年市集", "attendees=1200", "audience=public"], ["brief.json", "runsheet.json", "budget.json", "risks.json", "proposal.md", "check-report.md"], "属于大型群众性活动"],
+    ["hiring", ["role=社群运营", "company=转角咖啡"], ["competencies.json", "job-ad.md", "interview.json", "scorecard.md", "check-report.md"], "行为题占一半以上"],
+    ["travel-guide", ["destination=泉州"], ["places.json", "itinerary.json", "guide.md", "check-report.md"], "每人预算合计 1300，在 3000 以内"],
+    ["online-course", ["topic=用表格做个人记账", "lessons=4"], ["analysis.json", "outline.json", "lesson-1.md", "course-page.md", "check-report.md"], "用条件格式标出超支」8 分钟"],
   ];
 
   it.each(cases)("%s runs end to end", (template, inputs, files, expected) => {

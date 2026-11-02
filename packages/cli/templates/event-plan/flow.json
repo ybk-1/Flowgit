@@ -1,0 +1,181 @@
+{
+  "format": "flowgit",
+  "version": "0.1",
+  "id": "event-plan",
+  "name": "活动策划方案",
+  "description": "从一个活动想法写出能执行的策划方案：活动简报（SMART 目标和衡量指标）→ 流程表、预算和风险预案（并行）→ 完整方案 → 检查流程时间、预算算术和预备金、风险覆盖，以及 1000 人以上公开活动的安全许可。 / Turn an event idea into a plan people can run: a brief with SMART objectives and measures → run of show, budget and risk register (in parallel) → the full proposal → checks on timing, budget arithmetic and contingency, risk coverage, and the safety permit for public events of 1,000 or more.",
+  "language": "zh",
+  "author": {
+    "name": "Flowgit"
+  },
+  "license": "Apache-2.0",
+  "tags": [
+    "event",
+    "planning",
+    "marketing"
+  ],
+  "inputs": {
+    "event": {
+      "type": "string",
+      "description": "活动是什么，例如：社区咖啡馆周年庆市集 / What the event is, e.g. a neighborhood café's anniversary market",
+      "required": true
+    },
+    "goal": {
+      "type": "string",
+      "default": "",
+      "description": "办这个活动想达到什么，例如：带来新会员 / What the event is for, e.g. new members"
+    },
+    "attendees": {
+      "type": "number",
+      "default": 200,
+      "description": "预计人数 / Expected attendance"
+    },
+    "audience": {
+      "type": "string",
+      "enum": [
+        "invite",
+        "public"
+      ],
+      "default": "invite",
+      "description": "invite 邀请制，public 面向社会公众（影响是否需要公安安全许可）/ invite-only, or open to the public (decides whether a public-security permit applies)"
+    },
+    "budget": {
+      "type": "number",
+      "default": 50000,
+      "description": "总预算（含预备金）/ Total budget, contingency included"
+    },
+    "venue": {
+      "type": "string",
+      "default": "室内场地",
+      "description": "场地，例如：商场中庭、户外草坪 / The venue, e.g. a mall atrium or an outdoor lawn"
+    },
+    "language": {
+      "type": "string",
+      "enum": [
+        "zh",
+        "en"
+      ],
+      "default": "zh",
+      "description": "输出语言：zh 中文，en English / Output language: zh or en"
+    }
+  },
+  "stages": [
+    {
+      "id": "brief",
+      "name": "活动简报",
+      "description": "目的、2 到 4 个 SMART 目标（每个带衡量指标和数值）、目标人群、核心信息、形式、时间和场地。 / The purpose, 2 to 4 SMART objectives (each with a measure and a number), the audience, the key message, the format, the date and the venue.",
+      "executor": {
+        "type": "llm",
+        "prompt": "prompts/brief.md",
+        "effort": "low"
+      },
+      "outputs": [
+        {
+          "type": "application/json",
+          "path": "brief.json"
+        }
+      ]
+    },
+    {
+      "id": "runsheet",
+      "name": "流程表",
+      "description": "从搭建到撤场按分钟排：开始时间、时长、内容、负责人和出状况时的备选。 / Minute by minute from setup to teardown: start, length, item, owner and a fallback.",
+      "inputs": [
+        "brief"
+      ],
+      "executor": {
+        "type": "llm",
+        "prompt": "prompts/runsheet.md",
+        "effort": "low"
+      },
+      "outputs": [
+        {
+          "type": "application/json",
+          "path": "runsheet.json"
+        }
+      ]
+    },
+    {
+      "id": "budget",
+      "name": "预算",
+      "description": "按类别列出每一项的数量、单价和小计，再留 10% 到 15% 的预备金。 / Every line by category with quantity, unit price and subtotal, plus a 10% to 15% contingency.",
+      "inputs": [
+        "brief"
+      ],
+      "executor": {
+        "type": "llm",
+        "prompt": "prompts/budget.md",
+        "effort": "low"
+      },
+      "outputs": [
+        {
+          "type": "application/json",
+          "path": "budget.json"
+        }
+      ]
+    },
+    {
+      "id": "risks",
+      "name": "风险预案",
+      "description": "人流、消防和安全、天气、设备和供电、医疗、延误、供应商等风险，每条有可能性、影响、预防措施、发生后怎么办和负责人。 / Crowd, fire and safety, weather, equipment and power, medical, delays, suppliers and more, each with likelihood, impact, prevention, response and an owner.",
+      "inputs": [
+        "brief"
+      ],
+      "executor": {
+        "type": "llm",
+        "prompt": "prompts/risks.md",
+        "effort": "medium"
+      },
+      "outputs": [
+        {
+          "type": "application/json",
+          "path": "risks.json"
+        }
+      ]
+    },
+    {
+      "id": "proposal",
+      "name": "策划方案",
+      "description": "把简报、流程、预算和风险写成一份给老板或客户审批的方案，最后写效果怎么衡量和复盘。 / Combine the brief, run of show, budget and risks into one proposal for sign-off, ending with how success is measured and reviewed.",
+      "inputs": [
+        "brief",
+        "runsheet",
+        "budget",
+        "risks"
+      ],
+      "executor": {
+        "type": "llm",
+        "prompt": "prompts/proposal.md",
+        "effort": "medium"
+      },
+      "outputs": [
+        {
+          "type": "text/markdown",
+          "path": "proposal.md"
+        }
+      ]
+    },
+    {
+      "id": "check",
+      "name": "检查",
+      "description": "检查目标能不能衡量、流程时间接不接得上、每项有没有负责人、预算乘法和总额、预备金比例、风险有没有漏掉的类别，以及要不要申请大型群众性活动安全许可。 / Checks that objectives are measurable, the run of show adds up with an owner for every item, the budget arithmetic and total, the contingency share, missing risk categories, and whether a large-event safety permit is needed.",
+      "inputs": [
+        "brief",
+        "runsheet",
+        "budget",
+        "risks",
+        "proposal"
+      ],
+      "executor": {
+        "type": "script",
+        "run": "node scripts/check.mjs"
+      },
+      "outputs": [
+        {
+          "type": "text/markdown",
+          "path": "check-report.md"
+        }
+      ]
+    }
+  ]
+}

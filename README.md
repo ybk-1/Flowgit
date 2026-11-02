@@ -179,6 +179,12 @@ Every command accepts `-C <dir>` for the flow directory. `run` also takes `--inp
 | `live-selling` | `flowgit init -t live-selling` | 商品资料（人）→ 流程表 → 话术和弹幕问答（模型，并行）→ 检查（脚本）/ product facts (person) → rundown → script and chat Q&A (model, in parallel) → check (script) |
 | `short-drama` | `flowgit init -t short-drama` | 设定和人物 → 分集节拍 → 逐集剧本 → 审读（模型）→ 检查（脚本）/ bible and characters → episode beats → scripts → review (model) → check (script) |
 | `lesson-plan` | `flowgit init -t lesson-plan` | 教学目标 → 评价任务 → 教案和分层练习（模型，并行）→ 练习单、答案和检查（脚本）/ objectives → assessment → plan and tiered exercises (model, in parallel) → worksheet, answer key and check (script) |
+| `novel-serial` | `flowgit init -t novel-serial` | 设定和卖点 → 分章细纲 → 黄金三章（模型）→ 检查（脚本）/ setting and hook → chapter outlines → first three chapters (model) → check (script) |
+| `business-plan` | `flowgit init -t business-plan` | 公司资料（人）→ 市场和竞争 → 单位经济和财务 → BP 正文（模型）→ 检查（脚本）/ company facts (person) → market and competition → unit economics and financials → the plan (model) → check (script) |
+| `event-plan` | `flowgit init -t event-plan` | 活动简报 → 流程表、预算和风险预案（模型，并行）→ 策划方案（模型）→ 检查（脚本）/ brief → run of show, budget and risks (model, in parallel) → proposal (model) → check (script) |
+| `hiring` | `flowgit init -t hiring` | 岗位需求（人）→ 岗位分析 → 招聘启事和面试题（模型，并行）→ 评分表和检查（脚本）/ the role (person) → job analysis → job ad and interview questions (model, in parallel) → scorecard and check (script) |
+| `travel-guide` | `flowgit init -t travel-guide` | 备选地点 → 按天行程 → 攻略笔记（模型）→ 检查（脚本）/ candidate places → day-by-day itinerary → guide (model) → check (script) |
+| `online-course` | `flowgit init -t online-course` | 学员和成果 → 课程大纲 → 试听课逐字稿和介绍页（模型，并行）→ 检查（脚本）/ learners and outcomes → syllabus → trial lesson and course page (model, in parallel) → check (script) |
 
 图文模板按平台（小红书、公众号、博客）决定篇幅和语气，导出 `post.md` 和 `post.html`。说明见 [`packages/cli/templates/article/README.md`](packages/cli/templates/article/README.md)。客服 SOP 模板把你的资料整理成规程和测试用例，最后打包成 `skill/SKILL.md`，说明见 [`packages/cli/templates/support-sop/README.md`](packages/cli/templates/support-sop/README.md)。短视频见 [`packages/cli/templates/short-video/README.md`](packages/cli/templates/short-video/README.md)，周报入门见 [教程](docs/guide.md)。
 
@@ -311,7 +317,7 @@ To build your own flow from scratch, follow [docs/guide.md](docs/guide.md) (abou
 packages/
   core/   @flowgit/core  格式、校验、版本记录、执行器 / format, validation, runs, executors
   cli/    flowgit        命令行工具和模板 / CLI and templates
-    templates/             自带模板：short-video（短视频）、weekly-report（周报入门）、article（图文）、support-sop（客服 SOP）、job-application（求职材料）、research-report（调研报告）、ecommerce-listing（电商上架）、slides（演示稿）、live-selling（直播带货）、short-drama（短剧）、lesson-plan（备课）/ bundled templates: short-video, weekly-report (starter), article, support-sop, job-application, research-report, ecommerce-listing, slides, live-selling, short-drama, lesson-plan
+    templates/             自带模板：short-video（短视频）、weekly-report（周报入门）、article（图文）、support-sop（客服 SOP）、job-application（求职材料）、research-report（调研报告）、ecommerce-listing（电商上架）、slides（演示稿）、live-selling（直播带货）、short-drama（短剧）、lesson-plan（备课）、novel-serial（网文连载）、business-plan（商业计划书）、event-plan（活动策划）、hiring（招聘）、travel-guide（旅行攻略）、online-course（知识付费课程）/ bundled templates: short-video, weekly-report (starter), article, support-sop, job-application, research-report, ecommerce-listing, slides, live-selling, short-drama, lesson-plan, novel-serial, business-plan, event-plan, hiring, travel-guide, online-course
   web/    @flowgit/web   本机网页看板：查看、修改、运行、新增和删除阶段、填写输入、看历史、对比和回退、流程图、预演和 token 用量 / local web board: view, edit, run, add and remove stages, fill in inputs, browse history, compare, restore, a flow graph, preview, and token usage
 docs/
   spec.md                  格式规范 / format spec

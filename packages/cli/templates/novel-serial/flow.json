@@ -1,0 +1,125 @@
+{
+  "format": "flowgit",
+  "version": "0.1",
+  "id": "novel-serial",
+  "name": "网文连载",
+  "description": "从一个点子开一本连载网文：设定和卖点 → 分章细纲（每章的冲突、爽点和章末钩子）→ 黄金三章正文 → 检查字数、钩子、爽点间隔和“期待感”有没有兑现。 / Start a serialized web novel from an idea: setting and hook → chapter outlines (conflict, payoff and cliffhanger for each) → the first three chapters in full → checks on length, cliffhangers, gaps between payoffs and whether the reader's expectations get paid off.",
+  "language": "zh",
+  "author": {
+    "name": "Flowgit"
+  },
+  "license": "Apache-2.0",
+  "tags": [
+    "fiction",
+    "web-novel",
+    "writing"
+  ],
+  "inputs": {
+    "premise": {
+      "type": "string",
+      "description": "一句话点子，例如：外卖员捡到能看见别人好感度的眼镜 / The idea in one line, e.g. a delivery rider finds glasses that show how much people like him",
+      "required": true
+    },
+    "genre": {
+      "type": "string",
+      "default": "都市",
+      "description": "类型，例如：都市、玄幻、仙侠、言情、悬疑、科幻 / Genre, e.g. urban, fantasy, xianxia, romance, mystery, sci-fi"
+    },
+    "chapters": {
+      "type": "number",
+      "default": 10,
+      "description": "先写多少章细纲。前三章会写成正文 / How many chapter outlines to write first. The first three become full chapters"
+    },
+    "chapterWords": {
+      "type": "number",
+      "default": 2500,
+      "description": "每章目标字数（中文按字，英文按词）/ Target length per chapter (Chinese characters, or English words)"
+    },
+    "language": {
+      "type": "string",
+      "enum": [
+        "zh",
+        "en"
+      ],
+      "default": "zh",
+      "description": "输出语言：zh 中文，en English / Output language: zh or en"
+    }
+  },
+  "stages": [
+    {
+      "id": "setting",
+      "name": "设定和卖点",
+      "description": "一句话卖点、主角（目标、缺点、金手指和它的代价）、对手、世界规则，以及要让读者一直期待的 3 到 5 件事。 / The one-line hook, the protagonist (goal, flaw, edge and its cost), rivals, world rules, and 3 to 5 things the reader will keep waiting for.",
+      "executor": {
+        "type": "llm",
+        "prompt": "prompts/setting.md",
+        "effort": "medium"
+      },
+      "outputs": [
+        {
+          "type": "application/json",
+          "path": "setting.json"
+        }
+      ]
+    },
+    {
+      "id": "outline",
+      "name": "分章细纲",
+      "description": "每章一个目标、一个冲突、一个爽点和一个章末钩子，并标出推进了哪件“期待”。前三章要把冲突和金手指亮出来。 / Each chapter gets a goal, a conflict, a payoff and a closing hook, and names the expectation it moves forward. The first three chapters must show the conflict and the edge.",
+      "inputs": [
+        "setting"
+      ],
+      "executor": {
+        "type": "llm",
+        "prompt": "prompts/outline.md",
+        "effort": "medium"
+      },
+      "outputs": [
+        {
+          "type": "application/json",
+          "path": "outline.json"
+        }
+      ]
+    },
+    {
+      "id": "chapters",
+      "name": "黄金三章",
+      "description": "按细纲写出前三章正文。开头直接进冲突，不先交代背景；每章结尾停在钩子上。 / The first three chapters in full, following the outline. Open on the conflict, not on background, and end each chapter on its hook.",
+      "inputs": [
+        "setting",
+        "outline"
+      ],
+      "executor": {
+        "type": "llm",
+        "prompt": "prompts/chapters.md",
+        "effort": "high"
+      },
+      "outputs": [
+        {
+          "type": "text/markdown",
+          "path": "chapters.md"
+        }
+      ]
+    },
+    {
+      "id": "check",
+      "name": "检查",
+      "description": "检查每章字数、细纲有没有缺冲突或钩子、连续几章没有爽点、每件“期待”有没有推进、金手指有没有在前三章出现、开头是不是大段背景。 / Checks each chapter's length, outlines missing a conflict or hook, runs of chapters with no payoff, expectations never moved forward, whether the edge shows up in the first three chapters, and openings that start with a block of background.",
+      "inputs": [
+        "setting",
+        "outline",
+        "chapters"
+      ],
+      "executor": {
+        "type": "script",
+        "run": "node scripts/check.mjs"
+      },
+      "outputs": [
+        {
+          "type": "text/markdown",
+          "path": "check-report.md"
+        }
+      ]
+    }
+  ]
+}
