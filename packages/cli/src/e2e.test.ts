@@ -69,12 +69,12 @@ describe("flowgit CLI with the short-video template", () => {
     expect(list.status).toBe(0);
     const templates = JSON.parse(list.stdout) as { id: string; default: boolean; stages: { executor: string }[] }[];
     expect(templates[0]).toMatchObject({ id: "short-video", default: true });
-    expect(templates.map((t) => t.id)).toContain("weekly-report");
+    expect(templates.map((t) => t.id)).toEqual(expect.arrayContaining(["weekly-report", "article"]));
     expect(spawnSync(process.execPath, [cli, "templates"], { encoding: "utf8", env: { ...process.env, NO_COLOR: "1" } }).stdout).toMatch(/weekly-report\s+周报（入门示例）\s+随手记 human → 周报草稿 llm → 检查 script/);
 
     const wrong = spawnSync(process.execPath, [cli, "init", path.join(work, "nope"), "-t", "no-such-template"], { encoding: "utf8" });
     expect(wrong.status).toBe(1);
-    expect(wrong.stderr).toContain("bundled templates: short-video, weekly-report");
+    expect(wrong.stderr).toContain("bundled templates: short-video, article, weekly-report");
   });
 
   it("shows a short, quoted path when the new flow is below the current folder", () => {
@@ -274,6 +274,100 @@ describe("flowgit CLI with the short-video template", () => {
     const bad = flowgit(["run", "script", "--model", "nope/x"], env);
     expect(bad.code).toBe(1);
     expect(bad.out).toContain('Unknown provider "nope"');
+  });
+});
+
+describe("flowgit CLI with the article template", () => {
+  const title = "为什么猫喜欢纸箱";
+  const coverPrompt = "一只橘猫把脑袋挤出小号纸箱，窗边的早晨侧光，竖构图，画面里没有文字";
+  let articleRoot: string;
+  let articleDir: string;
+
+  function article(args: string[], env: Record<string, string> = {}) {
+    const r = spawnSync(process.execPath, [cli, "-C", articleDir, ...args], {
+      encoding: "utf8",
+      env: { ...process.env, NO_COLOR: "1", ...env },
+    });
+    return { code: r.status, out: `${r.stdout}${r.stderr}` };
+  }
+
+  beforeAll(() => {
+    if (!fs.existsSync(cli)) throw new Error("Build the CLI first: pnpm -r run build");
+    articleRoot = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-e2e-article-"));
+    articleDir = path.join(articleRoot, "post");
+  });
+
+  afterAll(() => {
+    fs.rmSync(articleRoot, { recursive: true, force: true });
+  });
+
+  it("creates and validates an article flow", () => {
+    const init = spawnSync(process.execPath, [cli, "init", articleDir, "-t", "article"], { encoding: "utf8" });
+    expect(init.status, init.stdout + init.stderr).toBe(0);
+    expect(fs.existsSync(path.join(articleDir, "flow.json"))).toBe(true);
+    expect(article(["validate"])).toMatchObject({ code: 0 });
+    expect(article(["status"]).out).toContain("flow inputs not set: topic");
+  });
+
+  it("stops at the photos stage, then exports a post from an empty photos directory", () => {
+    const mock = { FLOWGIT_LLM_MOCK_DIR: path.join(articleDir, "demo-replies") };
+    expect(article(["inputs", "set", "topic=为什么猫喜欢纸箱"]).code).toBe(0);
+    const waiting = article(["run", "all"], mock);
+    expect(waiting.code, waiting.out).toBe(2);
+    expect(waiting.out).toContain("waiting for you: photos");
+    expect(fs.existsSync(path.join(articleDir, "outline.md"))).toBe(true);
+    expect(fs.existsSync(path.join(articleDir, "draft.md"))).toBe(true);
+    const images = JSON.parse(fs.readFileSync(path.join(articleDir, "images.json"), "utf8"));
+    expect(images.images[0]).toMatchObject({ purpose: expect.any(String), prompt: coverPrompt, alt: expect.any(String) });
+    const status = JSON.parse(article(["status", "--json"]).out);
+    expect(status.stages.map((s: { id: string; state: string }) => [s.id, s.state])).toEqual([
+      ["outline", "ok"],
+      ["draft", "ok"],
+      ["images", "ok"],
+      ["photos", "never-run"],
+      ["export", "waiting-upstream"],
+    ]);
+
+    fs.mkdirSync(path.join(articleDir, "photos"));
+    const done = article(["run", "all"], mock);
+    expect(done.code, done.out).toBe(0);
+    expect(done.out).toContain("3 张占位");
+    const html = fs.readFileSync(path.join(articleDir, "post.html"), "utf8");
+    const md = fs.readFileSync(path.join(articleDir, "post.md"), "utf8");
+    expect(html).toContain(title);
+    expect(html).toContain(`<h1>${title}</h1>`);
+    expect(html).toContain("快递箱");
+    expect(html).toContain(coverPrompt);
+    expect(html).not.toContain('src="photos/');
+    expect(md).toContain(`# ${title}`);
+    expect(md).toContain(coverPrompt);
+
+    fs.writeFileSync(path.join(articleDir, "photos", "cover.jpg"), "not-a-real-jpeg");
+    const withPhoto = article(["run", "all"], mock);
+    expect(withPhoto.code, withPhoto.out).toBe(0);
+    expect(withPhoto.out).toContain("kept your manual edit");
+    const html2 = fs.readFileSync(path.join(articleDir, "post.html"), "utf8");
+    expect(html2).toContain('src="photos/cover.jpg"');
+    expect(html2).toContain(title);
+    expect(html2).not.toContain(coverPrompt);
+
+    const en = article(["run", "export", "--input", "language=en"]);
+    expect(en.code, en.out).toBe(0);
+    expect(en.out).toContain("2 placeholders");
+    expect(en.out).not.toContain("张占位");
+    const enHtml = fs.readFileSync(path.join(articleDir, "post.html"), "utf8");
+    expect(enHtml).toContain('lang="en"');
+    expect(enHtml).toContain("Image to add");
+    expect(article(["run", "export", "--input", "language=fr"]).out).toContain('Input "language" must be one of "zh", "en"');
+    expect(article(["run", "export", "--input", "platform=tiktok"]).out).toContain('Input "platform" must be one of "xiaohongshu", "wechat", "blog"');
+  });
+
+  it("exports a SKILL.md", () => {
+    const r = article(["export-skill", "--out", "-"]);
+    expect(r.code).toBe(0);
+    expect(r.out).toContain("name: article");
+    expect(r.out).toContain("# 图文帖子");
+    expect(r.out).toContain("flowgit run draft");
   });
 });
 
