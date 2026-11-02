@@ -9,7 +9,9 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 ### 命令行 / CLI
 
 - `flowgit prune` 清理旧版本：每个阶段默认保留最新 5 个，并留下所有手动修改、和当前文件一致的最新版本，以及最近一次成功的运行。`--dry-run` 只列出能腾出的空间；不在终端里必须加 `--yes` 才会删除。删掉的版本号不会再被使用。`runs/` 超过 500 MB 时，`flowgit status` 最后一行会提示可以清理。
+- `batch <file.csv>`：用一份 CSV 一次做很多份。表头是流程输入的名字，每一行复制一份流程（不带产物、`runs/`、`flowgit.local.json`、`.env*`）再跑完。空单元格用默认值；必填是空的，这一行失败，其他行继续。停在人工阶段记为等待。结束时列出每行的状态和 token，以及合计。退出码：全部完成是 0，有等待且没有失败是 2，有失败是 1。再跑一次不会重新复制已有的文件夹。`--concurrency` 默认 1、最大 4；`--rows a-b` 只跑其中几行。输出目录在流程里面时（默认 `batch/`），复制会跳过它。从 Git 地址复制来的流程先确认一次（`--yes` 不问），做的事一样的副本沿用这次确认。
 - `flowgit prune` deletes old versions: each stage keeps its newest 5, every manual edit, the newest version matching the current files, and the newest successful run. `--dry-run` only lists how much space that frees; outside a terminal nothing is deleted unless `--yes` is set. Deleted version numbers are never reused. When `runs/` is over 500 MB, the last line of `flowgit status` says so.
+- `batch <file.csv>` runs many copies from one CSV. The header row names the flow inputs; each data row is a copy of the flow (without outputs, `runs/`, `flowgit.local.json` or `.env*`) that then runs. Empty cells use defaults; an empty required input fails that row and the others still run. A row that stops at a human stage is waiting. The command ends with each row's state and tokens, then a total. Exit 0 when all are done, 2 when some are waiting and none failed, 1 when any failed. Running it again does not recopy folders that already exist. `--concurrency` defaults to 1 and is at most 4; `--rows a-b` runs only that range. When the output directory is inside the flow (the default `batch/`), the copy skips it. A flow copied from a Git URL is confirmed once first (`--yes` skips the question), and copies that do the same things run under that confirmation.
 
 ### 看板 / Board
 
