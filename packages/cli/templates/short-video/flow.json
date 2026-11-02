@@ -47,7 +47,7 @@
     {
       "id": "voice",
       "name": "配音",
-      "description": "把脚本里要念的口播合成一条配音。没有 FLOWGIT_TTS_API_KEY 时跳过，你可以自己录。 / Synthesize the script's narration into one voiceover. Skipped when FLOWGIT_TTS_API_KEY is unset; you can record it yourself.",
+      "description": "把脚本里要念的口播合成一条配音。用 FLOWGIT_TTS 选语音预设，或只设置 FLOWGIT_TTS_API_KEY 走 OpenAI 兼容接口。都没设置时跳过，你可以自己录。 / Synthesize the script's narration into one voiceover. Set FLOWGIT_TTS for a speech preset, or only FLOWGIT_TTS_API_KEY for an OpenAI-compatible API. Skipped when neither is set; you can record it yourself.",
       "inputs": ["script"],
       "executor": { "type": "script", "run": "node scripts/tts.mjs" },
       "outputs": [{ "type": "dir", "path": "voice/" }]

@@ -18,7 +18,7 @@ let flowDir: string;
 function flowgit(args: string[], env: Record<string, string> = {}) {
   const r = spawnSync(process.execPath, [cli, "-C", flowDir, ...args], {
     encoding: "utf8",
-    env: { ...process.env, NO_COLOR: "1", FLOWGIT_TTS_API_KEY: "", ...env },
+    env: { ...process.env, NO_COLOR: "1", FLOWGIT_TTS_API_KEY: "", FLOWGIT_TTS: "", ...env },
   });
   return { code: r.status, out: `${r.stdout}${r.stderr}` };
 }

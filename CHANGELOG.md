@@ -91,6 +91,7 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 
 - `short-video`（默认）：脚本 → 配音 → 分镜 → 素材 → 剪辑 → 导出。FFmpeg 渲染竖屏视频，支持推近、模糊背景、渐变文字卡、标题、转场、背景音乐和配音（镜头时长跟着配音走）；输出语言可选中文或英文。
 - 配音阶段调用 OpenAI 兼容的语音接口，把口播合成 `voice/voice.mp3`。密钥用 `FLOWGIT_TTS_API_KEY`（不写进文件），`FLOWGIT_TTS_BASE_URL` 可以换成别的兼容服务。没配密钥就跳过，不报错；`assets/` 里自己录的配音优先。`doctor` 没配密钥时只提醒，不算错误。
+- 配音可以用 `FLOWGIT_TTS=<供应商>/<模型或声音>` 选预设：OpenAI、阿里云百炼 CosyVoice、火山引擎豆包、MiniMax、Azure。`node scripts/tts.mjs --list` 列出预设和要设置的环境变量。`FLOWGIT_TTS_BASE_URL`、`FLOWGIT_TTS_API_KEY`、`FLOWGIT_TTS_MODEL`、`FLOWGIT_TTS_VOICE` 仍可覆盖预设。选了预设却没密钥，`doctor` 会报错。
 - `weekly-report`：周报入门示例，随手记（人）→ 草稿（模型）→ 检查（脚本），配合 [教程](docs/guide.md) 一步步做出来。
 - `article`：图文帖子，大纲 → 正文 → 配图方案 → 照片（人）→ 导出 `post.md` 和 `post.html`。篇幅和语气按平台（小红书、公众号、博客）变化，缺的照片用画面描述占位。
 - `support-sop`：客服 SOP，资料（人）→ 汇总（脚本）→ 规程 → 用例 → 检查（模型）→ 打包成 `skill/SKILL.md` 和评测用例。
@@ -112,6 +113,7 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 - `examples/subflow`：题目（人）→ 子流程（模型和脚本）→ 摘要（脚本）。演示 `workflow` 执行器。
 - `short-video` (default): script → voiceover → storyboard → assets → edit → export. FFmpeg renders a vertical video with zoom, blurred fill, gradient text cards, a title, transitions, background music and voiceover (clips follow the voice); the output language is Chinese or English.
 - The voice stage calls an OpenAI-compatible speech API and writes `voice/voice.mp3`. The key is `FLOWGIT_TTS_API_KEY` (never written to a file); `FLOWGIT_TTS_BASE_URL` points it at another compatible service. With no key the stage skips instead of failing, and a voiceover you recorded in `assets/` wins. `doctor` warns when the key is missing, and that warning is not an error.
+- The voiceover can use `FLOWGIT_TTS=<provider>/<model or voice>`: OpenAI, Alibaba DashScope CosyVoice, Volcengine Doubao, MiniMax or Azure. `node scripts/tts.mjs --list` lists the presets and the env vars they need. `FLOWGIT_TTS_BASE_URL`, `FLOWGIT_TTS_API_KEY`, `FLOWGIT_TTS_MODEL` and `FLOWGIT_TTS_VOICE` still override a preset. `doctor` errors when a preset is selected and its key is missing.
 - `weekly-report`: a starter that turns rough notes (person) into a draft (model) and checks it (script); the [guide](docs/guide.md) builds it step by step.
 - `article`: an illustrated post, outline → draft → image plan → photos (person) → export to `post.md` and `post.html`. Length and tone follow the platform (Xiaohongshu, WeChat, blog), and a missing photo becomes a placeholder with its scene description.
 - `support-sop`: a customer-support SOP, knowledge (person) → collect (script) → SOP → test cases → review (model) → packaged as `skill/SKILL.md` with an eval set.

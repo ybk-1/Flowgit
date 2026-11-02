@@ -188,9 +188,57 @@ function flowUsesLlm(loaded: LoadedFlow, stack?: string[]): boolean {
   return false;
 }
 
+/**
+ * Preset id → key env. Keep this in step with
+ * packages/cli/templates/short-video/scripts/tts-presets.mjs.
+ * `extra` is a non-secret value the official URL needs (workspace id or region).
+ */
+const TTS_PRESETS: Record<string, { key: string; extra?: string }> = {
+  openai: { key: "OPENAI_API_KEY" },
+  dashscope: { key: "DASHSCOPE_API_KEY", extra: "DASHSCOPE_WORKSPACE_ID" },
+  volcengine: { key: "VOLCENGINE_API_KEY" },
+  minimax: { key: "MINIMAX_API_KEY" },
+  azure: { key: "SPEECH_KEY", extra: "SPEECH_REGION" },
+};
+
 /** The short-video template's voice stage. A missing key skips synthesis; that is a warning, not a failure. */
 function ttsCheck(stageId: string, command: string, env: NodeJS.ProcessEnv): DoctorCheck | undefined {
   if (!/(?:^|\s)["']?scripts\/tts\.mjs["']?(?:\s|$)/.test(command)) return undefined;
+  const selected = env.FLOWGIT_TTS?.trim() ?? "";
+  if (selected) {
+    const slash = selected.indexOf("/");
+    const id = (slash > 0 ? selected.slice(0, slash) : selected).toLowerCase();
+    const preset = slash > 0 && slash < selected.length - 1 ? TTS_PRESETS[id] : undefined;
+    if (!preset) {
+      return {
+        level: "error",
+        stage: stageId,
+        message: `不认识的语音预设 ${selected}。运行 node scripts/tts.mjs --list 查看 / Unknown speech preset ${selected}. Run node scripts/tts.mjs --list`,
+      };
+    }
+    const override = env.FLOWGIT_TTS_API_KEY?.trim() ?? "";
+    const vendor = env[preset.key]?.trim() ?? "";
+    if (!override && !vendor) {
+      return {
+        level: "error",
+        stage: stageId,
+        message: `没有设置 ${preset.key}，配音阶段会失败 / ${preset.key} is not set, so the voice stage fails`,
+        hint:
+          `设置 ${preset.key}，或用 FLOWGIT_TTS_API_KEY 覆盖（PowerShell：$env:${preset.key}="..."；macOS/Linux：export ${preset.key}=...）\n` +
+          `Set ${preset.key}, or override it with FLOWGIT_TTS_API_KEY (PowerShell: $env:${preset.key}="..."; macOS/Linux: export ${preset.key}=...)`,
+      };
+    }
+    if (preset.extra && !env.FLOWGIT_TTS_BASE_URL?.trim() && !env[preset.extra]?.trim()) {
+      return {
+        level: "error",
+        stage: stageId,
+        message: `没有设置 ${preset.extra}，配音阶段拼不出接口地址 / ${preset.extra} is not set, so the voice stage cannot build the speech URL`,
+        hint: `也可以设置 FLOWGIT_TTS_BASE_URL / or set FLOWGIT_TTS_BASE_URL`,
+      };
+    }
+    const keyName = override ? "FLOWGIT_TTS_API_KEY" : preset.key;
+    return { level: "ok", stage: stageId, message: `${keyName} 已设置 / ${keyName} is set` };
+  }
   if (env.FLOWGIT_TTS_API_KEY?.trim()) {
     return { level: "ok", stage: stageId, message: "FLOWGIT_TTS_API_KEY 已设置 / FLOWGIT_TTS_API_KEY is set" };
   }

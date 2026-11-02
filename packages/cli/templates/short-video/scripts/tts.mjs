@@ -1,20 +1,30 @@
 // 配音阶段：把 script.md 里要念的口播合成 voice/voice.mp3。
 // Voice stage: turn the spoken lines of script.md into voice/voice.mp3.
 //
-// 密钥只放在请求头里，不写进任何文件。没设置 FLOWGIT_TTS_API_KEY 时不报错，写一份说明后退出。
-// The key is sent only as a header and never written to a file. With no FLOWGIT_TTS_API_KEY
-// the stage writes a note and exits successfully.
+// 密钥只放在请求头里，不写进任何文件。没设置 FLOWGIT_TTS、也没设置 FLOWGIT_TTS_API_KEY 时不报错，写一份说明后退出。
+// 设置 FLOWGIT_TTS=<供应商>/<模型或声音> 时用 scripts/tts-presets.mjs 里的预设；没密钥就报错，并写上变量名。
+// The key is sent only as a header and never written to a file. With neither FLOWGIT_TTS nor
+// FLOWGIT_TTS_API_KEY the stage writes a note and exits successfully.
+// FLOWGIT_TTS=<provider>/<model or voice> selects a preset in scripts/tts-presets.mjs; a missing key
+// is an error that names the variable.
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { PRESETS, buildRequest, decodeAudio, formatList, resolveCall } from "./tts-presets.mjs";
 
 const dir = process.env.FLOWGIT_PROJECT_DIR ?? process.cwd();
-const lang = JSON.parse(process.env.FLOWGIT_FLOW_INPUTS ?? "{}").language === "en" ? "en" : "zh";
+const lang = (() => {
+  try {
+    return JSON.parse(process.env.FLOWGIT_FLOW_INPUTS ?? "{}").language === "en" ? "en" : "zh";
+  } catch {
+    return "zh";
+  }
+})();
 const say = (zh, en) => (lang === "en" ? en : zh);
 
 // https://platform.openai.com/docs/api-reference/audio/createSpeech
-// `input` maximum length is 4096 characters.
+// `input` maximum length is 4096 characters. The legacy path (no FLOWGIT_TTS) still uses this.
 const INPUT_LIMIT = 4096;
 const SKIP_MESSAGE =
   "没有配置语音合成，跳过自动配音；可以自己录 assets/voice.mp3，或设置 FLOWGIT_TTS_API_KEY / No text-to-speech configured, so no voiceover was made; record assets/voice.mp3 yourself or set FLOWGIT_TTS_API_KEY";
@@ -99,18 +109,40 @@ function spokenParagraphs(markdown) {
   return paragraphs;
 }
 
+function measure(text, unit) {
+  return unit === "utf8" ? Buffer.byteLength(text) : text.length;
+}
+
+/** How many JS characters of `text` fit in the limit. */
+function prefixLength(text, limit, unit) {
+  if (unit === "chars") return Math.min(limit, text.length);
+  let bytes = 0;
+  let index = 0;
+  for (const ch of text) {
+    const size = Buffer.byteLength(ch);
+    if (bytes + size > limit) break;
+    bytes += size;
+    index += ch.length;
+  }
+  return index;
+}
+
 /** Split one paragraph on a sentence boundary when it exceeds the API limit. */
-function withinLimit(text) {
+function withinLimit(text, limit, unit) {
   const out = [];
   let rest = text.trim();
-  while (rest.length > INPUT_LIMIT) {
-    const head = rest.slice(0, INPUT_LIMIT);
+  while (measure(rest, unit) > limit) {
+    const max = prefixLength(rest, limit, unit);
+    if (max < 1) {
+      throw new Error("有一段口播比语音接口的单次上限还短不了 / one spoken piece cannot be split under the speech API limit");
+    }
+    const head = rest.slice(0, max);
     let cut = -1;
-    for (const mark of ["。", "！", "？", "!", "?", "；", ";", "\n"]) {
+    for (const mark of ["。", "！", "？", "!", "?", "；", ";", "\n", "."]) {
       const at = head.lastIndexOf(mark);
       if (at > cut) cut = at + mark.length;
     }
-    if (cut < 32) cut = INPUT_LIMIT;
+    if (cut < 32) cut = max;
     out.push(rest.slice(0, cut).trim());
     rest = rest.slice(cut).trim();
   }
@@ -119,7 +151,7 @@ function withinLimit(text) {
 }
 
 /** Pack paragraphs into requests that each fit the speech API input limit. */
-function chunksOf(paragraphs) {
+function chunksOf(paragraphs, limit, unit) {
   const chunks = [];
   let cur = "";
   const flush = () => {
@@ -127,9 +159,9 @@ function chunksOf(paragraphs) {
     cur = "";
   };
   for (const paragraph of paragraphs) {
-    for (const piece of withinLimit(paragraph)) {
+    for (const piece of withinLimit(paragraph, limit, unit)) {
       const next = cur ? `${cur}\n\n${piece}` : piece;
-      if (next.length > INPUT_LIMIT) {
+      if (measure(next, unit) > limit) {
         flush();
         cur = piece;
       } else {
@@ -150,8 +182,14 @@ function proxyLines(env) {
   ];
 }
 
+function secretsOf(key) {
+  return [key, process.env.FLOWGIT_TTS_API_KEY?.trim() ?? ""].filter(Boolean);
+}
+
 function redact(text, key) {
-  return key ? text.split(key).join("***") : text;
+  let out = text;
+  for (const secret of secretsOf(key)) out = out.split(secret).join("***");
+  return out;
 }
 
 function connectionError(base, err, key) {
@@ -166,13 +204,13 @@ function connectionError(base, err, key) {
   return new Error(redact(lines.join("\n"), key));
 }
 
-async function httpError(base, response, key) {
+async function httpError(base, response, key, keyEnv) {
   const detail = (await response.text()).trim().slice(0, 500);
   const lines = [
     `请求语音合成（${base}）失败 / Request to text-to-speech (${base}) failed: ${response.status}${detail ? ` ${detail}` : ""}`,
   ];
   if (response.status === 401 || response.status === 403) {
-    lines.push("密钥被拒绝了，检查 FLOWGIT_TTS_API_KEY 是否正确 / The key was rejected; check FLOWGIT_TTS_API_KEY");
+    lines.push(`密钥被拒绝了，检查 ${keyEnv} 是否正确 / The key was rejected; check ${keyEnv}`);
   } else if (response.status === 429) {
     lines.push(
       "请求太频繁，或者额度、用量上限用完了。稍后再试，或到供应商的控制台检查额度 / Rate-limited or out of quota. Try again later, or check your limits in the provider's console",
@@ -184,23 +222,19 @@ async function httpError(base, response, key) {
 }
 
 /**
- * POST {base}/audio/speech. Redirects stay on the same origin so the key
- * in Authorization is never sent to another site.
+ * POST the speech endpoint. Redirects stay on the same origin so the key
+ * is never sent to another site.
  */
-async function postSpeech(base, body, key) {
-  const started = new URL(`${base}/audio/speech`);
+async function postSpeech(urlString, { headers, body }, key, keyEnv, base) {
+  const started = new URL(urlString);
   let url = started;
-  const payload = JSON.stringify(body);
   for (let hop = 0; ; hop++) {
     let response;
     try {
       response = await fetch(url, {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${key}`,
-          "Content-Type": "application/json",
-        },
-        body: payload,
+        headers,
+        body,
         redirect: "manual",
         signal: AbortSignal.timeout(60_000),
       });
@@ -222,21 +256,44 @@ async function postSpeech(base, body, key) {
       url = next;
       continue;
     }
-    if (!response.ok) throw await httpError(base, response, key);
-    const bytes = Buffer.from(await response.arrayBuffer());
-    if (!bytes.length) throw new Error("语音合成没有返回音频 / text-to-speech returned no audio");
-    return bytes;
+    if (!response.ok) throw await httpError(base, response, key, keyEnv);
+    return response;
   }
+}
+
+/** Download a documented audio URL. The API key is not sent. */
+async function fetchAudio(audioUrl, requestUrl, key) {
+  let url;
+  try {
+    url = new URL(audioUrl, requestUrl);
+  } catch {
+    throw new Error("配音地址无法解析，没有下载 / the audio URL could not be parsed, so it was not downloaded");
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new Error("配音地址不是 http(s)，没有下载 / the audio URL is not http(s), so it was not downloaded");
+  }
+  let response;
+  try {
+    response = await fetch(url, { method: "GET", redirect: "follow", signal: AbortSignal.timeout(60_000) });
+  } catch (err) {
+    throw connectionError(url.origin, err, key);
+  }
+  if (!response.ok) {
+    const detail = (await response.text()).trim().slice(0, 500);
+    throw new Error(
+      redact(`下载合成的音频失败 / downloading the synthesized audio failed: ${response.status}${detail ? ` ${detail}` : ""}`, key),
+    );
+  }
+  const bytes = Buffer.from(await response.arrayBuffer());
+  if (!bytes.length) throw new Error("语音合成没有返回音频 / text-to-speech returned no audio");
+  return bytes;
 }
 
 function joinWithFfmpeg(files, outFile) {
   const probe = spawnSync("ffmpeg", ["-version"], { encoding: "utf8" });
   if (probe.status !== 0) {
     throw new Error(
-      say(
-        "找不到 ffmpeg，请先安装（https://ffmpeg.org/download.html）再重跑这个阶段",
-        "ffmpeg not found. Install it (https://ffmpeg.org/download.html) and run this stage again.",
-      ),
+      "找不到 ffmpeg，请先安装（https://ffmpeg.org/download.html）再重跑这个阶段 / ffmpeg not found. Install it (https://ffmpeg.org/download.html) and run this stage again.",
     );
   }
   const list = path.join(path.dirname(files[0]), "concat.txt");
@@ -265,9 +322,40 @@ function skipVoiceover() {
   console.log(SKIP_MESSAGE);
 }
 
+async function synthesize(call, input) {
+  if (call.mode === "legacy") {
+    const base = envOr("FLOWGIT_TTS_BASE_URL", "https://api.openai.com/v1").replace(/\/+$/, "");
+    const model = envOr("FLOWGIT_TTS_MODEL", "gpt-4o-mini-tts");
+    const voiceName = envOr("FLOWGIT_TTS_VOICE", "alloy");
+    // https://platform.openai.com/docs/api-reference/audio/createSpeech
+    const response = await postSpeech(
+      `${base}/audio/speech`,
+      {
+        headers: { Authorization: `Bearer ${call.key}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ model, input, voice: voiceName, response_format: "mp3" }),
+      },
+      call.key,
+      "FLOWGIT_TTS_API_KEY",
+      base,
+    );
+    const bytes = Buffer.from(await response.arrayBuffer());
+    if (!bytes.length) throw new Error("语音合成没有返回音频 / text-to-speech returned no audio");
+    return bytes;
+  }
+  const request = buildRequest(call, input);
+  const response = await postSpeech(call.url, request, call.key, call.keyEnv, call.base);
+  const bytes = Buffer.from(await response.arrayBuffer());
+  const fetchBytes = (audioUrl) => fetchAudio(audioUrl, response.url || call.url, call.key);
+  return decodeAudio(call.preset, bytes, response.headers.get("content-type") ?? "", fetchBytes);
+}
+
 async function main() {
-  const key = process.env.FLOWGIT_TTS_API_KEY?.trim() ?? "";
-  if (!key) {
+  if (process.argv.includes("--list")) {
+    console.log(formatList(process.env));
+    return;
+  }
+  const call = resolveCall(process.env);
+  if (call.mode === "legacy" && !call.key) {
     skipVoiceover();
     return;
   }
@@ -276,20 +364,18 @@ async function main() {
     throw new Error(say("找不到 script.md", "script.md not found"));
   }
   const paragraphs = spokenParagraphs(fs.readFileSync(scriptPath, "utf8"));
-  const chunks = chunksOf(paragraphs);
+  const limit = call.mode === "legacy" ? INPUT_LIMIT : call.preset.inputLimit;
+  const unit = call.mode === "legacy" ? "chars" : call.preset.limitUnit;
+  const chunks = chunksOf(paragraphs, limit, unit);
   if (!chunks.length) {
     throw new Error(say("脚本里没有可以念的旁白", "the script has no narration to read"));
   }
-  const base = envOr("FLOWGIT_TTS_BASE_URL", "https://api.openai.com/v1").replace(/\/+$/, "");
-  const model = envOr("FLOWGIT_TTS_MODEL", "gpt-4o-mini-tts");
-  const voiceName = envOr("FLOWGIT_TTS_VOICE", "alloy");
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-tts-"));
   try {
     const parts = [];
     for (const [i, input] of chunks.entries()) {
       console.log(say(`正在合成第 ${i + 1}/${chunks.length} 段`, `synthesizing part ${i + 1}/${chunks.length}`));
-      // https://platform.openai.com/docs/api-reference/audio/createSpeech
-      const audio = await postSpeech(base, { model, input, voice: voiceName, response_format: "mp3" }, key);
+      const audio = await synthesize(call, input);
       const file = path.join(tmp, `part-${i}.mp3`);
       fs.writeFileSync(file, audio);
       parts.push(file);
@@ -308,7 +394,12 @@ async function main() {
 }
 
 main().catch((err) => {
-  const message = err instanceof Error ? err.message : String(err);
-  console.error(redact(message, process.env.FLOWGIT_TTS_API_KEY?.trim() ?? ""));
+  let message = err instanceof Error ? err.message : String(err);
+  const names = ["FLOWGIT_TTS_API_KEY", ...PRESETS.flatMap((preset) => [preset.apiKeyEnv, ...preset.extras.map((extra) => extra.name)])];
+  for (const name of names) {
+    const secret = process.env[name]?.trim();
+    if (secret) message = message.split(secret).join("***");
+  }
+  console.error(message);
   process.exit(1);
 });

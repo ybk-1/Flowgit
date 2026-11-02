@@ -79,7 +79,7 @@ flowgit board --no-open                          # 本机网页看板：打开�
 flowgit inputs set topic="为什么猫喜欢纸箱"         # 主题 / topic
 flowgit inputs set language=en                   # 可选：zh（默认）或 en / optional: zh (default) or en
 export ANTHROPIC_API_KEY=...                     # 脚本和分镜由 Claude 写 / Claude writes the script and storyboard
-export FLOWGIT_TTS_API_KEY=...                   # 可选：自动配音，说明见短视频模板 / optional voiceover, see the short-video template
+export FLOWGIT_TTS_API_KEY=...                   # 可选：自动配音；或用 FLOWGIT_TTS 选预设，见短视频模板 / optional voiceover; or set FLOWGIT_TTS for a preset, see the short-video template
 flowgit doctor                                   # 检查密钥和 FFmpeg 准备好了没有 / check the key and FFmpeg are ready
 flowgit run all                                  # 跑到"素材"会停下等你 / stops at "assets" and waits for you
 mkdir -p assets                                  # 放素材；空着也行，导出时用文字卡 / add assets, or leave empty for text cards
@@ -101,7 +101,7 @@ cd $HOME\my-video
 
 flowgit inputs set topic="为什么猫喜欢纸箱"
 $env:ANTHROPIC_API_KEY = "..."                    # 或者换别的模型，见"接任何模型" / or another model, see "Any model"
-$env:FLOWGIT_TTS_API_KEY = "..."                  # 可选：自动配音 / optional voiceover
+$env:FLOWGIT_TTS_API_KEY = "..."                  # 可选：自动配音；或用 FLOWGIT_TTS 选预设 / optional voiceover; or set FLOWGIT_TTS for a preset
 flowgit doctor                                    # 检查密钥和 FFmpeg 准备好了没有 / check the key and FFmpeg are ready
 flowgit run all
 mkdir assets
