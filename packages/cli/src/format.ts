@@ -62,6 +62,38 @@ export function statusBoard(statuses: StageStatus[]): string {
   return table(rows);
 }
 
+function ansi(code: number, s: string): string {
+  return `\x1b[${code}m${s}\x1b[0m`;
+}
+
+/**
+ * Color a unified diff: added lines green, removed lines red.
+ * `---` / `+++` file headers stay plain. Set `enabled` to force a decision;
+ * otherwise color follows a TTY and is off when NO_COLOR is set.
+ */
+export function colorizeUnifiedDiff(patch: string, enabled?: boolean): string {
+  const on = enabled ?? (Boolean(process.stdout.isTTY) && !process.env.NO_COLOR);
+  let minusHeader = false;
+  let plusHeader = false;
+  return patch
+    .split("\n")
+    .map((line) => {
+      if (!minusHeader && line.startsWith("--- ")) {
+        minusHeader = true;
+        return line;
+      }
+      if (!plusHeader && line.startsWith("+++ ")) {
+        plusHeader = true;
+        return line;
+      }
+      if (!on) return line;
+      if (line.startsWith("+")) return ansi(32, line);
+      if (line.startsWith("-")) return ansi(31, line);
+      return line;
+    })
+    .join("\n");
+}
+
 export function nextHint(statuses: StageStatus[]): string | undefined {
   const next = statuses.find((s) => s.state !== "ok" && s.state !== "edited" && s.state !== "waiting-upstream");
   if (!next) {

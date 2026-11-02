@@ -17,6 +17,7 @@ import {
   flowToMermaid,
   effectiveProvider,
   globalProvidersFile,
+  diffRuns,
   listRuns,
   loadFlow,
   loadProviders,
@@ -38,12 +39,14 @@ import {
   type LoadedFlow,
   type PlanAction,
   type PlanStep,
+  type OutputDiff,
+  type RunDiff,
   type RunEvent,
   type RunRecord,
   type RunOptions,
 } from "@flowgit/core";
 import { openBrowser, startBoard } from "@flowgit/web";
-import { bilingualCliError, c, nextHint, statusBoard, table, width } from "./format.js";
+import { bilingualCliError, c, colorizeUnifiedDiff, nextHint, statusBoard, table, width } from "./format.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const VERSION = (JSON.parse(fs.readFileSync(path.join(here, "..", "package.json"), "utf8")) as { version: string }).version;
@@ -150,6 +153,38 @@ const HELP_TITLES: Record<string, string> = {
   "Global Options:": "全局选项 / Global Options:",
 };
 const bilingualDefault = (s: string) => s.replace(/\(default: /g, "(默认 / default: ");
+
+function parseRunArg(raw: string): number {
+  if (!/^[1-9]\d*$/.test(raw)) {
+    throw new Error(`版本号必须是正整数，收到 "${raw}" / Version must be a positive integer, got "${raw}"`);
+  }
+  return Number(raw);
+}
+
+function formatOutputDiff(out: OutputDiff): string {
+  if (out.kind === "text") {
+    if (out.same) return `${c.bold(out.path)}\n${c.dim("  相同 / same")}`;
+    return `${c.bold(out.path)}\n${colorizeUnifiedDiff(out.diff).replace(/\n$/, "")}`;
+  }
+  if (out.kind === "binary") {
+    const label = out.same ? c.dim("二进制相同 / binary same") : c.yellow("二进制不同 / binary differs");
+    return `${c.bold(out.path)}  ${label}`;
+  }
+  const lines = [c.bold(`${out.path}/`)];
+  if (out.same) lines.push(c.dim("  文件夹相同 / directory same"));
+  else {
+    if (out.added.length) lines.push(`  ${c.green("新增 / added")}: ${out.added.join(", ")}`);
+    if (out.removed.length) lines.push(`  ${c.red("删除 / removed")}: ${out.removed.join(", ")}`);
+    if (out.changed.length) lines.push(`  ${c.yellow("改动 / changed")}: ${out.changed.join(", ")}`);
+  }
+  return lines.join("\n");
+}
+
+function formatRunDiff(diff: RunDiff, stageName: string): string {
+  const right = diff.b === null ? "当前文件 current" : `v${diff.b}`;
+  const body = diff.outputs.map(formatOutputDiff).join("\n\n");
+  return `${c.bold(stageName)} ${c.dim(`(${diff.stage})`)}  v${diff.a} → ${right}\n\n${body}`;
+}
 
 const program = new Command();
 program
@@ -514,7 +549,28 @@ program
         rows.push([`v${r.n}`, runResult(r), finished(r), r.executor, runDetail(r)]);
       }
       console.log(table(rows));
-      console.log(c.dim(`\n快照 / snapshots: runs/${stageId}/<n>/outputs/   回退 / restore: flowgit restore ${stageId} <n>`));
+      console.log(c.dim(`\n快照 / snapshots: runs/${stageId}/<n>/outputs/   对比 / diff: flowgit diff ${stageId} <a> [b]   回退 / restore: flowgit restore ${stageId} <n>`));
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+program
+  .command("diff")
+  .description("对比两个版本的产物；省略第二个版本则和当前文件比 / diff two versions, or a version against the current files")
+  .argument("<stage>", "阶段 id / stage id")
+  .argument("<a>", "版本号 / run number")
+  .argument("[b]", "另一个版本号；省略则对比当前文件 / other run number; omit to compare with the current files")
+  .option("--json", "输出 JSON / machine-readable output")
+  .action((stageId: string, a: string, b: string | undefined, opts: { json?: boolean }) => {
+    try {
+      const loaded = loadFlow(dirOf());
+      const diff = diffRuns(loaded.dir, loaded.flow, stageId, parseRunArg(a), b === undefined ? undefined : parseRunArg(b));
+      if (opts.json) {
+        console.log(JSON.stringify(diff, null, 2));
+        return;
+      }
+      console.log(formatRunDiff(diff, loaded.flow.stages.find((s) => s.id === stageId)?.name ?? stageId));
     } catch (err) {
       fail(err);
     }

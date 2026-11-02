@@ -313,6 +313,15 @@ Without a stage, `flowgit log` lists every version of the whole flow by time, ne
 2026-11-01 17:52:15  随手记 notes    v1      ok           human          from
 ```
 
+想知道两个版本差在哪，用 `flowgit diff`。文本和 JSON 按行显示改动（`+` 是新加的，`-` 是删掉的），图片和视频只说相同还是不同，文件夹列出新增、删除和改动的文件：
+
+To see what changed between two versions, use `flowgit diff`. Text and JSON show changed lines (`+` added, `-` removed), images and video only say same or different, and folders list added, removed and changed files:
+
+```bash
+flowgit diff draft 1 2           # v1 和 v2 比 / v1 against v2
+flowgit diff draft 2             # v2 和现在的文件比 / v2 against the current files
+```
+
 ```bash
 flowgit restore draft 2          # 回到你手改的那一版 / back to your hand-edited version
 flowgit run all                  # 下游会重跑 / downstream re-runs
