@@ -16,7 +16,7 @@ import {
   loadFlowInputs,
   nextRunNumber,
   outputAbs,
-  outputsEdited,
+  outputsHandEdited,
   resolveFlowInputs,
   restoreRun,
   snapshotOutputs,
@@ -97,7 +97,7 @@ export function restoreStage(loaded: LoadedFlow, stageId: string, n: number): { 
   const okRuns = listRuns(dir, stageId).filter((r) => r.status === "ok");
   let kept: RunRecord | undefined;
   // Only once the target is known to be restorable; restoreRun reports a bad n.
-  if (okRuns.some((r) => r.n === n) && okRuns.length && okRuns.every((r) => outputsEdited(dir, stage, r))) {
+  if (okRuns.some((r) => r.n === n) && outputsHandEdited(dir, stage, okRuns)) {
     kept = recordManualEdit(loaded, stageId, resolveFlowInputs(dir, flow));
   }
   const run = restoreRun(dir, flow, stageId, n);
@@ -123,7 +123,7 @@ export async function runStage(loaded: LoadedFlow, stageId: string, options: Run
   if (missingUpstream.length) throw new UpstreamNotReadyError(stage, missingUpstream);
 
   // never lose a hand edit: save it as its own version before re-running
-  if (outputsEdited(dir, stage)) {
+  if (outputsHandEdited(dir, stage)) {
     const kept = recordManualEdit(loaded, stageId, flowInputs);
     emit({ type: "stage:log", stage, line: `你的手动修改已存为 v${kept.n} / your manual edit was saved as v${kept.n}` });
   }

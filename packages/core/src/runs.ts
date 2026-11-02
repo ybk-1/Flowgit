@@ -296,6 +296,24 @@ export function outputsEdited(dir: string, stage: Stage, run: RunRecord | undefi
   });
 }
 
+/**
+ * True when the outputs on disk are a hand edit: they match no successful run,
+ * so a restored older version does not count. Missing outputs do not count.
+ * Hashes each output once, however many runs there are.
+ */
+export function outputsHandEdited(dir: string, stage: Stage, runs: RunRecord[] = listRuns(dir, stage.id)): boolean {
+  const ok = runs.filter((r) => r.status === "ok");
+  if (!ok.length) return false;
+  const current: Array<[string, string]> = [];
+  for (const o of stage.outputs) {
+    const abs = outputAbs(dir, o);
+    if (fs.existsSync(abs)) current.push([outputRel(o), hashPath(abs).sha256]);
+  }
+  if (!current.length) return false;
+  const matches = (run: RunRecord) => current.every(([rel, sha]) => run.outputs.find((r) => r.path === rel)?.sha256 === sha);
+  return !ok.some(matches);
+}
+
 /** State of one stage judged on its own: its runs, its inputs and its outputs. */
 function localStatus(loaded: LoadedFlow, stageId: string, flowInputs: Record<string, unknown>): StageStatus {
   const { dir, flow } = loaded;
@@ -313,7 +331,7 @@ function localStatus(loaded: LoadedFlow, stageId: string, flowInputs: Record<str
   if (missingUpstream.length) return { ...base, state: "waiting-upstream" };
   const current = inputHash(inputRefs(dir, flow, stage), flowInputs, stageConfigHash(dir, stage));
   if (current !== latest.inputHash) return { ...base, state: "stale" };
-  if (outputsEdited(dir, stage, latest)) return { ...base, state: "edited" };
+  if (outputsHandEdited(dir, stage, runs)) return { ...base, state: "edited" };
   return { ...base, state: "ok" };
 }
 

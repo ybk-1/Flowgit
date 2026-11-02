@@ -168,6 +168,10 @@ flowgit status
 1  随手记 notes    human          ○ 可以运行 (never-run)       -          notes.md
 2  周报草稿 draft  llm            … 等上游 (waiting-upstream)  -          report.md
 3  检查 check      script         … 等上游 (waiting-upstream)  -          check.json
+
+下一步：「随手记」需要你来做。Next: "notes" is yours.
+  把这周的事随手写进 notes.md，一行一件
+  完成后运行 / then run: flowgit run notes
 ```
 
 第一个阶段是人做的。把这周的事写进 `notes.md`（或者 `flowgit run notes --from 别处的文件.md`），然后：
@@ -293,10 +297,14 @@ flowgit log draft
 ```
 
 ```text
+周报草稿 (draft) · 3 个版本 / run(s)
+
 版本 v  结果 status  完成时间 finished    执行 executor  详情 details
 v3      ok           2026-11-01 16:10:30  llm            mock:draft.md
 v2      ok           2026-11-01 16:10:30  manual
 v1      ok           2026-11-01 16:10:29  llm            mock:draft.md
+
+快照 / snapshots: runs/draft/<n>/outputs/   对比 / diff: flowgit diff draft <a> [b]   回退 / restore: flowgit restore draft <n>
 ```
 
 不写阶段，`flowgit log` 会按时间列出整个流程的所有版本，最新的在最上面。调用过真实模型的话，最后还会加一行 token 合计。
@@ -304,6 +312,8 @@ v1      ok           2026-11-01 16:10:29  llm            mock:draft.md
 Without a stage, `flowgit log` lists every version of the whole flow by time, newest first. When real models were called, it ends with a token total.
 
 ```text
+周报 · 6 个版本 / run(s)
+
 完成时间 finished    阶段 stage      版本 v  结果 status  执行 executor  详情 details
 2026-11-01 17:52:17  周报草稿 draft  v3      ok           llm            mock:draft.md
 2026-11-01 17:52:17  周报草稿 draft  v2      ok           manual
@@ -311,6 +321,8 @@ Without a stage, `flowgit log` lists every version of the whole flow by time, ne
 2026-11-01 17:52:16  检查 check      v1      ok           script         node scripts/check.mjs
 2026-11-01 17:52:16  周报草稿 draft  v1      ok           llm            mock:draft.md
 2026-11-01 17:52:15  随手记 notes    v1      ok           human          from
+
+一个阶段的历史 / one stage: flowgit log <stage>
 ```
 
 想知道两个版本差在哪，用 `flowgit diff`。文本和 JSON 按行显示改动（`+` 是新加的，`-` 是删掉的），图片和视频只说相同还是不同，文件夹列出新增、删除和改动的文件：
@@ -325,6 +337,18 @@ flowgit diff draft 2             # v2 和现在的文件比 / v2 against the cur
 ```bash
 flowgit restore draft 2          # 回到你手改的那一版 / back to your hand-edited version
 flowgit run all                  # 下游会重跑 / downstream re-runs
+```
+
+回退之前，如果现在的 `report.md` 又被你改过、和哪个版本都不一样，Flowgit 会先把它存成一个版本。回退到的版本本来就存着，所以草稿不会显示"手动修改"，`run all` 只重跑下游的检查。
+
+Before a restore, if `report.md` holds a new edit that matches no version, Flowgit saves it as a version first. The restored version is already saved, so the draft doesn't show as edited and `run all` re-runs only the downstream check.
+
+**也可以在浏览器里做。** `flowgit board` 打开本机看板（只监听 `127.0.0.1`）：每个阶段一张卡，可以看和改产物、填流程输入、运行、看历史、对比和回退，和上面的命令效果一样。
+
+**Or do it in the browser.** `flowgit board` opens a local board (listening on `127.0.0.1` only): one card per stage, where you can view and edit outputs, fill in flow inputs, run, browse history, compare and restore, with the same effect as the commands above.
+
+```bash
+flowgit board                    # 加 --no-open 不自动打开浏览器 / add --no-open to skip opening a browser
 ```
 
 每个版本的文件快照在 `runs/<阶段>/<版本>/outputs/`，运行记录（用了哪个模型、花了多少 token、读了哪些上游文件）在同一个文件夹的 `run.json` 里。

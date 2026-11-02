@@ -271,9 +271,9 @@ Each run of a stage:
 4. Checks every declared output was written and copies them to `runs/<stage>/<n>/outputs/`.
 5. Writes `runs/<stage>/<n>/run.json`. Failed runs are recorded too (`status: "error"`).
 
-回退（`flowgit restore <stage> <n>`，或看板上的"回退"）把 `runs/<stage>/<n>/outputs/` 复制回原位。当前产物如果和任何一个已保存的版本都不一样，说明是手改的，会先存成一个 `manual` 版本再回退。
+回退（`flowgit restore <stage> <n>`，或看板上的"回退"）把 `runs/<stage>/<n>/outputs/` 复制回原位。当前产物如果和任何一个已保存的版本都不一样，说明是手改的，会先存成一个 `manual` 版本再回退。回退后的产物等于一个已保存的版本，所以不算手改：这个阶段不会显示 `edited`，下次运行也不会再存一份；下游因为上游产物变了而变成 `stale`。
 
-Restoring (`flowgit restore <stage> <n>`, or "Restore" on the board) copies `runs/<stage>/<n>/outputs/` back in place. If the current outputs match no saved version, they are a hand edit and are saved as a `manual` version before the restore.
+Restoring (`flowgit restore <stage> <n>`, or "Restore" on the board) copies `runs/<stage>/<n>/outputs/` back in place. If the current outputs match no saved version, they are a hand edit and are saved as a `manual` version before the restore. Restored outputs equal a saved version, so they are not a hand edit: the stage does not show as `edited` and the next run does not save another copy; downstream stages become `stale` because their upstream output changed.
 
 `run.json` 的主要字段：`stage`、`n`、`status`、`executor`、`startedAt`、`finishedAt`、`inputHash`、`inputs`（上游产物和它们的 sha256）、`flowInputs`、`outputs`（路径、类型、sha256、大小）、`params`（provider、模型、用量、命令等）、`log`、`error`。
 
@@ -287,7 +287,7 @@ Main `run.json` fields: `stage`, `n`, `status`, `executor`, `startedAt`, `finish
 | `waiting-upstream` | 有上游阶段还没有成功的版本 | An upstream stage has no successful version yet |
 | `ok` | 最新版本成功，之后上游、配置、产物都没变 | Latest run succeeded; upstream, config and outputs unchanged since |
 | `stale` | 上游产物、流程输入、执行器配置（含提示词文件、脚本文件）变了，或者上游本身需要重跑 | Upstream artifacts, flow inputs or executor config (incl. prompt and script files) changed, or an upstream stage itself needs a re-run |
-| `edited` | 产物在最新版本之后被手动改过 | Outputs were edited by hand after the latest run |
+| `edited` | 产物被手动改过：和任何一个成功的版本都不一样（回退到旧版本不算） | Outputs were edited by hand: they match no successful run (restoring an older version does not count) |
 | `error` | 最新一次运行失败 | The latest run failed |
 
 `inputHash` 是"上游产物的 sha256 + 流程输入 + 执行器配置"的指纹。执行器配置包括执行器定义本身、llm 的提示词文件，以及 script 命令里出现的、存在于流程目录中的文件（比如 `node scripts/render.mjs` 里的 `scripts/render.mjs`）。所以改一句提示词，这个阶段和它下游的阶段都会变成 `stale`。
