@@ -1,8 +1,8 @@
 # 更新记录 / Changelog
 
-每个版本做了什么。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。`@flowgit/core` 和 `flowgit` 两个包用同一个版本号。
+每个版本做了什么。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。`@flowgit/core`、`@flowgit/web` 和 `flowgit` 用同一个版本号。
 
-What changed in each version. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/). `@flowgit/core` and `flowgit` share one version number.
+What changed in each version. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/). `@flowgit/core`, `@flowgit/web` and `flowgit` share one version number.
 
 ## [0.1.0] - 未发布 / Unreleased
 
@@ -30,19 +30,21 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 
 ### 命令行 / CLI
 
-- `init`、`templates`、`validate`、`status`（看板）、`inputs`、`run`、`log`、`restore`、`providers`、`doctor`、`graph`、`export-skill`。
+- `init`、`templates`、`validate`、`status`（终端看板）、`board`（网页看板）、`inputs`、`run`、`log`、`restore`、`providers`、`doctor`、`graph`、`export-skill`。
 - `doctor` 在运行前检查 Node、流程输入、密钥、代理设置，以及脚本和 agent 要用的命令。
 - `export-skill` 把流程导出成 `SKILL.md`，AI 工具不用界面也能按步骤运行。
 - `graph` 把流程画成 Mermaid 流程图，贴进 GitHub 或 Obsidian 就能看到；加 `--status` 按状态上色，`-o/--out` 直接写成 UTF-8 文件（`.md` 自动包上代码块）。
 - `log` 不写阶段时按时间列出整个流程的所有版本，并合计用掉的 token。
+- `board` 在浏览器打开本机只读看板（新包 `@flowgit/web`）：每个阶段一张卡，显示状态、最新版本和产物，点产物在侧栏预览文本、JSON、图片、视频和目录，每 3 秒刷新。只监听 `127.0.0.1`，接口要令牌并检查 `Host`。
 - `run all --dry-run` 预演：每个阶段会跳过、运行还是停下等你，最多调用几次模型，什么都不运行。`doctor` 通过后和导出的 `SKILL.md` 里都会提到它。
 - `inputs set` 保存前就检查名字和值（数字、`true`/`false`、可选值），写错了不会存进去。
 - 提示、报错和 `--help` 都是中英双语（包括输错命令、少写参数这类报错，会提示“是不是想输入 …”），并针对余额不足、限流、连不上（包括代理）给出具体建议。
-- `init`, `templates`, `validate`, `status` (the board), `inputs`, `run`, `log`, `restore`, `providers`, `doctor`, `graph`, `export-skill`.
+- `init`, `templates`, `validate`, `status` (terminal board), `board` (web board), `inputs`, `run`, `log`, `restore`, `providers`, `doctor`, `graph`, `export-skill`.
 - `doctor` checks Node, flow inputs, keys, proxy settings, and the programs script and agent stages use, before a run.
 - `export-skill` exports a flow as a `SKILL.md`, so AI tools can run it step by step without the UI.
 - `graph` draws the flow as a Mermaid diagram that GitHub and Obsidian render; `--status` colors it by state, and `-o/--out` writes a UTF-8 file (a `.md` file gets the code block).
 - `log` without a stage lists every version of the whole flow by time and adds up the tokens used.
+- `board` opens a local read-only board in the browser (new package `@flowgit/web`): one card per stage with its state, latest version and outputs; click an output to preview text, JSON, images, video or a folder in a side panel; refreshes every 3 seconds. It listens on `127.0.0.1` only, and its API needs a token and checks `Host`.
 - `run all --dry-run` shows whether each stage would be skipped, run or stop for you, and at most how many model calls it would make, without running anything. `doctor` points to it when nothing blocks, and so does the exported `SKILL.md`.
 - `inputs set` checks names and values (numbers, `true`/`false`, allowed values) before saving, so a typo is never stored.
 - Messages, errors and `--help` are bilingual (including typos in commands and missing arguments, with a “did you mean …”), with specific advice for an empty balance, rate limits and connection problems (including proxies).

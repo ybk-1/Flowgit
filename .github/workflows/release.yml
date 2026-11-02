@@ -1,12 +1,12 @@
 # 发布到 npm / Publish to npm
 #
-# 打 tag（例如 v0.1.1）会测试、打包，再把 @flowgit/core 和 flowgit 发到 npm。
+# 打 tag（例如 v0.1.1）会测试、打包，再把 @flowgit/core、@flowgit/web 和 flowgit 发到 npm。
 # 手动运行（workflow_dispatch）只打包检查，不发布。
 # 用 npm 的 Trusted Publishing（OIDC），不需要也不存放任何 npm token。
 # 第一次发布和 npm 端的设置见 docs/releasing.md。
 #
-# Pushing a tag (e.g. v0.1.1) tests, packs and publishes @flowgit/core and
-# flowgit to npm. A manual run (workflow_dispatch) only packs and checks.
+# Pushing a tag (e.g. v0.1.1) tests, packs and publishes @flowgit/core,
+# @flowgit/web and flowgit to npm. A manual run (workflow_dispatch) only packs and checks.
 # Uses npm Trusted Publishing (OIDC): no npm token is needed or stored.
 # First release and npm-side setup: docs/releasing.md.
 name: Release
@@ -50,13 +50,14 @@ jobs:
           mkdir -p "$RUNNER_TEMP/pack"
           # pnpm pack rewrites "workspace:*" to the real version; npm then publishes the tarballs.
           (cd packages/core && pnpm pack --pack-destination "$RUNNER_TEMP/pack")
+          (cd packages/web && pnpm pack --pack-destination "$RUNNER_TEMP/pack")
           (cd packages/cli && pnpm pack --pack-destination "$RUNNER_TEMP/pack")
           ls -l "$RUNNER_TEMP/pack"
       - name: 发布到 npm / Publish to npm
         if: github.ref_type == 'tag'
         run: |
-          # core first: the CLI depends on it. Versions already on npm are skipped.
-          for pkg in core cli; do
+          # core, then web, then the CLI, which depends on both. Versions already on npm are skipped.
+          for pkg in core web cli; do
             name=$(node -p "require('./packages/$pkg/package.json').name")
             version=$(node -p "require('./packages/$pkg/package.json').version")
             if npm view "$name@$version" version >/dev/null 2>&1; then

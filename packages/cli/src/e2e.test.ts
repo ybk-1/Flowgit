@@ -1,4 +1,5 @@
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
+import http from "node:http";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -199,6 +200,52 @@ describe("flowgit CLI with the short-video template", () => {
     expect(noFlow.stderr).toContain(`No flow.json in ${work}`);
     expect(noFlow.stderr).toContain("新建一个 / create one: flowgit init <目录 dir>");
   });
+
+  it("starts a local board on 127.0.0.1 and requires a token", async () => {
+    const child = spawn(process.execPath, [cli, "-C", flowDir, "board", "--port", "0", "--no-open"], {
+      env: { ...process.env, NO_COLOR: "1" },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let buf = "";
+    let exited = false;
+    child.on("exit", () => {
+      exited = true;
+    });
+    try {
+      const url = await new Promise<string>((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error(`board did not print a URL:\n${buf}`)), 15_000);
+        const onData = (chunk: Buffer) => {
+          buf += chunk.toString("utf8");
+          const match = buf.match(/http:\/\/127\.0\.0\.1:\d+\//);
+          if (match) {
+            clearTimeout(timer);
+            resolve(match[0]);
+          }
+        };
+        child.stdout!.on("data", onData);
+        child.stderr!.on("data", onData);
+        child.once("exit", (code) => {
+          clearTimeout(timer);
+          reject(new Error(`board exited ${code} before printing a URL:\n${buf}`));
+        });
+      });
+      const status = await new Promise<number>((resolve, reject) => {
+        const req = http.get(`${url}api/flow`, (res) => {
+          res.resume();
+          resolve(res.statusCode ?? 0);
+        });
+        req.on("error", reject);
+      });
+      expect(status).toBe(401);
+      expect(buf).toContain("只读");
+    } finally {
+      if (!exited) {
+        const closed = new Promise((resolve) => child.once("exit", resolve));
+        child.kill();
+        await closed;
+      }
+    }
+  }, 20_000);
 
   it("exports a SKILL.md", () => {
     const r = flowgit(["export-skill", "--out", "-"]);

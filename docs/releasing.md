@@ -1,8 +1,8 @@
 # 发布 / Releasing
 
-Flowgit 发布两个 npm 包：`@flowgit/core`（核心库）和 `flowgit`（命令行），两个包用同一个版本号。日常发布由 GitHub Actions 的 [`release.yml`](../.github/workflows/release.yml) 完成：推一个 `v*` tag，它就测试、打包、发布。它用 npm 的 [Trusted Publishing](https://docs.npmjs.com/trusted-publishers)（OIDC），仓库里不存任何 npm token。
+Flowgit 发布三个 npm 包：`@flowgit/core`（核心库）、`@flowgit/web`（本机网页看板）和 `flowgit`（命令行），三个包用同一个版本号。日常发布由 GitHub Actions 的 [`release.yml`](../.github/workflows/release.yml) 完成：推一个 `v*` tag，它就测试、打包、发布。它用 npm 的 [Trusted Publishing](https://docs.npmjs.com/trusted-publishers)（OIDC），仓库里不存任何 npm token。
 
-Flowgit publishes two npm packages on one shared version: `@flowgit/core` (the core library) and `flowgit` (the CLI). Routine releases run in GitHub Actions ([`release.yml`](../.github/workflows/release.yml)): push a `v*` tag and it tests, packs and publishes. It uses npm [Trusted Publishing](https://docs.npmjs.com/trusted-publishers) (OIDC), so no npm token is stored anywhere.
+Flowgit publishes three npm packages on one shared version: `@flowgit/core` (the core library), `@flowgit/web` (the local web board) and `flowgit` (the CLI). Routine releases run in GitHub Actions ([`release.yml`](../.github/workflows/release.yml)): push a `v*` tag and it tests, packs and publishes. It uses npm [Trusted Publishing](https://docs.npmjs.com/trusted-publishers) (OIDC), so no npm token is stored anywhere.
 
 ## 第一次发布（只做一次）/ First release (once)
 
@@ -12,8 +12,8 @@ npm can only set up Trusted Publishing for a package that already exists, so the
 
 1. **npm 账号**：在 [npmjs.com](https://www.npmjs.com/) 注册，并开启双重验证（2FA）。
    **npm account**: sign up at [npmjs.com](https://www.npmjs.com/) and turn on two-factor authentication (2FA).
-2. **建组织 `flowgit`**：头像菜单 → Add Organization，名字填 `flowgit`，选免费的 "Unlimited public packages"。组织名就是 `@flowgit/` 这个 scope，没有它发不了 `@flowgit/core`。
-   **Create the `flowgit` organization**: avatar menu → Add Organization, name it `flowgit`, pick the free "Unlimited public packages" plan. The organization name is the `@flowgit/` scope; `@flowgit/core` can't be published without it.
+2. **建组织 `flowgit`**：头像菜单 → Add Organization，名字填 `flowgit`，选免费的 "Unlimited public packages"。组织名就是 `@flowgit/` 这个 scope，没有它发不了 `@flowgit/core` 和 `@flowgit/web`。
+   **Create the `flowgit` organization**: avatar menu → Add Organization, name it `flowgit`, pick the free "Unlimited public packages" plan. The organization name is the `@flowgit/` scope; `@flowgit/core` and `@flowgit/web` can't be published without it.
 3. **手动发布**（在最新的 `main` 上，工作区要干净）：
    **Publish by hand** (on the latest `main`, with a clean working tree):
 
@@ -22,11 +22,12 @@ npm can only set up Trusted Publishing for a package that already exists, so the
    pnpm install && pnpm build && pnpm test
    node scripts/pack-smoke.mjs          # 先确认装得起来 / make sure it installs
    cd packages/core && pnpm publish --access public
+   cd ../web && pnpm publish --access public
    cd ../cli && pnpm publish --access public
    ```
 
-   一定要用 `pnpm publish`，它会把 `"@flowgit/core": "workspace:*"` 换成真正的版本号。先发 core，再发 cli。
-   Use `pnpm publish`: it replaces `"@flowgit/core": "workspace:*"` with the real version. Publish core first, then the CLI.
+   一定要用 `pnpm publish`，它会把 `"workspace:*"` 换成真正的版本号。按 core、web、cli 的顺序发。
+   Use `pnpm publish`: it replaces `"workspace:*"` with the real version. Publish core, then web, then the CLI.
 
 4. **设置 Trusted Publishing**：在 npmjs.com 打开每个包的 Settings → Trusted Publisher → GitHub Actions，填：
    **Set up Trusted Publishing**: on npmjs.com, open each package's Settings → Trusted Publisher → GitHub Actions and fill in:
@@ -48,7 +49,7 @@ npm can only set up Trusted Publishing for a package that already exists, so the
 
 ```bash
 git checkout -b release/v0.1.1 origin/main
-node scripts/release-version.mjs set 0.1.1     # 两个包一起改版本 / bump both packages
+node scripts/release-version.mjs set 0.1.1     # 所有包一起改版本 / bump every package
 # 在 CHANGELOG.md 里把"未发布"改成版本号和日期 / in CHANGELOG.md, turn "Unreleased" into the version and date
 git commit -am "发布 0.1.1 / Release 0.1.1"
 # 开 PR、合并 / open a PR and merge it
@@ -56,9 +57,9 @@ git checkout main && git pull
 git tag v0.1.1 && git push origin v0.1.1      # 触发 release.yml / triggers release.yml
 ```
 
-`release.yml` 会检查 tag 和两个包的版本一致，跑完整的测试和打包冒烟测试，然后先发 core、再发 cli；npm 上已经有的版本会跳过，所以失败后直接重跑这个 workflow 就行。想只检查不发布，在 Actions 页面手动运行 Release。
+`release.yml` 会检查 tag 和所有包的版本一致，跑完整的测试和打包冒烟测试，然后按 core、web、cli 的顺序发布；npm 上已经有的版本会跳过，所以失败后直接重跑这个 workflow 就行。想只检查不发布，在 Actions 页面手动运行 Release。
 
-`release.yml` checks the tag matches both package versions, runs the full tests and the pack smoke test, then publishes core before the CLI. Versions already on npm are skipped, so a failed run can simply be re-run. To check without publishing, run Release by hand from the Actions page.
+`release.yml` checks the tag matches every package version, runs the full tests and the pack smoke test, then publishes core, web and the CLI in that order. Versions already on npm are skipped, so a failed run can simply be re-run. To check without publishing, run Release by hand from the Actions page.
 
 ## 注意 / Notes
 

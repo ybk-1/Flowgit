@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="flowgit-token" content="__FLOWGIT_TOKEN__" />
+  <title>Flowgit 看板 / Board</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <header class="top">
+    <div class="brand-block">
+      <p class="brand">Flowgit</p>
+      <h1 id="flow-name">看板 / Board</h1>
+      <p class="tagline">只读 · 本机 / read-only · local</p>
+    </div>
+    <p class="hint" id="refresh-hint">每 3 秒刷新 / refreshes every 3s</p>
+  </header>
+  <div id="banner" class="banner" hidden></div>
+  <div id="inputs" class="inputs"></div>
+  <p id="notice" class="notice" hidden></p>
+  <main id="board" class="board" aria-live="polite"></main>
+  <aside id="panel" class="panel" hidden>
+    <div class="panel-bar">
+      <h2 id="panel-title"></h2>
+      <button id="panel-close" type="button">关闭 / Close</button>
+    </div>
+    <div id="panel-body"></div>
+  </aside>
+  <noscript>
+    <p class="banner">需要 JavaScript 才能看看板。 / JavaScript is required to show the board.</p>
+  </noscript>
+  <script src="/app.js"></script>
+</body>
+</html>

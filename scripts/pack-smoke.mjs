@@ -1,4 +1,4 @@
-// Packs @flowgit/core and flowgit the way `pnpm publish` would, installs the
+// Packs @flowgit/core, @flowgit/web and flowgit the way `pnpm publish` would, installs the
 // tarballs into an empty folder with npm, and runs the installed CLI on a fresh
 // flow. Catches files missing from "files", a broken bin, or workspace links
 // that only work inside the monorepo. Run after `pnpm build`:
@@ -30,9 +30,9 @@ function check(ok, message) {
 }
 
 try {
-  // 1. Pack both packages. pnpm rewrites "workspace:*" to the real version.
+  // 1. Pack every package. pnpm rewrites "workspace:*" to the real version.
   const tarballs = {};
-  for (const [name, dir] of [["@flowgit/core", "packages/core"], ["flowgit", "packages/cli"]]) {
+  for (const [name, dir] of [["@flowgit/core", "packages/core"], ["@flowgit/web", "packages/web"], ["flowgit", "packages/cli"]]) {
     const out = run("pnpm", ["pack", "--pack-destination", tmp, "--json"], { cwd: path.join(root, dir) });
     const info = JSON.parse(out.slice(out.indexOf("{")));
     tarballs[name] = info;
@@ -43,6 +43,8 @@ try {
     check(!files.some((f) => /(^|\/)(runs|node_modules)\//.test(f)), `${name}: no runs/ or node_modules/ in the tarball`);
     if (name === "@flowgit/core") {
       check(files.includes("dist/index.js") && files.includes("schema/flow.schema.json"), `${name}: ships dist and the schema`);
+    } else if (name === "@flowgit/web") {
+      check(files.includes("dist/index.js") && files.includes("public/index.html") && files.includes("public/app.js"), `${name}: ships dist and the board page`);
     } else {
       check(files.includes("dist/index.js"), `${name}: ships the CLI entry`);
       for (const t of ["short-video", "weekly-report"]) check(files.includes(`templates/${t}/flow.json`), `${name}: ships the ${t} template`);
@@ -55,12 +57,14 @@ try {
   const app = path.join(tmp, "app");
   fs.mkdirSync(app);
   fs.writeFileSync(path.join(app, "package.json"), JSON.stringify({ name: "smoke", private: true }));
-  run("npm", ["install", "--no-audit", "--no-fund", "--loglevel=error", tgz("@flowgit/core"), tgz("flowgit")], { cwd: app });
+  run("npm", ["install", "--no-audit", "--no-fund", "--loglevel=error", tgz("@flowgit/core"), tgz("@flowgit/web"), tgz("flowgit")], { cwd: app });
   const bin = path.join(app, "node_modules", ".bin", win ? "flowgit.cmd" : "flowgit");
   check(fs.existsSync(bin), "npm created the flowgit bin");
   const cliManifest = JSON.parse(fs.readFileSync(path.join(app, "node_modules", "flowgit", "package.json"), "utf8"));
   const coreVersion = tarballs["@flowgit/core"].version;
   check(cliManifest.dependencies["@flowgit/core"] === coreVersion, `flowgit depends on @flowgit/core ${coreVersion}, not a workspace link`);
+  const webVersion = tarballs["@flowgit/web"].version;
+  check(cliManifest.dependencies["@flowgit/web"] === webVersion, `flowgit depends on @flowgit/web ${webVersion}, not a workspace link`);
 
   // 3. Use the installed CLI on a fresh flow (llm stage answered by the template's demo replies).
   const cli = path.join(app, "node_modules", "flowgit", "dist", "index.js");

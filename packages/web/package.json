@@ -1,0 +1,52 @@
+{
+  "name": "@flowgit/web",
+  "version": "0.1.0",
+  "description": "Flowgit local web board: a node:http server on 127.0.0.1 and a static page. 本机网页看板。",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cgold9820-dotcom/Flowgit.git",
+    "directory": "packages/web"
+  },
+  "homepage": "https://github.com/cgold9820-dotcom/Flowgit#readme",
+  "bugs": {
+    "url": "https://github.com/cgold9820-dotcom/Flowgit/issues"
+  },
+  "keywords": [
+    "flowgit",
+    "workflow",
+    "flow",
+    "board",
+    "kanban"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "public",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "prepack": "node ../../scripts/copy-license.mjs"
+  },
+  "dependencies": {
+    "@flowgit/core": "workspace:*"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
