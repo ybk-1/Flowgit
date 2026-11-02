@@ -6,8 +6,12 @@ import { findCycle } from "./graph.js";
 import type { Flow, LoadedFlow, ValidationIssue } from "./types.js";
 import { outputSchemaIssues } from "./schema-check.js";
 import { isSafeRelative, linkOutsideError, outputRel, staysInside } from "./util.js";
+import { parseFlowMd, renderFlowMd } from "./flowmd.js";
 
 export const FLOW_FILE = "flow.json";
+/** The Markdown way to write the same flow; see flowmd.ts. */
+export const FLOW_MD_FILE = "flow.md";
+export const FLOW_FILES = [FLOW_FILE, FLOW_MD_FILE] as const;
 
 const schemaUrl = new URL("../schema/flow.schema.json", import.meta.url);
 export const flowSchema = JSON.parse(fs.readFileSync(schemaUrl, "utf8")) as Record<string, unknown>;
@@ -89,6 +93,8 @@ export function validateFlow(data: unknown, opts: ValidateOptions = {}): Validat
       const rel = outputRel(out);
       if (!isSafeRelative(rel)) {
         issues.push({ level: "error", path: `${base}/outputs/${j}/path`, message: `产物路径必须是相对路径，且在流程目录内 / output path must be relative and stay inside the flow directory: "${out.path}"` });
+      } else if ((FLOW_FILES as readonly string[]).includes(rel)) {
+        issues.push({ level: "error", path: `${base}/outputs/${j}/path`, message: `产物不能叫 ${rel}，这是流程文件的名字 / an output cannot be ${rel}; that name is the flow file` });
       } else if (rel.split("/")[0] === "runs") {
         issues.push({ level: "error", path: `${base}/outputs/${j}/path`, message: `产物不能放在 runs/ 里 / output path must not be inside runs/` });
       }
@@ -140,32 +146,86 @@ export function validateFlow(data: unknown, opts: ValidateOptions = {}): Validat
   return issues;
 }
 
-/** Resolve the flow directory from a path that may be a directory or a flow.json file. */
+/** Resolve the flow directory from a path that may be a directory, a flow.json or a flow.md. */
 export function resolveFlowDir(target: string = "."): string {
   const abs = path.resolve(target);
   if (fs.existsSync(abs) && fs.statSync(abs).isFile()) return path.dirname(abs);
   return abs;
 }
 
-/** There is no flow.json where a flow was expected. */
+/** There is no flow.json or flow.md where a flow was expected. */
 export class FlowNotFoundError extends Error {
   constructor(public dir: string) {
-    super(`${dir} 里没有 ${FLOW_FILE} / No ${FLOW_FILE} in ${dir}`);
+    super(`${dir} 里没有 ${FLOW_FILE} 或 ${FLOW_MD_FILE} / No ${FLOW_FILE} or ${FLOW_MD_FILE} in ${dir}`);
     this.name = "FlowNotFoundError";
   }
 }
 
-/** Read, parse and validate <dir>/flow.json. Throws FlowValidationError on errors. */
-export function loadFlow(target: string = "."): LoadedFlow {
-  const dir = resolveFlowDir(target);
-  const file = path.join(dir, FLOW_FILE);
-  if (!fs.existsSync(file)) throw new FlowNotFoundError(dir);
-  let data: unknown;
+/**
+ * The flow file in dir: flow.json or flow.md, or undefined when there is neither.
+ * Throws when both exist, since it would be unclear which one counts.
+ */
+export function findFlowFile(dir: string): string | undefined {
+  let found = FLOW_FILES.map((name) => path.join(dir, name)).filter((f) => fs.existsSync(f));
+  // A flow.md without frontmatter next to flow.json is not a flow, e.g. an older
+  // `flowgit graph --out flow.md`: keep using flow.json.
+  if (found.length > 1 && !looksLikeFlowMd(path.join(dir, FLOW_MD_FILE))) found = [path.join(dir, FLOW_FILE)];
+  if (found.length > 1) {
+    throw new Error(
+      `${dir} 里同时有 ${FLOW_FILE} 和 ${FLOW_MD_FILE}，只能留一个（可以用 flowgit convert 转换）/ ${dir} has both ${FLOW_FILE} and ${FLOW_MD_FILE}; keep one (flowgit convert switches between them)`,
+    );
+  }
+  return found[0];
+}
+
+/** Whether a flow.md starts with frontmatter, as every flow.md must. */
+function looksLikeFlowMd(file: string): boolean {
+  const head = fs.readFileSync(file, "utf8").slice(0, 8).replace(/^\uFEFF/, "");
+  return /^---\r?\n/.test(head);
+}
+
+/** Whether the file is a flow.md (by name), as opposed to flow.json. */
+export function isFlowMd(file: string): boolean {
+  return path.basename(file) === FLOW_MD_FILE;
+}
+
+/** Parse a flow file (flow.json or flow.md) without validating it. */
+export function parseFlowText(text: string, file: string): unknown {
+  if (isFlowMd(file)) {
+    try {
+      return parseFlowMd(text);
+    } catch (err) {
+      throw new Error(`${file} 读不懂 / could not be read: ${(err as Error).message}`);
+    }
+  }
   try {
-    data = JSON.parse(fs.readFileSync(file, "utf8"));
+    return JSON.parse(text);
   } catch (err) {
     throw new Error(`${file} 不是合法的 JSON / is not valid JSON: ${(err as Error).message}`);
   }
+}
+
+/** Read and parse a flow file (flow.json or flow.md) without validating it. */
+export function readFlowFile(file: string): unknown {
+  return parseFlowText(fs.readFileSync(file, "utf8"), file);
+}
+
+/** Text of a flow in the format its file name asks for. */
+export function renderFlowText(flow: Flow, file: string): string {
+  return isFlowMd(file) ? renderFlowMd(flow) : `${JSON.stringify(flow, null, 2)}\n`;
+}
+
+/** Write a flow back in the format of its file (flow.json or flow.md). */
+export function writeFlowFile(file: string, flow: Flow): void {
+  fs.writeFileSync(file, renderFlowText(flow, file));
+}
+
+/** Read, parse and validate <dir>/flow.json or <dir>/flow.md. Throws FlowValidationError on errors. */
+export function loadFlow(target: string = "."): LoadedFlow {
+  const dir = resolveFlowDir(target);
+  const file = findFlowFile(dir);
+  if (!file) throw new FlowNotFoundError(dir);
+  const data = readFlowFile(file);
   const issues = validateFlow(data, { dir });
   if (issues.some((i) => i.level === "error")) {
     throw new FlowValidationError(issues, file);

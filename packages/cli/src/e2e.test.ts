@@ -124,8 +124,9 @@ describe("flowgit CLI with the short-video template", () => {
     expect(md.out).toContain("  class s4,s5 waitingUpstream");
 
     // --out writes UTF-8 next to the flow; a .md file gets the code block
-    expect(flowgit(["graph", "--out", "flow.md"]).out).toContain("wrote");
-    const saved = fs.readFileSync(path.join(flowDir, "flow.md"));
+    expect(flowgit(["graph", "--out", "flow.md"]).out).toContain("is the flow file's name; pick another, e.g. graph.md");
+    expect(flowgit(["graph", "--out", "graph.md"]).out).toContain("wrote");
+    const saved = fs.readFileSync(path.join(flowDir, "graph.md"));
     expect(saved.subarray(0, 10).toString("utf8")).toBe("```mermaid");
     expect(saved.toString("utf8")).toContain('s1["脚本<br/>llm"]');
     flowgit(["graph", "--out", "flow.mmd"]);
@@ -204,7 +205,7 @@ describe("flowgit CLI with the short-video template", () => {
 
     const noFlow = spawnSync(process.execPath, [cli, "-C", work, "status"], { encoding: "utf8", env: { ...process.env, NO_COLOR: "1" } });
     expect(noFlow.status).toBe(1);
-    expect(noFlow.stderr).toContain(`No flow.json in ${work}`);
+    expect(noFlow.stderr).toContain(`No flow.json or flow.md in ${work}`);
     expect(noFlow.stderr).toContain("新建一个 / create one: flowgit init <目录 dir>");
   });
 
@@ -597,6 +598,76 @@ describe("flowgit stage add / rm", () => {
     expect(readd.out).toContain("没有覆盖");
     expect(fs.readFileSync(prompt, "utf8")).toBe("KEEP\n");
     expect(report(["validate"]).code).toBe(0);
+  });
+});
+
+describe("flow.md", () => {
+  let root: string;
+
+  function inDir(dir: string, args: string[], env: Record<string, string> = {}) {
+    const r = spawnSync(process.execPath, [cli, "-C", dir, ...args], {
+      encoding: "utf8",
+      env: { ...process.env, NO_COLOR: "1", ...env },
+    });
+    return { code: r.status, out: `${r.stdout}${r.stderr}` };
+  }
+
+  beforeAll(() => {
+    if (!fs.existsSync(cli)) throw new Error("Build the CLI first: pnpm -r run build");
+    root = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-md-"));
+  });
+
+  afterAll(() => {
+    if (root) fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  it("starts a flow as flow.md, runs it, edits it in place and converts it back", () => {
+    const dir = path.join(root, "weekly");
+    const init = spawnSync(process.execPath, [cli, "init", dir, "-t", "weekly-report", "--format", "md"], { encoding: "utf8" });
+    expect(init.status, `${init.stdout}${init.stderr}`).toBe(0);
+    expect(fs.existsSync(path.join(dir, "flow.json"))).toBe(false);
+    const md = fs.readFileSync(path.join(dir, "flow.md"), "utf8");
+    expect(md).toContain("# 周报（入门示例）");
+    expect(md).toContain("## 周报草稿 {#draft}");
+    expect(md).toContain("```flowgit");
+
+    expect(inDir(dir, ["validate"]).out).toContain("✓ flow.md 符合规范 / is valid");
+    expect(inDir(dir, ["status"]).out).toContain("· flow.md v0.1 ·");
+    expect(inDir(dir, ["inputs", "set", "name=小明"]).code).toBe(0);
+    fs.writeFileSync(path.join(dir, "notes.md"), "- 修了登录 bug\n");
+    const run = inDir(dir, ["run", "all"], { FLOWGIT_LLM_MOCK_DIR: path.join(dir, "demo-replies") });
+    expect(run.code, run.out).toBe(0);
+
+    const add = inDir(dir, ["stage", "add", "polish", "--type", "llm", "--after", "draft"]);
+    expect(add.code, add.out).toBe(0);
+    expect(fs.existsSync(path.join(dir, "flow.json"))).toBe(false);
+    expect(fs.readFileSync(path.join(dir, "flow.md"), "utf8")).toContain("{#polish}");
+    expect(inDir(dir, ["export-skill", "-o", "-"]).out).toContain("由 `flow.md` 自动生成");
+
+    const back = inDir(dir, ["convert", "--to", "json"]);
+    expect(back.code, back.out).toBe(0);
+    expect(back.out).toContain("已把 flow.md 换成 flow.json / converted flow.md to flow.json");
+    expect(fs.existsSync(path.join(dir, "flow.md"))).toBe(false);
+    const flow = JSON.parse(fs.readFileSync(path.join(dir, "flow.json"), "utf8")) as { stages: { id: string }[] };
+    expect(flow.stages.map((s) => s.id)).toEqual(["notes", "draft", "polish", "check"]);
+    expect(inDir(dir, ["convert", "--to", "json"]).out).toContain("already flow.json");
+    // Same flow, so converting does not make anything stale.
+    expect(inDir(dir, ["status"]).out).not.toMatch(/check\s.*(stale|过期)/);
+  });
+
+  it("explains a broken flow.md and refuses both files at once", () => {
+    const dir = path.join(root, "broken");
+    fs.mkdirSync(dir);
+    fs.writeFileSync(path.join(dir, "flow.md"), "---\nformat: flowgit\nversion: \"0.1\"\nname: x\n---\n\n## A {#a}\n\n说明\n");
+    const bad = inDir(dir, ["validate"]);
+    expect(bad.code).toBe(1);
+    expect(bad.out).toContain("needs a ```flowgit block");
+
+    fs.writeFileSync(path.join(dir, "flow.json"), "{}");
+    const both = inDir(dir, ["status"]);
+    expect(both.code).toBe(1);
+    expect(both.out).toContain("has both flow.json and flow.md");
+    expect(inDir(dir, ["convert", "--to", "yaml"]).out).toContain("format must be json or md");
   });
 });
 

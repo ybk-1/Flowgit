@@ -14,7 +14,9 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 - JSON 产物可以带 `schema`（一个 JSON Schema 文件）。跑完就检查；llm 不合格时自动让模型修一次。改 schema 文件会让这个阶段需要重跑。短视频模板的分镜带了 `schemas/storyboard.schema.json`。
 - 每次运行都存成一个版本：`runs/<阶段>/<n>/` 里有产物快照和 `run.json`，可以随时回退。
 - 是否需要重跑由上游产物、流程输入和执行器配置（包括提示词文件和脚本文件）的哈希决定，并向下游传递；手动改过的产物在重跑或回退前会先存成 `manual` 版本，不会被覆盖；回退到的旧版本不算手改。
+- 流程也可以写成 `flow.md`：YAML 头写流程信息，每个 `## 阶段名 {#id}` 是一个阶段，配置写在 ```` ```flowgit ```` 代码块里，其余文字就是说明。和 `flow.json` 用同一个规范检查，可以互相转换。
 - `flow.json` spec v0.1: flow inputs (optionally with an `enum`), stages, outputs and executors; see [docs/spec.md](docs/spec.md).
+- A flow can also be written as `flow.md`: YAML frontmatter for the flow, one `## Stage name {#id}` per stage with its settings in a ```` ```flowgit ```` block, and the rest as descriptions. It is checked against the same spec as `flow.json`, and the two convert into each other.
 - A JSON output can carry a `schema` (a JSON Schema file). It is checked when the stage finishes, and an llm stage that fails gets one automatic repair call. Editing the schema file marks the stage stale. The short-video template's storyboard uses `schemas/storyboard.schema.json`.
 - Every run is kept as a version: `runs/<stage>/<n>/` holds an output snapshot and `run.json`, and you can roll back at any time.
 - Whether a stage needs a re-run comes from a hash of upstream artifacts, flow inputs and executor config (including prompt and script files), and it propagates downstream. A hand edit is saved as a `manual` run before any re-run or restore, so it is never overwritten; a restored older version does not count as a hand edit.
@@ -38,6 +40,7 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 
 - `init`、`templates`、`validate`、`status`（终端看板）、`board`（网页看板）、`inputs`、`run`、`log`、`diff`、`restore`、`providers`、`doctor`、`graph`、`export-skill`。
 - `init -t` 可以是 Git 地址（`git clone --depth 1`，可加 `--ref` 和 `--path`）。从本地目录或 Git 复制时默认不带产物，`--with-outputs` 才带上；Git 来源会把 `forkedFrom` 写进新的 `flow.json`。没有安装 git 时会说明怎么装。
+- `convert --to md|json` 在 `flow.json` 和 `flow.md` 之间转换，内容不变；`init --format md` 新建时直接用 `flow.md`。`stage add`、`stage rm` 写回时保持原来的格式。
 - `stage add` / `stage rm`：用命令加、删阶段。llm 和 agent 没给提示词时会建一个中英双语骨架，已有文件不覆盖。删阶段不删文件，也不动 `runs/`；还有别的阶段依赖它时要 `--force`。
 - `share`：把流程复制成可以分享的副本。先检查密钥（发现就拒绝、什么都不写）、邮箱和本机路径（写完后提醒）。`runs/`、`flowgit.local.json` 和 `.env*` 永远不复制。
 - `doctor` 在运行前检查 Node、流程输入、密钥、代理设置，以及脚本和 agent 要用的命令。
@@ -63,6 +66,7 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 - Models are reachable behind a proxy or VPN: `run` and `board` use `HTTPS_PROXY` without `NODE_USE_ENV_PROXY=1`, and pick up the Windows or macOS system proxy too. `doctor` shows which proxy is used; `FLOWGIT_PROXY=off` turns this off.
 - `export-skill` exports a flow as a `SKILL.md`, so AI tools can run it step by step without the UI.
 - `graph` draws the flow as a Mermaid diagram that GitHub and Obsidian render; `--status` colors it by state, and `-o/--out` writes a UTF-8 file (a `.md` file gets the code block).
+- `convert --to md|json` switches between `flow.json` and `flow.md` without changing the flow; `init --format md` starts a flow as `flow.md`. `stage add` and `stage rm` write back in the file's own format.
 - `log` without a stage lists every version of the whole flow by time and adds up the tokens used.
 - `diff` compares two versions of a stage, or a version with the current files: line changes for text and JSON, same-or-different for binaries, and added, removed and changed files for folders.
 - `board` opens a local board in the browser (new package `@flowgit/web`): one card per stage with its state, latest version and outputs; click an output to preview text, JSON, images, video or a folder in a side panel. A file change refreshes it through the SSE event `flow:changed` (debounced by about 300 ms); saving an output, an upload, the end of a run, a restore and saving inputs push it too. While that stream is connected it no longer polls every 3 seconds; if the stream drops it says so, polls every 3 seconds again, and retries every 5 seconds. Text outputs can be edited and saved (JSON is checked first), and files can be uploaded into a human stage's folder; an edited output is saved as a version before the next run. Flow inputs can be filled in, and one stage or the whole flow can be run with a live log; one run at a time, and outputs cannot be saved while it runs. Each card can list its versions, compare two of them (or one with the current files) and restore one. It listens on `127.0.0.1` only, and its API needs a token and checks `Host`.

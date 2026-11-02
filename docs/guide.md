@@ -128,6 +128,20 @@ Removing a stage deletes none of its files and does not touch `runs/`. If later 
 flowgit stage rm polish
 ```
 
+### 换成 flow.md / Write it as flow.md
+
+JSON 的引号和逗号不好手写。同一个流程也可以写成 Markdown：每个 `## 阶段名 {#id}` 是一个阶段，阶段配置写在 ```` ```flowgit ```` 代码块里，其他文字就是说明，在 GitHub 上打开就能读。下面这条把 `flow.json` 换成 `flow.md`，内容不变，也不需要重跑：
+
+JSON's quotes and commas are fiddly by hand. The same flow can be Markdown instead: each `## Stage name {#id}` is a stage, its settings go in a ```` ```flowgit ```` block, and the rest is its description, readable right on GitHub. This switches `flow.json` to `flow.md` without changing the flow, so nothing needs a re-run:
+
+```bash
+flowgit convert --to md
+```
+
+本教程后面都写 `flow.json`，换成 `flow.md` 也一样能跟着做；想换回来就用 `flowgit convert --to json`。格式的完整说明见 [spec.md 的 flow.md 一节](spec.md#flowmd)。
+
+The rest of this guide says `flow.json`, and it works the same with `flow.md`; `flowgit convert --to json` switches back. The format is described in [the flow.md section of spec.md](spec.md#flowmd).
+
 ## 3. 写提示词 / Write the prompt
 
 新建 `prompts/draft.md`：
@@ -467,14 +481,14 @@ Add `--status` to color each stage by its current state (green when done, amber 
 To save it to a file, use `--out` (`-o`). A `.md` file gets the code block automatically, and the file is always UTF-8. In Windows PowerShell 5, redirecting with `>` writes UTF-16, which GitHub can't show, so on Windows use `--out`:
 
 ```bash
-flowgit graph --status --out flow.md
+flowgit graph --status --out graph.md
 ```
 
 ## 常见问题 / Troubleshooting
 
 | 看到 / You see | 怎么办 | What to do |
 | --- | --- | --- |
-| `里没有 flow.json` / `No flow.json in …` | 命令要在流程目录里运行：先 `cd` 进去，或者加 `-C <流程目录>`；还没有流程就先 `flowgit init` | Run commands inside the flow directory: `cd` into it or add `-C <flow dir>`; with no flow yet, start with `flowgit init` |
+| `里没有 flow.json 或 flow.md` / `No flow.json or flow.md in …` | 命令要在流程目录里运行：先 `cd` 进去，或者加 `-C <流程目录>`；还没有流程就先 `flowgit init` | Run commands inside the flow directory: `cd` into it or add `-C <flow dir>`; with no flow yet, start with `flowgit init` |
 | `flowgit validate` 报错 | 按提示改 `flow.json`。常见的是阶段 id 写错、`inputs` 里引用了不存在的阶段、两个阶段产出同一个路径、阶段之间成环 | Fix `flow.json` as the message says. Common causes: a typo in a stage id, `inputs` naming a stage that doesn't exist, two stages writing the same path, or a cycle |
 | 缺少流程输入 / missing flow inputs | `flowgit inputs set 名字=值` 存下来，或者只这一次用 `--input 名字=值` | Save it with `flowgit inputs set key=value`, or pass `--input key=value` for one run |
 | 「随手记」在等你 / waiting for you | 人工阶段的产物还没放好。写好文件后 `flowgit run <阶段>` | A human stage's output isn't there yet. Write it, then `flowgit run <stage>` |

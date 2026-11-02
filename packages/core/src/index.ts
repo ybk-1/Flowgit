@@ -1,6 +1,7 @@
 export * from "./types.js";
 export * from "./graph.js";
 export * from "./load.js";
+export * from "./flowmd.js";
 export * from "./runs.js";
 export * from "./diff.js";
 export * from "./run.js";

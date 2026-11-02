@@ -59,7 +59,7 @@ function stageSection(flow: Flow, stage: Stage, index: number): string {
  * Render a SKILL.md so any agent that reads skills (Claude Code, Cursor ...)
  * can run the flow stage by stage, with or without the flowgit CLI.
  */
-export function renderSkillMd(flow: Flow): string {
+export function renderSkillMd(flow: Flow, fileName = "flow.json"): string {
   const order = topoOrder(flow);
   const stages = order.map((id) => flow.stages.find((s) => s.id === id)!);
   const inputs = Object.entries(flow.inputs ?? {});
@@ -74,9 +74,9 @@ export function renderSkillMd(flow: Flow): string {
     "",
     flow.description ?? "",
     "",
-    `这是一个 Flowgit 流程（spec v${flow.version}），由 \`flow.json\` 自动生成。流程分为 ${stages.length} 个阶段，每个阶段读取上游阶段的产物，写出自己的产物，每次运行都记录为 \`runs/<stage>/<n>/\` 下的一个版本。`,
+    `这是一个 Flowgit 流程（spec v${flow.version}），由 \`${fileName}\` 自动生成。流程分为 ${stages.length} 个阶段，每个阶段读取上游阶段的产物，写出自己的产物，每次运行都记录为 \`runs/<stage>/<n>/\` 下的一个版本。`,
     "",
-    `This is a Flowgit flow generated from \`flow.json\`. It has ${stages.length} stages; each stage reads upstream artifacts, writes its own, and every run is recorded as a version under \`runs/<stage>/<n>/\`.`,
+    `This is a Flowgit flow generated from \`${fileName}\`. It has ${stages.length} stages; each stage reads upstream artifacts, writes its own, and every run is recorded as a version under \`runs/<stage>/<n>/\`.`,
     "",
     "## 输入 / Inputs",
     "",

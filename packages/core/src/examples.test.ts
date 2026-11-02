@@ -3,17 +3,17 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { loadFlow, mockCompleteFromDir, runAll, runStage, validateFlow } from "./index.js";
+import { findFlowFile, loadFlow, mockCompleteFromDir, runAll, runStage, validateFlow } from "./index.js";
 
 const repoDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const examplesDir = path.join(repoDir, "examples");
 const templatesDir = path.join(repoDir, "packages/cli/templates");
 
-/** Every folder with a flow.json under dir. */
+/** Every folder with a flow.json or flow.md under dir. */
 function flowsIn(dir: string): string[] {
   return fs
     .readdirSync(dir, { withFileTypes: true })
-    .filter((e) => e.isDirectory() && fs.existsSync(path.join(dir, e.name, "flow.json")))
+    .filter((e) => e.isDirectory() && findFlowFile(path.join(dir, e.name)))
     .map((e) => e.name);
 }
 

@@ -17,7 +17,7 @@
 - **人和 AI 混合**：一个阶段可以由模型做、由脚本做，也可以由人来做。
 - **接任何模型**：Claude、GPT、GLM、DeepSeek、Kimi、通义千问、OpenRouter、本机 Ollama 都能接，流程里只写模型名。
 - **接任何 agent**：一个阶段可以交给 Claude Code、Codex、Cursor、Gemini CLI 或你自己的 agent，它在流程目录里把产物写出来。
-- **开放格式**：流程就是一个文件夹加一个 `flow.json`，可以放进 Git、分享、fork。
+- **开放格式**：流程就是一个文件夹加一个 `flow.json`（也可以写成好读好改的 `flow.md`），可以放进 Git、分享、fork。
 - **能导出成 Skill**：同一个流程可以生成 `SKILL.md`，让 Claude Code 这类工具直接按阶段跑。
 
 Today's AI tools are either one-click black boxes or node graphs built for engineers. You can't see the steps in between, change them, or keep them. Flowgit treats the process of making something as the product itself:
@@ -27,7 +27,7 @@ Today's AI tools are either one-click black boxes or node graphs built for engin
 - **People and AI together**: a stage can be done by a model, by a script, or by a person.
 - **Any model**: Claude, GPT, GLM, DeepSeek, Kimi, Qwen, OpenRouter or a local Ollama. The flow only names the model.
 - **Any agent**: hand a stage to Claude Code, Codex, Cursor, Gemini CLI or your own agent, which writes the outputs in the flow directory.
-- **Open format**: a flow is a folder with a `flow.json`. Put it in Git, share it, fork it.
+- **Open format**: a flow is a folder with a `flow.json` (or a `flow.md`, easier to read and edit). Put it in Git, share it, fork it.
 - **Exports to a Skill**: the same flow can generate a `SKILL.md` so tools like Claude Code can run it stage by stage.
 
 自带的短视频模板跑完一遍、再手动改过分镜之后，`flowgit graph --status` 画出来是这样：分镜标成“手动修改”，下游三个阶段标成“需重跑”。
@@ -136,7 +136,8 @@ CLI messages and errors are bilingual. What a template produces (script, caption
 | `flowgit init [dir] [-t 模板\|目录\|Git 地址]` | 从模板、本地目录或 Git 地址新建流程。本地目录和 Git 默认不复制产物，`--with-outputs` 才复制；Git 可加 `--ref` 和 `--path` | Create a flow from a template, a local directory or a Git URL. A local directory or Git URL skips outputs unless `--with-outputs` is set; Git also takes `--ref` and `--path` |
 | `flowgit share <目录> [--with-outputs] [--force]` | 复制一份可以分享的流程：默认不带产物，发现密钥就拒绝写入，邮箱和本机路径只提醒 | Copy a flow that is safe to share: outputs stay behind by default, a secret refuses the write, emails and local paths are warnings |
 | `flowgit templates [--json]` | 列出自带的模板和它们的阶段 | List the bundled templates and their stages |
-| `flowgit validate` | 按规范检查 `flow.json` | Check `flow.json` against the spec |
+| `flowgit validate` | 按规范检查 `flow.json` 或 `flow.md` | Check `flow.json` or `flow.md` against the spec |
+| `flowgit convert --to md\|json` | 在 `flow.json` 和 `flow.md` 之间转换，内容不变 | Switch between `flow.json` and `flow.md`; the flow stays the same |
 | `flowgit stage add <id> --type <类型>` | 加一个阶段。没写 `--after` 就加在最后，没写 `--input` 就用前一个阶段；llm / agent 会建提示词骨架 | Add a stage. Omit `--after` to append, omit `--input` to use the previous stage; llm / agent gets a prompt skeleton |
 | `flowgit stage rm <id> [--force]` | 删一个阶段，不删文件也不动 `runs/`。还有阶段依赖它时要 `--force` | Remove a stage without deleting files or `runs/`. `--force` when other stages depend on it |
 | `flowgit status [--json]` | 看板：每个阶段的状态、版本、产物和下一步 | The board: each stage's state, version, outputs, and the next step |
@@ -285,6 +286,10 @@ A minimal `flow.json`:
   ]
 }
 ```
+
+同一个流程也可以写成 `flow.md`：每个 `## 阶段名 {#id}` 是一个阶段，配置写在 ```` ```flowgit ```` 代码块里，在 GitHub 上直接能读。`flowgit convert --to md` 会帮你转换，见 [docs/spec.md 的 flow.md 一节](docs/spec.md#flowmd)。
+
+The same flow can be written as `flow.md`: each `## Stage name {#id}` is a stage with its settings in a ```` ```flowgit ```` block, readable right on GitHub. `flowgit convert --to md` converts it for you; see [the flow.md section of docs/spec.md](docs/spec.md#flowmd).
 
 完整规范见 [docs/spec.md](docs/spec.md)，JSON Schema 在 [packages/core/schema/flow.schema.json](packages/core/schema/flow.schema.json)。
 

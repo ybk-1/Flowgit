@@ -4,10 +4,16 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { isDeepStrictEqual } from "node:util";
 import { Command, Help } from "commander";
 import {
   FLOW_FILE,
+  FLOW_MD_FILE,
   FlowNotFoundError,
+  findFlowFile,
+  readFlowFile,
+  renderFlowText,
+  writeFlowFile,
   FlowValidationError,
   addStage,
   promptSkeleton,
@@ -234,7 +240,7 @@ program
   .name("flowgit")
   .description("Flowgit: 万物皆可流程化。Turn anything into a visual, staged, forkable flow.")
   .version(VERSION, "-V, --version", "显示版本号 / show the version number")
-  .option("-C, --dir <dir>", "流程目录（含 flow.json）/ flow directory (contains flow.json)", ".");
+  .option("-C, --dir <dir>", "流程目录（含 flow.json 或 flow.md）/ flow directory (contains flow.json or flow.md)", ".");
 
 // run and board call models and services: send those through the user's proxy, if there is one.
 program.hook("preAction", async (_program, action) => {
@@ -248,14 +254,23 @@ const dirOf = () => resolveFlowDir(program.opts<{ dir: string }>().dir);
 const templatesDir = path.join(here, "..", "templates");
 const DEFAULT_TEMPLATE = "short-video";
 
-/** The templates installed with the CLI, from their flow.json files. */
+/** The flow file (flow.json or flow.md) in dir, or undefined; never throws. */
+function flowFileIn(dir: string): string | undefined {
+  try {
+    return findFlowFile(dir);
+  } catch {
+    return path.join(dir, FLOW_FILE);
+  }
+}
+
+/** The templates installed with the CLI, from their flow files. */
 function bundledTemplates(): { id: string; flow: Flow }[] {
   if (!fs.existsSync(templatesDir)) return [];
   return fs
     .readdirSync(templatesDir)
-    .filter((id) => fs.existsSync(path.join(templatesDir, id, FLOW_FILE)))
+    .filter((id) => flowFileIn(path.join(templatesDir, id)))
     .sort((a, b) => (a === DEFAULT_TEMPLATE ? -1 : b === DEFAULT_TEMPLATE ? 1 : a.localeCompare(b)))
-    .map((id) => ({ id, flow: JSON.parse(fs.readFileSync(path.join(templatesDir, id, FLOW_FILE), "utf8")) as Flow }));
+    .map((id) => ({ id, flow: readFlowFile(findFlowFile(path.join(templatesDir, id))!) as Flow }));
 }
 
 function isGitUrl(source: string): boolean {
@@ -266,7 +281,7 @@ function isGitUrl(source: string): boolean {
 function bundledDir(name: string): string | undefined {
   if (!name || name.includes("/") || name.includes("\\") || isGitUrl(name)) return undefined;
   const dir = path.join(templatesDir, name);
-  return fs.existsSync(path.join(dir, FLOW_FILE)) ? dir : undefined;
+  return flowFileIn(dir) ? dir : undefined;
 }
 
 /**
@@ -356,18 +371,55 @@ function presentOutputs(src: string, flow: Flow): string[] {
   return found;
 }
 
-function readSourceFlow(src: string): Flow {
-  const file = path.join(src, FLOW_FILE);
-  let data: unknown;
-  try {
-    data = JSON.parse(fs.readFileSync(file, "utf8")) as unknown;
-  } catch (err) {
-    throw new Error(`${file} 不是合法的 JSON / is not valid JSON: ${(err as Error).message}`);
-  }
+function readSourceFlow(file: string): Flow {
+  const data = readFlowFile(file);
   if (!data || typeof data !== "object" || !Array.isArray((data as Flow).stages)) {
     throw new Error(`${file} 不是一个流程 / is not a flow`);
   }
   return data as Flow;
+}
+
+/** Resolve an --out file in the flow directory, refusing the flow file's own names. */
+function notFlowFile(dir: string, out: string): string {
+  const file = path.resolve(dir, out);
+  if (path.dirname(file) === path.resolve(dir) && [FLOW_FILE, FLOW_MD_FILE].includes(path.basename(file))) {
+    throw new Error(`${path.basename(file)} 是流程文件的名字，换一个文件名，例如 graph.md / ${path.basename(file)} is the flow file's name; pick another, e.g. graph.md`);
+  }
+  return file;
+}
+
+type FlowFormat = "json" | "md";
+
+function parseFormat(value: string | undefined): FlowFormat | undefined {
+  if (value === undefined) return undefined;
+  if (value === "json" || value === "md") return value;
+  fail(new Error(`格式只能是 json 或 md，收到 "${value}" / format must be json or md, got "${value}"`));
+}
+
+const formatFile = (format: FlowFormat) => (format === "md" ? FLOW_MD_FILE : FLOW_FILE);
+
+/**
+ * Rewrite dir's flow file in the other format and remove the old one.
+ * The new text must read back as the same flow before the old file goes.
+ */
+function convertFlowFile(dir: string, to: FlowFormat): { from: string; to: string } | undefined {
+  const from = findFlowFile(dir);
+  if (!from) throw new FlowNotFoundError(dir);
+  const target = path.join(dir, formatFile(to));
+  if (from === target) return undefined;
+  const flow = readSourceFlow(from);
+  const text = renderFlowText(flow, target);
+  fs.writeFileSync(target, text);
+  try {
+    if (!isDeepStrictEqual(readFlowFile(target), flow)) {
+      throw new Error(`转换后内容不一致，没有改动 / the converted file does not read back the same; nothing was changed`);
+    }
+  } catch (err) {
+    fs.rmSync(target, { force: true });
+    throw err;
+  }
+  fs.rmSync(from);
+  return { from: path.basename(from), to: path.basename(target) };
 }
 
 /** For a flow copied from somewhere else: the commands it runs, the agents it starts and the services it calls. */
@@ -397,12 +449,27 @@ program
   .option("--ref <ref>", "Git 分支或标签 / Git branch or tag")
   .option("--path <subdir>", "仓库里的子目录 / subdirectory inside the repo")
   .option("--with-outputs", "连产物一起复制 / also copy stage outputs")
-  .option("--force", "覆盖已有的 flow.json / overwrite an existing flow.json")
-  .action((dir: string, opts: { template: string; ref?: string; path?: string; withOutputs?: boolean; force?: boolean }) => {
+  .option("--format <format>", "流程文件写成 json（flow.json）还是 md（flow.md），默认跟来源一样 / write the flow file as json (flow.json) or md (flow.md); defaults to the source's format")
+  .option("--force", "覆盖已有的流程文件 / overwrite an existing flow file")
+  .action((dir: string, opts: { template: string; ref?: string; path?: string; withOutputs?: boolean; format?: string; force?: boolean }) => {
     const target = path.resolve(dir);
-    if (fs.existsSync(path.join(target, FLOW_FILE)) && !opts.force) {
-      fail(new Error(`${path.join(target, FLOW_FILE)} 已存在，加 --force 覆盖 / already exists (use --force to overwrite)`));
+    const format = parseFormat(opts.format);
+    const existing = [FLOW_FILE, FLOW_MD_FILE].map((f) => path.join(target, f)).filter((f) => fs.existsSync(f));
+    if (existing.length && !opts.force) {
+      fail(new Error(`${existing[0]} 已存在，加 --force 覆盖 / already exists (use --force to overwrite)`));
     }
+    /** After the copy: drop a leftover flow file in the other format (--force), then convert if asked. */
+    const finish = (copied: string) => {
+      try {
+        for (const name of [FLOW_FILE, FLOW_MD_FILE]) {
+          if (name !== copied && fs.existsSync(path.join(target, name))) fs.rmSync(path.join(target, name));
+        }
+        if (!format) return;
+        convertFlowFile(target, format);
+      } catch (err) {
+        fail(err);
+      }
+    };
     const builtin = bundledDir(opts.template);
     if (builtin) {
       if (opts.ref || opts.path) fail(new Error(`--ref 和 --path 只用于 Git 地址 / --ref and --path are only for a Git URL`));
@@ -414,6 +481,7 @@ program
           return !["runs", "node_modules", "flowgit.local.json"].includes(rel);
         },
       });
+      finish(path.basename(findFlowFile(builtin)!));
       console.log(`${c.green("✓")} 已创建流程 / created flow in ${target}`);
       console.log(nextStepLine(target));
       return;
@@ -441,22 +509,24 @@ program
         } else {
           src = path.resolve(opts.template);
         }
-        if (!fs.existsSync(path.join(src, FLOW_FILE))) {
+        const srcFile = findFlowFile(src);
+        if (!srcFile) {
           const names = bundledTemplates().map((t) => t.id).join(", ");
           const where = opts.path ? `${opts.template} (${opts.path})` : opts.template;
           throw new Error(`找不到流程 / Flow not found: ${where}\n  自带的模板 / bundled templates: ${names}（flowgit templates 查看说明 / see flowgit templates）`);
         }
-        const sourceFlow = readSourceFlow(src);
+        const sourceFlow = readSourceFlow(srcFile);
         const withOutputs = !!opts.withOutputs;
-        const rels = flowFiles({ dir: src, file: path.join(src, FLOW_FILE), flow: sourceFlow }, { withOutputs });
+        const rels = flowFiles({ dir: src, file: srcFile, flow: sourceFlow }, { withOutputs });
         fs.mkdirSync(target, { recursive: true });
         copyListed(src, target, rels);
         if (forked) {
-          const file = path.join(target, FLOW_FILE);
-          const flow = JSON.parse(fs.readFileSync(file, "utf8")) as Flow;
+          const file = path.join(target, path.basename(srcFile));
+          const flow = readSourceFlow(file);
           flow.forkedFrom = forked;
-          fs.writeFileSync(file, `${JSON.stringify(flow, null, 2)}\n`);
+          writeFlowFile(file, flow);
         }
+        finish(path.basename(srcFile));
         const skipped = withOutputs ? [] : presentOutputs(src, sourceFlow);
         console.log(`${c.green("✓")} 已创建流程 / created flow in ${target}`);
         console.log(`  来源 / source: ${isGitUrl(opts.template) ? publicGitUrl(opts.template) : opts.template}${opts.path ? ` (${opts.path})` : ""}`);
@@ -567,16 +637,17 @@ program
 
 program
   .command("validate")
-  .description("按规范检查 flow.json / check flow.json against the spec")
+  .description("按规范检查 flow.json 或 flow.md / check flow.json or flow.md against the spec")
   .action(() => {
     const dir = dirOf();
-    const file = path.join(dir, FLOW_FILE);
-    if (!fs.existsSync(file)) fail(new Error(`${dir} 里没有 ${FLOW_FILE} / No ${FLOW_FILE} in ${dir}`));
+    let file: string | undefined;
     let data: unknown;
     try {
-      data = JSON.parse(fs.readFileSync(file, "utf8"));
+      file = findFlowFile(dir);
+      if (!file) throw new FlowNotFoundError(dir);
+      data = readFlowFile(file);
     } catch (err) {
-      fail(new Error(`${file} 不是合法的 JSON / is not valid JSON: ${(err as Error).message}`));
+      fail(err);
     }
     const issues = validateFlow(data, { dir });
     for (const i of issues) {
@@ -588,7 +659,7 @@ program
       console.log(`\n${c.red("✗")} ${errors} 个错误 / ${errors} error(s)`);
       process.exit(1);
     }
-    console.log(`${c.green("✓")} ${FLOW_FILE} 符合规范 / is valid (spec v0.1)${issues.length ? `，${issues.length} 个警告 / ${issues.length} warning(s)` : ""}`);
+    console.log(`${c.green("✓")} ${path.basename(file!)} 符合规范 / is valid (spec v0.1)${issues.length ? `，${issues.length} 个警告 / ${issues.length} warning(s)` : ""}`);
   });
 
 const STAGE_TYPES = ["human", "llm", "script", "agent"] as const;
@@ -606,22 +677,19 @@ function outputFromPath(p: string): Output {
 }
 
 function readFlowRaw(dir: string): { file: string; flow: Flow } {
-  const file = path.join(dir, FLOW_FILE);
-  if (!fs.existsSync(file)) fail(new Error(`${dir} 里没有 ${FLOW_FILE} / No ${FLOW_FILE} in ${dir}`));
-  let data: unknown;
+  let file: string | undefined;
   try {
-    data = JSON.parse(fs.readFileSync(file, "utf8")) as unknown;
+    file = findFlowFile(dir);
+    if (!file) throw new FlowNotFoundError(dir);
+    return { file, flow: readSourceFlow(file) };
   } catch (err) {
-    fail(new Error(`${file} 不是合法的 JSON / is not valid JSON: ${(err as Error).message}`));
+    fail(err);
   }
-  if (!data || typeof data !== "object" || !Array.isArray((data as Flow).stages)) {
-    fail(new Error(`${file} 不是一个流程 / is not a flow`));
-  }
-  return { file, flow: data as Flow };
 }
 
+/** Write back in the file's own format: flow.md stays flow.md. */
 function writeFlowRaw(file: string, flow: Flow): void {
-  fs.writeFileSync(file, `${JSON.stringify(flow, null, 2)}\n`);
+  writeFlowFile(file, flow);
 }
 
 function printFlowIssues(issues: ValidationIssue[]): void {
@@ -781,7 +849,7 @@ program
         );
         return;
       }
-      console.log(`${c.bold(loaded.flow.name)} ${c.dim(`· ${FLOW_FILE} v${loaded.flow.version} · ${loaded.dir}`)}\n`);
+      console.log(`${c.bold(loaded.flow.name)} ${c.dim(`· ${path.basename(loaded.file)} v${loaded.flow.version} · ${loaded.dir}`)}\n`);
       console.log(statusBoard(statuses));
       if (missingInputs.length) {
         console.log(`\n${c.yellow("!")} 还没填流程输入 / flow inputs not set: ${missingInputs.join(", ")}`);
@@ -1030,7 +1098,7 @@ program
   .action((opts: { json?: boolean }) => {
     try {
       const dir = dirOf();
-      const inFlow = fs.existsSync(path.join(dir, FLOW_FILE));
+      const inFlow = !!flowFileIn(dir);
       const providers = Object.values(loadProviders(inFlow ? dir : undefined));
       const globalFile = globalProvidersFile();
       if (opts.json) {
@@ -1129,9 +1197,29 @@ program
         return;
       }
       // a file written by Node is UTF-8, unlike `>` in Windows PowerShell 5, which writes UTF-16
-      const file = path.resolve(loaded.dir, opts.out);
+      const file = notFlowFile(loaded.dir, opts.out);
       fs.writeFileSync(file, `${text}\n`);
       console.log(`${c.green("✓")} 已写入 / wrote ${path.relative(process.cwd(), file) || file}`);
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+program
+  .command("convert")
+  .description("在 flow.json 和 flow.md 之间转换，内容不变 / switch between flow.json and flow.md; the flow stays the same")
+  .requiredOption("--to <format>", "json 或 md / json or md")
+  .action((opts: { to: string }) => {
+    try {
+      const to = parseFormat(opts.to)!;
+      const dir = dirOf();
+      const done = convertFlowFile(dir, to);
+      if (!done) {
+        console.log(`${c.green("✓")} 已经是 ${formatFile(to)}，不用转换 / already ${formatFile(to)}; nothing to do`);
+        return;
+      }
+      console.log(`${c.green("✓")} 已把 ${done.from} 换成 ${done.to} / converted ${done.from} to ${done.to}`);
+      console.log(`  runs/ 和产物都没动，不需要重跑。 / runs/ and outputs are untouched; nothing needs a re-run.`);
     } catch (err) {
       fail(err);
     }
@@ -1144,12 +1232,12 @@ program
   .action((opts: { out: string }) => {
     try {
       const loaded = loadFlow(dirOf());
-      const md = renderSkillMd(loaded.flow);
+      const md = renderSkillMd(loaded.flow, path.basename(loaded.file));
       if (opts.out === "-") {
         process.stdout.write(md);
         return;
       }
-      const file = path.resolve(loaded.dir, opts.out);
+      const file = notFlowFile(loaded.dir, opts.out);
       fs.writeFileSync(file, md);
       console.log(`${c.green("✓")} 已写入 / wrote ${path.relative(process.cwd(), file) || file}`);
     } catch (err) {
@@ -1168,7 +1256,7 @@ program
       if (!Number.isInteger(port) || port < 0 || port > 65535) {
         throw new Error(`端口不合法 / invalid port: ${opts.port}`);
       }
-      const dir = loadFlow(dirOf()).dir; // fail early, with the usual hint, when there is no flow.json
+      const dir = loadFlow(dirOf()).dir; // fail early, with the usual hint, when there is no flow file
       const board = await startBoard({ dir, port, open: false });
       console.log(`${c.green("✓")} 看板 / board: ${board.url}`);
       console.log(c.dim("绑定 127.0.0.1。可以修改产物，也可以运行、填写输入、看历史、对比和回退。按 Ctrl+C 停止 / bound to 127.0.0.1. Outputs can be edited; you can also run stages, edit inputs, browse history, compare, and restore. Press Ctrl+C to stop"));

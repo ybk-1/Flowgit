@@ -144,9 +144,9 @@ export interface Flow {
 
 /** A flow loaded from disk. */
 export interface LoadedFlow {
-  /** Absolute path of the directory holding flow.json. */
+  /** Absolute path of the directory holding the flow file. */
   dir: string;
-  /** Absolute path of flow.json. */
+  /** Absolute path of the flow file: flow.json or flow.md. */
   file: string;
   flow: Flow;
 }

@@ -14,7 +14,7 @@ A flow is a list of stages. Each stage declares what it reads (upstream artifact
 
 ```text
 my-flow/
-├── flow.json              # 流程定义（必需）/ the flow definition (required)
+├── flow.json              # 流程定义（必需，或者写成 flow.md）/ the flow definition (required; or flow.md)
 ├── prompts/               # llm 阶段的提示词 / prompts for llm stages
 ├── scripts/               # script 阶段的脚本 / scripts for script stages
 ├── script.md              # 各阶段的当前产物 / current artifacts of each stage
@@ -258,6 +258,61 @@ The rendered prompt lives at `runs/.agent/<stage>.prompt.md` while the agent run
 
 The executor config hash covers the executor definition itself (so it includes `timeoutSec`), `agent`, `command`, `args`, the prompt file, and any file in the flow directory named in `command`.
 
+## flow.md
+
+同一个流程也可以写成 Markdown：把 `flow.json` 换成 `flow.md`。一个流程目录里只能有其中一个，两个都有会报错（例外：没有 YAML 头的 `flow.md`，例如以前用 `flowgit graph --out flow.md` 存的图，会被忽略）。`flow.md` 读进来就是和 `flow.json` 完全一样的对象，用同一个 JSON Schema 检查，运行、版本和是否需要重跑都不受影响。
+
+The same flow can be written as Markdown: replace `flow.json` with `flow.md`. A flow directory holds one or the other; both at once is an error (except that a `flow.md` with no YAML frontmatter, such as a diagram saved by an older `flowgit graph --out flow.md`, is ignored). A `flow.md` reads into exactly the object `flow.json` would hold and is checked by the same JSON Schema, so runs, versions and staleness work the same.
+
+| 写在哪 / Where | 对应 / Becomes | 说明 | Notes |
+| --- | --- | --- | --- |
+| 开头 `---` 之间的 YAML 头 | 流程级字段 | `format`、`version`、`inputs` 等，`stages` 不能写在这里 | Flow fields such as `format`, `version`, `inputs`; not `stages` |
+| `# 标题` | `name` | 只能有一个，在第一个阶段前面 | One, before the first stage |
+| 标题和第一个阶段之间的正文 | `description` | | |
+| `## 阶段名 {#id}` | 一个阶段的 `name` 和 `id` | 按出现顺序 | In order of appearance |
+| 阶段里的 ```` ```flowgit ```` 代码块 | 阶段的其余字段 | YAML，字段和 `flow.json` 一样；每个阶段正好一个 | YAML with the same fields as `flow.json`; exactly one per stage |
+| 阶段里代码块以外的正文 | 阶段的 `description` | 其他语言的代码块（例如 ```` ```js ````）也算正文 | Code blocks in other languages count as prose |
+
+标题和正文只是简写：每个字段也都可以直接写进 YAML（例如 `## {#notes}` 再在代码块里写 `name:`），但同一个字段不能两边都写。YAML 按 1.2 读，`version` 要加引号写成 `"0.1"`。
+
+Headings and prose are shorthand: any field can go in the YAML instead (e.g. `## {#notes}` with `name:` in the block), but not both ways at once. YAML is read as 1.2; quote `version` as `"0.1"`.
+
+````markdown
+---
+format: flowgit
+version: "0.1"
+inputs:
+  topic: {type: string, required: true}
+---
+
+# 写一篇文章
+
+先列大纲，再写初稿，最后人来审稿。
+
+## 大纲 {#outline}
+
+模型根据题目列出三到五个小节。
+
+```flowgit
+executor: {type: llm, prompt: prompts/outline.md}
+outputs:
+  - {type: text/markdown, path: outline.md}
+```
+
+## 人工审稿 {#review}
+
+```flowgit
+inputs: [outline]
+executor: {type: human, instructions: 改好后保存为 final.md}
+outputs:
+  - {type: text/markdown, path: final.md}
+```
+````
+
+`flowgit convert --to md` 和 `flowgit convert --to json` 在两种写法之间转换，转换前会确认新文件读回来和原来完全一样；`flowgit init --format md` 新建流程时直接用 `flow.md`。`stage add`、`stage rm` 和 `init` 写回时保持原来的格式。程序写回 `flow.md` 会按固定格式重新排版，写在 YAML 里的注释不会保留。
+
+`flowgit convert --to md` and `flowgit convert --to json` switch between the two, after checking the new file reads back exactly the same; `flowgit init --format md` starts a flow as `flow.md`. `stage add`, `stage rm` and `init` write back in the file's own format. A `flow.md` written back by a command is laid out in one fixed style, and YAML comments are not kept.
+
 ## 运行与版本 / Runs and versions
 
 每次运行一个阶段：
@@ -323,9 +378,9 @@ For each output the stage declares:
 
 ## 导出为 Skill / Export as a Skill
 
-`flowgit export-skill` 根据 `flow.json` 生成一个 `SKILL.md`，让 Claude Code 等会读 Skill 的 AI 工具不需要界面也能按阶段跑完这个流程。Flow 和 Skill 不是二选一：Flow 是人和 AI 共用的、可视化的、有版本的流程；Skill 是它给 AI 看的那一面。
+`flowgit export-skill` 根据 `flow.json`（或 `flow.md`）生成一个 `SKILL.md`，让 Claude Code 等会读 Skill 的 AI 工具不需要界面也能按阶段跑完这个流程。Flow 和 Skill 不是二选一：Flow 是人和 AI 共用的、可视化的、有版本的流程；Skill 是它给 AI 看的那一面。
 
-`flowgit export-skill` generates a `SKILL.md` from `flow.json`, so AI tools that read Skills, such as Claude Code, can run the flow stage by stage without a UI. Flows and Skills are not either/or: a Flow is the visual, versioned process shared by people and AI; the Skill is the side of it that an AI reads.
+`flowgit export-skill` generates a `SKILL.md` from `flow.json` (or `flow.md`), so AI tools that read Skills, such as Claude Code, can run the flow stage by stage without a UI. Flows and Skills are not either/or: a Flow is the visual, versioned process shared by people and AI; the Skill is the side of it that an AI reads.
 
 ## 以后的版本 / Planned
 
