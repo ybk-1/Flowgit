@@ -3,6 +3,7 @@ import { agentExecutor } from "./agent.js";
 import { humanExecutor } from "./human.js";
 import { llmExecutor } from "./llm.js";
 import { scriptExecutor } from "./script.js";
+import { serviceExecutor } from "./service.js";
 import { ExecutorNotImplementedError, type StageExecutor } from "./types.js";
 
 export * from "./types.js";
@@ -43,6 +44,7 @@ const registry: Partial<Record<ExecutorType, StageExecutor>> = {
   llm: llmExecutor,
   script: scriptExecutor,
   agent: agentExecutor,
+  service: serviceExecutor,
 };
 
 export function getExecutor(type: ExecutorType): StageExecutor {

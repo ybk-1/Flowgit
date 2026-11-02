@@ -228,6 +228,16 @@ Built in: `claude-code`, `codex`, `cursor` and `gemini`, plus `custom` for any c
 
 To try it now: [`examples/agent-page`](examples/agent-page) has Claude Code write an outline and a single-file web page, then checks the page with a script. A Claude subscription login for Claude Code is enough; no API key needed.
 
+## 接任何 HTTP 服务 / Any HTTP service
+
+`service` 阶段调用一个 HTTP 接口。`POST` 把流程输入和 1 MB 以内的文本上游产物发出去，`GET` 把流程输入放进查询参数。密钥放在请求头的 `{{env.变量名}}` 里，只从环境变量读，不写进文件。`timeoutSec` 默认 60 秒。`flowgit doctor` 会检查这些变量，`flowgit run all --dry-run` 会把这一步标成会运行。示例：[`examples/service-echo`](examples/service-echo)。
+
+A `service` stage calls an HTTP endpoint. `POST` sends the flow inputs and text upstream outputs up to 1 MB; `GET` puts the flow inputs in the query string. Keys go in header values as `{{env.NAME}}`, read only from the environment and never written to a file. `timeoutSec` defaults to 60 seconds. `flowgit doctor` checks those variables, and `flowgit run all --dry-run` lists the stage as one that would run. Example: [`examples/service-echo`](examples/service-echo).
+
+```json
+{ "type": "service", "method": "POST", "url": "https://example.com/hook", "headers": { "Authorization": "Bearer {{env.ECHO_TOKEN}}" } }
+```
+
 ## 格式 / Format
 
 最小的 `flow.json`：

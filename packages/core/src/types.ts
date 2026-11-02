@@ -83,6 +83,10 @@ export interface ExecutorService {
   type: "service";
   url: string;
   method?: "GET" | "POST";
+  /** Header values may contain {{env.NAME}}, read from the environment at run time. */
+  headers?: Record<string, string>;
+  /** Abort the request after this many seconds. Default 60. */
+  timeoutSec?: number;
 }
 
 export interface ExecutorMcp {
