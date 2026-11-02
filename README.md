@@ -4,9 +4,9 @@
 
 **Turn anything into a flow.** Break any piece of work into visual stages: each stage has artifacts and versions, people and AI can both pick it up, and finished flows can be shared and forked.
 
-> 状态：早期开发（spec v0.1）。目前有格式规范、核心库、命令行工具，以及本机看板（`flowgit board`，可查看、修改、运行、新增和删除阶段、填写输入、看历史、对比和回退，也可切换成流程图）。版本对比也可以在终端用 `flowgit diff`。
+> 状态：早期开发（spec v0.1）。目前有格式规范、核心库、命令行工具，以及本机看板（`flowgit board`，可查看、修改、运行、新增和删除阶段、填写输入、看历史、对比和回退，也可切换成流程图、预演全部运行、查看 token 用量）。版本对比也可以在终端用 `flowgit diff`。
 >
-> Status: early (spec v0.1). The format, core library, CLI, and a local board (`flowgit board`: view, edit, run, add and remove stages, fill in inputs, browse history, compare, restore, and switch to a flow graph) are here. Version diffs are also available in the terminal with `flowgit diff`.
+> Status: early (spec v0.1). The format, core library, CLI, and a local board (`flowgit board`: view, edit, run, add and remove stages, fill in inputs, browse history, compare, restore, switch to a flow graph, preview a run, and see token usage) are here. Version diffs are also available in the terminal with `flowgit diff`.
 
 ## 为什么 / Why
 
@@ -140,7 +140,7 @@ CLI messages and errors are bilingual. What a template produces (script, caption
 | `flowgit stage add <id> --type <类型>` | 加一个阶段。没写 `--after` 就加在最后，没写 `--input` 就用前一个阶段；llm / agent 会建提示词骨架 | Add a stage. Omit `--after` to append, omit `--input` to use the previous stage; llm / agent gets a prompt skeleton |
 | `flowgit stage rm <id> [--force]` | 删一个阶段，不删文件也不动 `runs/`。还有阶段依赖它时要 `--force` | Remove a stage without deleting files or `runs/`. `--force` when other stages depend on it |
 | `flowgit status [--json]` | 看板：每个阶段的状态、版本、产物和下一步 | The board: each stage's state, version, outputs, and the next step |
-| `flowgit board [--port 4747] [--no-open]` | 在浏览器打开本地看板（只监听 127.0.0.1），可查看和修改产物、运行阶段、新增和删除阶段、填写输入、看历史、对比版本和回退，也可切换成流程图 | Open a local board in the browser (listens on 127.0.0.1 only) to view and edit outputs, run stages, add and remove stages, edit inputs, browse history, compare versions, restore, and switch to a flow graph |
+| `flowgit board [--port 4747] [--no-open]` | 在浏览器打开本地看板（只监听 127.0.0.1），可查看和修改产物、运行阶段、新增和删除阶段、填写输入、看历史、对比版本和回退，也可切换成流程图、预演全部运行、查看 token 用量 | Open a local board in the browser (listens on 127.0.0.1 only) to view and edit outputs, run stages, add and remove stages, edit inputs, browse history, compare versions, restore, switch to a flow graph, preview a run, and see token usage |
 | `flowgit inputs` / `flowgit inputs set k=v` | 查看 / 填写流程输入 | Show / set flow inputs |
 | `flowgit run <stage\|all>` | 跑一个阶段，或按顺序跑完所有需要跑的阶段 | Run one stage, or every stage that needs it, in order |
 | `flowgit run all --dry-run` | 预演：列出每个阶段会跳过、运行还是停下等你，以及最多调用几次模型；什么都不运行 | Dry run: whether each stage would be skipped, run or stop for you, and at most how many model calls; nothing runs |
@@ -296,7 +296,7 @@ packages/
   core/   @flowgit/core  格式、校验、版本记录、执行器 / format, validation, runs, executors
   cli/    flowgit        命令行工具和模板 / CLI and templates
     templates/             自带模板：short-video（短视频）、weekly-report（周报入门）、article（图文）、support-sop（客服 SOP）、job-application（求职材料）、research-report（调研报告）/ bundled templates: short-video, weekly-report (starter), article, support-sop, job-application, research-report
-  web/    @flowgit/web   本机网页看板：查看、修改、运行、新增和删除阶段、填写输入、看历史、对比和回退、流程图 / local web board: view, edit, run, add and remove stages, fill in inputs, browse history, compare, restore, and a flow graph
+  web/    @flowgit/web   本机网页看板：查看、修改、运行、新增和删除阶段、填写输入、看历史、对比和回退、流程图、预演和 token 用量 / local web board: view, edit, run, add and remove stages, fill in inputs, browse history, compare, restore, a flow graph, preview, and token usage
 docs/
   spec.md                  格式规范 / format spec
   guide.md                 教程：动手做一个流程 / tutorial: build your own flow
@@ -325,14 +325,14 @@ Everything on GitHub (commit messages, PRs, docs) is bilingual, Chinese first.
 ## 路线图 / Roadmap
 
 1. **格式 + 命令行**（本仓库现状，0.1.0 准备发布）：Flow 规范 v0.1，JSON 产物可以带 schema；六个自带模板（短视频、周报入门、图文、客服 SOP、求职材料、调研报告）；llm 阶段接任何模型，agent 阶段接 Claude Code、Codex、Cursor、Gemini，service 阶段调用 HTTP 服务；script、agent 和 service 阶段可以设超时；`stage add` / `stage rm`、`diff`（版本对比）、`doctor`、`templates`、`graph`（流程图）等命令。更新记录见 [CHANGELOG.md](CHANGELOG.md)。
-2. **阶段看板**：本机看板已经有了（`flowgit board`），每张卡能看产物、改、运行、看历史、对比和回退，也可以新增和删除阶段。实时更新也有了：SSE 的 `flow:changed`。流程图也有了：顶部可以在卡片和流程图之间切换。下一步是预演，然后是网站：在网上打开一个流程就是一块看板。
+2. **阶段看板**：本机看板已经有了（`flowgit board`），每张卡能看产物、改、运行、看历史、对比和回退，也可以新增和删除阶段。实时更新也有了：SSE 的 `flow:changed`。流程图也有了：顶部可以在卡片和流程图之间切换。预演也有了：「预演 / Preview」列出会跳过、运行、等你还是不能运行，以及最多调用几次模型，什么都不运行；全部运行前如果会调用真实模型会先确认。每张卡和流程图提示显示用过的 token，页面顶部是合计。下一步是网站：在网上打开一个流程就是一块看板。
 3. **发布与复用**：已经能从别人的流程开始（`flowgit init -t <Git 地址>`，默认不带产物），分享前自动去隐私（`flowgit share`）。下一步是画廊。
 4. **更多领域**：更多模板（下一个是落地页网站，做网站现在有 `examples/agent-page` 示例）；短视频自动配音；`workflow` 执行器运行子流程；之后让作者把流程变成 MCP 服务供别人调用。
 
 English:
 
 1. **Format + CLI** (this repo today, 0.1.0 getting ready to ship): Flow spec v0.1, with optional schemas for JSON outputs; six bundled templates (short video, weekly-report starter, article posts, support SOP, job application, research report); llm stages on any model, agent stages on Claude Code, Codex, Cursor or Gemini, and service stages that call HTTP services; timeouts for script, agent and service stages; commands such as `stage add` / `stage rm`, `diff` (compare versions), `doctor`, `templates` and `graph` (a diagram of the flow). See [CHANGELOG.md](CHANGELOG.md) for details.
-2. **Stage board**: the local board is here (`flowgit board`); each card lets you see its outputs, edit them, run, browse history, compare and restore, and stages can be added and removed. Live updates are in too: the SSE event `flow:changed`. A flow graph is in too: a toggle at the top switches between cards and the graph. Next on the board: dry-run previews. After that comes the web app: open a flow online and it is a board.
+2. **Stage board**: the local board is here (`flowgit board`); each card lets you see its outputs, edit them, run, browse history, compare and restore, and stages can be added and removed. Live updates are in too: the SSE event `flow:changed`. A flow graph is in too: a toggle at the top switches between cards and the graph. Dry-run preview is in too: "预演 / Preview" lists whether each stage would be skipped, run, wait for you or cannot run, and at most how many model calls, without running anything; Run all asks first when it would call a real model. Each card and the graph tooltip show the tokens that stage has used, and the top of the page shows the total. Next is the web app: open a flow online and it is a board.
 3. **Publish and reuse**: you can already start from someone else's flow (`flowgit init -t <Git URL>`, without their outputs by default) and strip private data before sharing (`flowgit share`). Next is a gallery.
 4. **More domains**: more templates (a landing-page site is next; building a website has the `examples/agent-page` example today); automatic voiceover for short videos; a `workflow` executor that runs a sub-flow; later, authors can expose a flow as an MCP service for others to call.
 

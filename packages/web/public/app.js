@@ -52,6 +52,8 @@ const panelTitle = document.getElementById("panel-title");
 const panelBody = document.getElementById("panel-body");
 const logEl = document.getElementById("log");
 const runAllButton = document.getElementById("run-all");
+const previewButton = document.getElementById("preview");
+const usageTotalEl = document.getElementById("usage-total");
 
 let lastJson = "";
 let lastInputValues = "";
@@ -69,6 +71,18 @@ let graphTicket = 0;
 let selectedId = "";
 let panelMode = "";
 let returnToStage = null;
+let usageByStage = new Map();
+let usageTotal = { input: 0, output: 0, calls: 0 };
+let usageText = "";
+
+const PLAN_LABEL = {
+  skip: "跳过 / skipped",
+  "keep-edit": "保留手动修改 / keep your edit",
+  run: "运行 / run",
+  wait: "等你 / wait for you",
+  "cannot-run": "不能运行 / cannot run",
+  "not-reached": "走不到 / not reached",
+};
 
 const LIVE_LOST = "实时更新已断开，改为每 3 秒刷新 / live updates lost, refreshing every 3 seconds";
 /** "connecting" until the first open or error, then "live" or "down". */
@@ -99,9 +113,40 @@ function captureModelDrafts() {
   }
 }
 
+function stageUsageLine(stageId) {
+  const row = usageByStage.get(stageId) || { input: 0, output: 0, calls: 0 };
+  const input = Number(row.input) || 0;
+  const output = Number(row.output) || 0;
+  const calls = Number(row.calls) || 0;
+  if (!calls) return "用量 / usage · 0 tokens";
+  return `用量 / usage · ${input + output} tokens（${input} 输入 input + ${output} 输出 output，${calls} 次 / ${calls} call(s)）`;
+}
+
+function paintUsageTotal() {
+  if (!usageTotalEl) return;
+  const input = Number(usageTotal.input) || 0;
+  const output = Number(usageTotal.output) || 0;
+  const calls = Number(usageTotal.calls) || 0;
+  usageTotalEl.textContent = `模型用量合计 / total model usage: ${input} 输入 input + ${output} 输出 output tokens（${calls} 次模型调用 / model calls）`;
+}
+
+function applyUsage(text) {
+  let data = {};
+  try {
+    data = JSON.parse(text);
+  } catch {
+    data = {};
+  }
+  const stages = Array.isArray(data.stages) ? data.stages : [];
+  usageByStage = new Map(stages.map((stage) => [stage.id, stage]));
+  const total = data.total;
+  usageTotal = total && typeof total === "object" ? total : { input: 0, output: 0, calls: 0 };
+}
+
 function render(data) {
   document.getElementById("flow-name").textContent = data.name || "看板 / Board";
   document.title = `${data.name || "Flowgit"} · 看板 / Board`;
+  paintUsageTotal();
 
   const missing = Array.isArray(data.missingInputs) ? data.missingInputs : [];
   bannerEl.replaceChildren();
@@ -344,7 +389,7 @@ function drawGraph(payload) {
       "data-id": node.id,
       "data-state": node.state || "",
       "aria-pressed": selected ? "true" : "false",
-      "aria-label": `${node.name || node.id} · ${node.type || ""} · ${state.zh} ${state.en}`,
+      "aria-label": `${node.name || node.id} · ${node.type || ""} · ${state.zh} ${state.en} · ${stageUsageLine(node.id)}`,
     });
     g.append(svgEl("rect", {
       class: "flow-box",
@@ -356,7 +401,7 @@ function drawGraph(payload) {
       ry: "12",
     }));
     const title = svgEl("title");
-    title.textContent = `${node.name || node.id} · ${node.type || ""} · ${state.icon} ${state.zh} ${state.en}`;
+    title.textContent = `${node.name || node.id} · ${node.type || ""} · ${state.icon} ${state.zh} ${state.en} · ${stageUsageLine(node.id)}`;
     const name = svgEl("text", {
       class: "flow-name",
       x: place.x + NODE_W / 2,
@@ -449,6 +494,7 @@ function openStage(stage) {
     el("p", "executor", `执行 / executor · ${stage.executor || ""}`),
     version,
     el("p", "runs", `${stage.runs ?? 0} 个版本 / ${stage.runs ?? 0} run(s)`),
+    el("p", "usage", stageUsageLine(stage.id)),
   ];
   if (stage.state === "edited") nodes.push(el("p", "edit-note", EDIT_NOTE));
   nodes.push(actions);
@@ -499,7 +545,7 @@ function renderCard(stage) {
   } else {
     version.textContent = "还没有版本 / no runs yet";
   }
-  card.append(version, el("p", "runs", `${stage.runs ?? 0} 个版本 / ${stage.runs ?? 0} run(s)`));
+  card.append(version, el("p", "runs", `${stage.runs ?? 0} 个版本 / ${stage.runs ?? 0} run(s)`), el("p", "usage", stageUsageLine(stage.id)));
   const history = document.createElement("button");
   history.type = "button";
   history.className = "history";
@@ -597,6 +643,7 @@ function modelForAll() {
 
 function syncRunButtons() {
   if (runAllButton) runAllButton.disabled = runBusy;
+  if (previewButton) previewButton.disabled = runBusy;
   const addStageButton = document.getElementById("add-stage");
   if (addStageButton) addStageButton.disabled = runBusy;
   for (const button of document.querySelectorAll("button.run")) {
@@ -616,6 +663,93 @@ function appendLog(line) {
 function clearLog() {
   logEl.textContent = "";
   logEl.hidden = false;
+}
+
+function modelCallCount(data) {
+  if (data && typeof data.modelCalls === "number" && Number.isFinite(data.modelCalls)) return data.modelCalls;
+  const steps = data && Array.isArray(data.steps) ? data.steps : [];
+  return steps.filter((step) => step.callsModel).length;
+}
+
+async function fetchPlan(model) {
+  const path = model ? `/api/plan?model=${encodeURIComponent(model)}` : "/api/plan";
+  const res = await fetch(path, { headers: headers(), cache: "no-store" });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) return { ok: false, error: data.error || `无法预演 / could not preview (${res.status})` };
+  return { ok: true, data };
+}
+
+function planLines(data) {
+  const lines = ["预演 / Preview · 不会运行 / runs nothing"];
+  const steps = Array.isArray(data.steps) ? data.steps : [];
+  for (const step of steps) {
+    const label = PLAN_LABEL[step.action] || step.action || "";
+    const detail = step.detail ? ` · ${step.detail}` : "";
+    lines.push(`${step.name || step.id} ${step.id} · ${label}${detail}`);
+  }
+  const n = modelCallCount(data);
+  lines.push(`最多调用 ${n} 次模型 / at most ${n} model calls`);
+  return lines;
+}
+
+async function previewAll() {
+  if (runBusy) {
+    appendLog("已有运行在进行 / a run is already in progress");
+    return;
+  }
+  const picked = modelForAll();
+  if (picked.error) {
+    appendLog(picked.error);
+    return;
+  }
+  clearLog();
+  try {
+    const plan = await fetchPlan(picked.model);
+    if (!plan.ok) {
+      appendLog(plan.error);
+      return;
+    }
+    logEl.textContent = planLines(plan.data).join("\n");
+    logEl.scrollTop = logEl.scrollHeight;
+  } catch {
+    appendLog("无法预演 / could not preview");
+  }
+}
+
+async function runAll() {
+  if (runBusy) {
+    appendLog("已有运行在进行 / a run is already in progress");
+    return;
+  }
+  const picked = modelForAll();
+  if (picked.error) {
+    appendLog(picked.error);
+    return;
+  }
+  runBusy = true;
+  syncRunButtons();
+  let calls = 0;
+  try {
+    const plan = await fetchPlan(picked.model);
+    if (!plan.ok) {
+      appendLog(plan.error);
+      return;
+    }
+    calls = modelCallCount(plan.data);
+  } catch {
+    appendLog("无法预演 / could not preview");
+    return;
+  } finally {
+    if (runBusy) {
+      runBusy = false;
+      syncRunButtons();
+    }
+  }
+  if (calls > 0) {
+    const ok = window.confirm(`这次最多调用 ${calls} 次模型，继续吗？/ This run makes at most ${calls} model calls. Continue?`);
+    if (!ok) return;
+  }
+  await startRun("all", picked.model);
 }
 
 async function startRun(stage, model) {
@@ -1446,12 +1580,28 @@ async function refresh() {
       return;
     }
     const text = await res.text();
+    let nextUsage = usageText;
+    let usageOk = false;
+    try {
+      const usageRes = await fetch("/api/usage", { headers: headers(), cache: "no-store" });
+      if (usageRes.ok) {
+        nextUsage = await usageRes.text();
+        usageOk = true;
+      }
+    } catch {
+      // Keep the totals already on screen. The next refresh tries again.
+    }
     if (eventsState === "down") showLiveLost();
     else noticeEl.hidden = true;
-    if (text === lastJson) return;
+    if (text === lastJson && (!usageOk || nextUsage === usageText)) return;
+    const flowChanged = text !== lastJson;
     lastJson = text;
+    if (usageOk) {
+      usageText = nextUsage;
+      applyUsage(nextUsage);
+    }
     const data = JSON.parse(text);
-    if (view === "graph") await reloadGraph();
+    if (view === "graph" && flowChanged) await reloadGraph();
     render(data);
     const signature = JSON.stringify(data.inputs ?? {});
     if (signature !== lastInputValues) {
@@ -1703,13 +1853,11 @@ removeForce.addEventListener("click", () => {
 document.getElementById("view-cards").addEventListener("click", () => setView("cards"));
 document.getElementById("view-graph").addEventListener("click", () => setView("graph"));
 syncViewToggle();
+if (previewButton) previewButton.addEventListener("click", () => {
+  void previewAll();
+});
 runAllButton.addEventListener("click", () => {
-  const picked = modelForAll();
-  if (picked.error) {
-    appendLog(picked.error);
-    return;
-  }
-  void startRun("all", picked.model);
+  void runAll();
 });
 inputsForm.addEventListener("submit", (event) => {
   void saveInputs(event);

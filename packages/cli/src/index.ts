@@ -30,6 +30,7 @@ import {
   loadProviders,
   providerKeyState,
   loadFlowInputs,
+  flowLog,
   planRunAll,
   resolveFlowInputs,
   renderSkillMd,
@@ -892,27 +893,18 @@ const runResult = (r: RunRecord) => (r.status === "ok" ? c.green("ok") : c.red("
 /** Every run of every stage, newest first, with the model usage they add up to. */
 function logAll(loaded: LoadedFlow): void {
   const names = new Map(loaded.flow.stages.map((s) => [s.id, s.name]));
-  const runs = loaded.flow.stages
-    .flatMap((s) => listRuns(loaded.dir, s.id))
-    .sort((a, b) => b.finishedAt.localeCompare(a.finishedAt));
-  console.log(`${c.bold(loaded.flow.name)} ${c.dim(`· ${runs.length} 个版本 / run(s)`)}\n`);
-  if (!runs.length) {
+  const logged = flowLog(loaded);
+  console.log(`${c.bold(loaded.flow.name)} ${c.dim(`· ${logged.runs.length} 个版本 / run(s)`)}\n`);
+  if (!logged.runs.length) {
     console.log(c.dim("还没有运行过。/ Nothing has run yet."));
     return;
   }
   const rows = [[c.dim("完成时间 finished"), c.dim("阶段 stage"), c.dim("版本 v"), c.dim("结果 status"), c.dim("执行 executor"), c.dim("详情 details")]];
-  const total = { input: 0, output: 0, calls: 0 };
-  for (const r of runs) {
+  for (const r of logged.runs) {
     rows.push([finished(r), `${names.get(r.stage)} ${c.dim(r.stage)}`, `v${r.n}`, runResult(r), r.executor, runDetail(r)]);
-    const t = usageTokens(r.params?.usage as Record<string, unknown> | undefined);
-    if (t) {
-      total.input += t.input;
-      total.output += t.output;
-      total.calls += 1;
-    }
   }
   console.log(table(rows));
-  if (total.calls) console.log(c.dim(`\n${usageLine("模型用量合计 / total model usage", total)}`));
+  if (logged.total.calls) console.log(c.dim(`\n${usageLine("模型用量合计 / total model usage", logged.total)}`));
   console.log(c.dim(`\n一个阶段的历史 / one stage: flowgit log <stage>`));
 }
 

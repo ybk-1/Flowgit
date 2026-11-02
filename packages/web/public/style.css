@@ -84,7 +84,7 @@ body {
   gap: 8px;
 }
 
-#add-stage {
+#add-stage, #preview {
   font: inherit;
   cursor: pointer;
   border: 1px solid rgba(246, 241, 232, 0.4);
@@ -95,11 +95,17 @@ body {
   font-weight: 600;
 }
 
-#add-stage:disabled { opacity: 0.45; cursor: default; }
+#add-stage:disabled, #preview:disabled { opacity: 0.45; cursor: default; }
 
-#add-stage:focus-visible {
+#add-stage:focus-visible, #preview:focus-visible {
   outline: 2px solid #fff;
   outline-offset: 2px;
+}
+
+.usage-total {
+  margin: 8px 0 0;
+  color: #e7d7c8;
+  font-size: 13px;
 }
 
 .view-switch {
@@ -509,7 +515,7 @@ body {
 
 .ghost:disabled, .danger:disabled { opacity: 0.45; cursor: default; }
 
-.stage-id, .executor, .version, .runs, .outputs-label {
+.stage-id, .executor, .version, .runs, .usage, .outputs-label {
   margin: 0;
   color: var(--muted);
   font-size: 13px;

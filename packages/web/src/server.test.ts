@@ -426,7 +426,20 @@ describe("read-only board", () => {
     expect(page.body).toContain("实时更新 / live updates");
     expect(page.body).toContain("卡片 / Cards");
     expect(page.body).toContain("流程图 / Graph");
+    expect(page.body).toContain("预演 / Preview");
+    expect(page.body).toContain("模型用量合计 / total model usage");
     expect(app.body).toContain('"/api/graph"');
+    expect(app.body).toContain('"/api/plan"');
+    expect(app.body).toContain('"/api/usage"');
+    expect(app.body).toContain("最多调用 ");
+    expect(app.body).toContain("at most ");
+    expect(app.body).toContain("这次最多调用 ");
+    expect(app.body).toContain("This run makes at most ");
+    expect(app.body).toContain("model calls. Continue?");
+    expect(app.body).toContain("跳过 / skipped");
+    expect(app.body).toContain("等你 / wait for you");
+    expect(app.body).toContain("不能运行 / cannot run");
+    expect(app.body).toContain("window.confirm");
     expect(app.body).toContain("localStorage.getItem");
     expect(app.body).toContain("localStorage.setItem");
   });
@@ -1072,6 +1085,148 @@ describe("add and remove stages on the board", () => {
       expect(fs.readFileSync(path.join(work, "draft.md"), "utf8")).toBe("keep draft\n");
       expect(fs.readFileSync(runFile, "utf8")).toBe("{}\n");
     } finally {
+      await board.close();
+      fs.rmSync(work, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("plan and usage on the board", () => {
+  function writeRun(dir: string, stage: string, n: number, record: Record<string, unknown>): void {
+    const file = path.join(dir, "runs", stage, String(n), "run.json");
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, JSON.stringify(record));
+  }
+
+  it("GET /api/plan waits on a human stage with no outputs and marks later stages not-reached", async () => {
+    const work = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-web-plan-"));
+    const flow = {
+      format: "flowgit",
+      version: "0.1",
+      name: "preview",
+      stages: [
+        {
+          id: "notes",
+          name: "笔记",
+          executor: { type: "human" },
+          outputs: [{ type: "text/plain", path: "notes.md" }],
+        },
+        {
+          id: "draft",
+          name: "草稿",
+          inputs: ["notes"],
+          executor: { type: "script", run: "true" },
+          outputs: [{ type: "text/plain", path: "draft.txt" }],
+        },
+        {
+          id: "check",
+          name: "检查",
+          inputs: ["draft"],
+          executor: { type: "script", run: "true" },
+          outputs: [{ type: "text/plain", path: "check.txt" }],
+        },
+      ],
+    };
+    fs.writeFileSync(path.join(work, "flow.json"), `${JSON.stringify(flow, null, 2)}\n`);
+    writeRun(work, "notes", 1, {
+      stage: "notes",
+      n: 1,
+      finishedAt: "2026-11-01T10:00:00.000Z",
+      params: { usage: { input_tokens: 10, output_tokens: 4 } },
+    });
+    writeRun(work, "notes", 2, { stage: "notes", n: 2, finishedAt: "2026-11-03T10:00:00.000Z" });
+    writeRun(work, "draft", 1, {
+      stage: "draft",
+      n: 1,
+      finishedAt: "2026-11-02T10:00:00.000Z",
+      params: { usage: { prompt_tokens: 7, completion_tokens: 3, total_tokens: 10 } },
+    });
+    const board = await startBoard({ dir: work, port: 0, open: false });
+    const authed = { "X-Flowgit-Token": board.token };
+    try {
+      expect((await httpGet(board.port, "/api/plan")).status).toBe(401);
+      expect((await httpGet(board.port, "/api/usage")).status).toBe(401);
+      expect((await httpGet(board.port, "/api/plan", { "X-Flowgit-Token": "nope" })).status).toBe(401);
+      expect((await httpGet(board.port, "/api/usage", { "X-Flowgit-Token": "nope" })).status).toBe(401);
+
+      const plan = await httpGet(board.port, "/api/plan", authed);
+      expect(plan.status, plan.body).toBe(200);
+      const body = JSON.parse(plan.body) as {
+        steps: Array<{ id: string; name: string; action: string; detail: string | null; callsModel: boolean }>;
+        modelCalls: number;
+      };
+      expect(body.steps.map((step) => step.action)).toEqual(["wait", "not-reached", "not-reached"]);
+      expect(body.steps[0]).toMatchObject({ id: "notes", name: "笔记", action: "wait", callsModel: false });
+      expect(body.steps[0]?.detail).toContain("notes.md");
+      expect(body.steps[1]).toMatchObject({ id: "draft", action: "not-reached", detail: null, callsModel: false });
+      expect(body.steps[2]).toMatchObject({ id: "check", action: "not-reached", detail: null, callsModel: false });
+      expect(body.modelCalls).toBe(0);
+      expect(fs.existsSync(path.join(work, "notes.md"))).toBe(false);
+
+      const usage = await httpGet(board.port, "/api/usage", authed);
+      expect(usage.status, usage.body).toBe(200);
+      const used = JSON.parse(usage.body) as {
+        stages: Array<{ id: string; name: string; input: number; output: number; calls: number }>;
+        total: { input: number; output: number; calls: number };
+      };
+      expect(used.stages).toEqual([
+        { id: "notes", name: "笔记", input: 10, output: 4, calls: 1 },
+        { id: "draft", name: "草稿", input: 7, output: 3, calls: 1 },
+        { id: "check", name: "检查", input: 0, output: 0, calls: 0 },
+      ]);
+      expect(used.total).toEqual({ input: 17, output: 7, calls: 2 });
+    } finally {
+      await board.close();
+      fs.rmSync(work, { recursive: true, force: true });
+    }
+  });
+
+  it("does not count FLOWGIT_LLM_MOCK_DIR replies as model calls", async () => {
+    const work = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-web-plan-mock-"));
+    fs.writeFileSync(path.join(work, "prompt.md"), "hi\n");
+    fs.writeFileSync(
+      path.join(work, "flow.json"),
+      `${JSON.stringify(
+        {
+          format: "flowgit",
+          version: "0.1",
+          name: "mock",
+          stages: [
+            {
+              id: "draft",
+              name: "草稿",
+              executor: { type: "llm", prompt: "prompt.md" },
+              outputs: [{ type: "text/markdown", path: "draft.md" }],
+            },
+          ],
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    const board = await startBoard({ dir: work, port: 0, open: false });
+    const authed = { "X-Flowgit-Token": board.token };
+    const previous = process.env.FLOWGIT_LLM_MOCK_DIR;
+    try {
+      delete process.env.FLOWGIT_LLM_MOCK_DIR;
+      const live = await httpGet(board.port, "/api/plan?model=glm/glm-5.3", authed);
+      expect(live.status, live.body).toBe(200);
+      const liveBody = JSON.parse(live.body) as { steps: Array<{ action: string; detail: string | null; callsModel: boolean }>; modelCalls: number };
+      expect(liveBody.modelCalls).toBe(1);
+      expect(liveBody.steps[0]).toMatchObject({ action: "run", callsModel: true });
+      expect(liveBody.steps[0]?.detail).toContain("glm/glm-5.3");
+
+      process.env.FLOWGIT_LLM_MOCK_DIR = templateReplies;
+      const canned = await httpGet(board.port, "/api/plan?model=glm/glm-5.3", authed);
+      expect(canned.status, canned.body).toBe(200);
+      const cannedBody = JSON.parse(canned.body) as { steps: Array<{ action: string; detail: string | null; callsModel: boolean }>; modelCalls: number };
+      expect(cannedBody.modelCalls).toBe(0);
+      expect(cannedBody.steps[0]).toMatchObject({ action: "run", callsModel: false });
+      expect(cannedBody.steps[0]?.detail).toContain("canned");
+      expect(fs.existsSync(path.join(work, "draft.md"))).toBe(false);
+    } finally {
+      if (previous === undefined) delete process.env.FLOWGIT_LLM_MOCK_DIR;
+      else process.env.FLOWGIT_LLM_MOCK_DIR = previous;
       await board.close();
       fs.rmSync(work, { recursive: true, force: true });
     }

@@ -11,6 +11,7 @@ export * from "./providers.js";
 export * from "./doctor.js";
 export * from "./mermaid.js";
 export * from "./plan.js";
+export * from "./usage.js";
 export * from "./files.js";
 export * from "./edit.js";
 export * from "./privacy.js";
