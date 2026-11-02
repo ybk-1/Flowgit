@@ -4,37 +4,42 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="flowgit-token" content="__FLOWGIT_TOKEN__" />
-  <title>Flowgit 看板 / Board</title>
+  <title data-i18n="doc.title">Flowgit 看板 / Board</title>
   <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
   <header class="top">
     <div class="brand-block">
       <p class="brand">Flowgit</p>
-      <h1 id="flow-name">看板 / Board</h1>
-      <p class="tagline">可运行、可修改、可回看 · 本机 / run, edit, and browse history · local</p>
-      <p id="usage-total" class="usage-total">模型用量合计 / total model usage</p>
+      <h1 id="flow-name" data-i18n="doc.boardName">看板 / Board</h1>
+      <p class="tagline" data-i18n="doc.tagline">可运行、可修改、可回看 · 本机 / run, edit, and browse history · local</p>
+      <p id="usage-total" class="usage-total" data-i18n="usage.totalPlaceholder">模型用量合计 / total model usage</p>
     </div>
     <div class="top-side">
-      <div class="view-switch" role="group" aria-label="视图 / View">
-        <button id="view-cards" type="button" aria-pressed="true">卡片 / Cards</button>
-        <button id="view-graph" type="button" aria-pressed="false">流程图 / Graph</button>
+      <div class="view-switch" role="group" data-i18n-aria-label="view.group" aria-label="视图 / View">
+        <button id="view-cards" type="button" aria-pressed="true" data-i18n="view.cards">卡片 / Cards</button>
+        <button id="view-graph" type="button" aria-pressed="false" data-i18n="view.graph">流程图 / Graph</button>
       </div>
-      <p class="hint" id="refresh-hint">实时更新 / live updates</p>
+      <p class="hint" id="refresh-hint" data-i18n="hint.live">实时更新 / live updates</p>
       <div class="top-actions">
-        <button id="add-stage" type="button">新增阶段 / Add stage</button>
-        <button id="preview" type="button">预演 / Preview</button>
-        <button id="run-all" type="button">全部运行 Run all</button>
+        <div class="lang-switch" role="group" data-i18n-aria-label="lang.group" aria-label="语言 / Language">
+          <button type="button" data-lang="zh" aria-pressed="false">中文</button>
+          <button type="button" data-lang="en" aria-pressed="false">EN</button>
+          <button type="button" data-lang="both" aria-pressed="false">双语</button>
+        </div>
+        <button id="add-stage" type="button" data-i18n="action.addStage">新增阶段 / Add stage</button>
+        <button id="preview" type="button" data-i18n="action.preview">预演 / Preview</button>
+        <button id="run-all" type="button" data-i18n="action.runAll">全部运行 Run all</button>
       </div>
     </div>
   </header>
   <div id="banner" class="banner" hidden></div>
   <section class="inputs-panel" aria-labelledby="inputs-heading">
-    <h2 id="inputs-heading">流程输入 / Flow inputs</h2>
+    <h2 id="inputs-heading" data-i18n="inputs.heading">流程输入 / Flow inputs</h2>
     <form id="inputs-form">
       <div id="inputs" class="input-fields"></div>
       <p id="inputs-status" class="inputs-status" hidden></p>
-      <button id="inputs-save" type="submit" disabled>保存输入 Save inputs</button>
+      <button id="inputs-save" type="submit" disabled data-i18n="action.saveInputs">保存输入 Save inputs</button>
     </form>
   </section>
   <p id="notice" class="notice" hidden></p>
@@ -43,55 +48,55 @@
   <aside id="panel" class="panel" hidden>
     <div class="panel-bar">
       <h2 id="panel-title"></h2>
-      <button id="panel-close" type="button">关闭 / Close</button>
+      <button id="panel-close" type="button" data-i18n="action.close">关闭 / Close</button>
     </div>
     <div id="panel-body"></div>
   </aside>
   <dialog id="stage-dialog" class="stage-dialog">
     <form id="stage-form">
-      <h2>新增阶段 / Add stage</h2>
+      <h2 data-i18n="action.addStage">新增阶段 / Add stage</h2>
       <div class="stage-fields">
         <label class="field">
-          <span class="field-name">类型 / Type</span>
+          <span class="field-name" data-i18n="stage.type">类型 / Type</span>
           <select id="stage-type" name="type" required>
-            <option value="human">人工 human</option>
-            <option value="llm">模型 llm</option>
-            <option value="script">脚本 script</option>
-            <option value="agent">agent</option>
+            <option value="human" data-i18n="stage.type.human">人工 human</option>
+            <option value="llm" data-i18n="stage.type.llm">模型 llm</option>
+            <option value="script" data-i18n="stage.type.script">脚本 script</option>
+            <option value="agent" data-i18n="stage.type.agent">agent</option>
           </select>
         </label>
         <label class="field">
-          <span class="field-name">id</span>
+          <span class="field-name" data-i18n="stage.idLabel">id</span>
           <input id="stage-id" name="id" required autocomplete="off" spellcheck="false" pattern="[a-z][a-z0-9_\-]*" />
         </label>
         <label class="field">
-          <span class="field-name">名称 / Name</span>
+          <span class="field-name" data-i18n="stage.name">名称 / Name</span>
           <input id="stage-name" name="name" autocomplete="off" />
         </label>
         <label class="field">
-          <span class="field-name">插在哪个阶段后面 / After</span>
+          <span class="field-name" data-i18n="stage.after">插在哪个阶段后面 / After</span>
           <select id="stage-after" name="after"></select>
         </label>
         <label class="field">
-          <span class="field-name">上游阶段 / Upstream stages</span>
+          <span class="field-name" data-i18n="stage.upstream">上游阶段 / Upstream stages</span>
           <select id="stage-inputs" name="inputs" multiple size="4"></select>
-          <span class="field-help">不选就用它前面那个阶段。 / Leave this empty to use the stage before it.</span>
+          <span class="field-help" data-i18n="stage.upstreamHelp">不选就用它前面那个阶段。 / Leave this empty to use the stage before it.</span>
         </label>
         <label class="field">
-          <span class="field-name">产物 / Outputs</span>
+          <span class="field-name" data-i18n="stage.outputs">产物 / Outputs</span>
           <textarea id="stage-outputs" name="outputs" spellcheck="false"></textarea>
-          <span id="stage-outputs-hint" class="field-help">一行一个路径。不填就用默认产物。 / One path per line. Leave empty for the default output.</span>
+          <span id="stage-outputs-hint" class="field-help" data-i18n="stage.outputsHint">一行一个路径。不填就用默认产物。 / One path per line. Leave empty for the default output.</span>
         </label>
         <label class="field" id="stage-prompt-field" hidden>
-          <span class="field-name">提示词 / Prompt</span>
-          <input id="stage-prompt" name="prompt" autocomplete="off" spellcheck="false" placeholder="prompts/stage.md" />
+          <span class="field-name" data-i18n="stage.prompt">提示词 / Prompt</span>
+          <input id="stage-prompt" name="prompt" autocomplete="off" spellcheck="false" data-i18n-placeholder="stage.promptPlaceholder" placeholder="prompts/stage.md" />
         </label>
         <label class="field" id="stage-run-field" hidden>
-          <span class="field-name">命令 / Command</span>
-          <input id="stage-run" name="run" autocomplete="off" spellcheck="false" placeholder="node scripts/check.mjs" />
+          <span class="field-name" data-i18n="stage.command">命令 / Command</span>
+          <input id="stage-run" name="run" autocomplete="off" spellcheck="false" data-i18n-placeholder="stage.commandPlaceholder" placeholder="node scripts/check.mjs" />
         </label>
         <label class="field" id="stage-agent-field" hidden>
-          <span class="field-name">Agent</span>
+          <span class="field-name" data-i18n="stage.agent">Agent</span>
           <select id="stage-agent" name="agent">
             <option value="claude-code">claude-code</option>
             <option value="codex">codex</option>
@@ -103,27 +108,28 @@
       </div>
       <p id="stage-status" class="stage-status" hidden></p>
       <div class="dialog-actions">
-        <button id="stage-cancel" type="button" class="ghost">取消 / Cancel</button>
-        <button id="stage-save" type="submit">添加 / Add</button>
+        <button id="stage-cancel" type="button" class="ghost" data-i18n="action.cancel">取消 / Cancel</button>
+        <button id="stage-save" type="submit" data-i18n="action.add">添加 / Add</button>
       </div>
     </form>
   </dialog>
   <dialog id="remove-dialog" class="stage-dialog">
     <form id="remove-form">
-      <h2>删除阶段 / Remove stage</h2>
+      <h2 data-i18n="action.removeStage">删除阶段 / Remove stage</h2>
       <p id="remove-text"></p>
       <p id="remove-deps" hidden></p>
       <p id="remove-status" class="stage-status" hidden></p>
       <div class="dialog-actions">
-        <button id="remove-cancel" type="button" class="ghost">取消 / Cancel</button>
-        <button id="remove-confirm" type="submit" class="danger">删除 / Remove</button>
-        <button id="remove-force" type="button" class="danger" hidden>一起断开依赖 / detach downstream</button>
+        <button id="remove-cancel" type="button" class="ghost" data-i18n="action.cancel">取消 / Cancel</button>
+        <button id="remove-confirm" type="submit" class="danger" data-i18n="action.remove">删除 / Remove</button>
+        <button id="remove-force" type="button" class="danger" hidden data-i18n="stage.detach">一起断开依赖 / detach downstream</button>
       </div>
     </form>
   </dialog>
   <noscript>
-    <p class="banner">需要 JavaScript 才能看看板。 / JavaScript is required to show the board.</p>
+    <p class="banner" data-i18n="doc.noscript">需要 JavaScript 才能看看板。 / JavaScript is required to show the board.</p>
   </noscript>
+  <script src="/i18n.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>

@@ -1186,3 +1186,42 @@ body {
 .more:focus-visible {
   border-color: var(--accent);
 }
+
+/* ---------- Language switch ---------- */
+
+.lang-switch {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-self: center;
+  border: 2px solid var(--ink);
+  border-radius: var(--btn-radius);
+}
+
+.lang-switch button {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  border: 0;
+  border-radius: 0;
+  padding: 7px 12px;
+  min-height: 36px;
+  background: transparent;
+  color: var(--ink);
+}
+
+.lang-switch button + button { border-left: 1px solid var(--hair); }
+
+.lang-switch button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+
+.lang-switch button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .lang-switch { border-width: 1px; border-color: var(--rule); }
+  :root:not([data-theme="light"]) .lang-switch button + button { border-left-color: var(--rule); }
+  :root:not([data-theme="light"]) .lang-switch button[aria-pressed="true"] { background: var(--surface-2); color: var(--ink); }
+}
+
+:root[data-theme="dark"] .lang-switch { border-width: 1px; border-color: var(--rule); }
+:root[data-theme="dark"] .lang-switch button + button { border-left-color: var(--rule); }
+:root[data-theme="dark"] .lang-switch button[aria-pressed="true"] { background: var(--surface-2); color: var(--ink); }

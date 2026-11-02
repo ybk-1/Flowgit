@@ -1,17 +1,5 @@
 const token = document.querySelector('meta[name="flowgit-token"]')?.getAttribute("content") ?? "";
 
-const STATES = {
-  ok: { icon: "✓", zh: "已完成", en: "ok" },
-  stale: { icon: "↻", zh: "需重跑（上游或配置变了）", en: "stale" },
-  edited: { icon: "✎", zh: "已手动修改", en: "edited" },
-  error: { icon: "✗", zh: "上次运行失败", en: "error" },
-  "never-run": { icon: "○", zh: "可以运行", en: "never-run" },
-  "waiting-upstream": { icon: "…", zh: "等上游", en: "waiting-upstream" },
-};
-
-const EDIT_NOTE =
-  "下次运行这个阶段前，这次修改会存成单独的版本，不会丢失。 / Before this stage next runs, the edit is saved as its own version and is not lost.";
-
 const VIEW_KEY = "flowgit.board.view";
 const SVG_NS = "http://www.w3.org/2000/svg";
 const NODE_W = 176;
@@ -74,17 +62,14 @@ let returnToStage = null;
 let usageByStage = new Map();
 let usageTotal = { input: 0, output: 0, calls: 0 };
 let usageText = "";
+let lastFlow = null;
+let lastFields = null;
+let viewState = null;
+let noticeKey = "";
+let noticeVars = null;
+let removeLabel = "";
+const boundNodes = new Set();
 
-const PLAN_LABEL = {
-  skip: "跳过 / skipped",
-  "keep-edit": "保留手动修改 / keep your edit",
-  run: "运行 / run",
-  wait: "等你 / wait for you",
-  "cannot-run": "不能运行 / cannot run",
-  "not-reached": "走不到 / not reached",
-};
-
-const LIVE_LOST = "实时更新已断开，改为每 3 秒刷新 / live updates lost, refreshing every 3 seconds";
 /** "connecting" until the first open or error, then "live" or "down". */
 let eventsState = "connecting";
 let pollTimer = 0;
@@ -109,6 +94,87 @@ function el(tag, className, text) {
   return node;
 }
 
+function textOf(spec) {
+  if (!spec) return "";
+  if (spec.issues) {
+    const data = spec.issues;
+    if (data && Array.isArray(data.issues) && data.issues.length) {
+      return data.issues.map((issue) => `${issue.path || "/"}: ${apiText(issue.message || "")}`).join("\n");
+    }
+    if (data && typeof data.error === "string" && data.error) return apiText(data.error);
+    return textOf(spec.fallback);
+  }
+  if (typeof spec.api === "string" && spec.api) return apiText(spec.api);
+  if (spec.key) return t(spec.key, spec.vars);
+  return "";
+}
+
+function setBound(node, spec) {
+  node._i18nSpec = spec;
+  boundNodes.add(node);
+  node.textContent = textOf(spec);
+}
+
+function refreshBound() {
+  for (const node of boundNodes) {
+    if (!node.isConnected || !node._i18nSpec) {
+      boundNodes.delete(node);
+      continue;
+    }
+    node.textContent = textOf(node._i18nSpec);
+  }
+}
+
+function tApi(key, message, vars, field) {
+  const name = field || "error";
+  const text = message == null ? "" : String(message);
+  const splitAt = text.indexOf(" / ");
+  const extra = vars || {};
+  if (splitAt === -1) return t(key, { ...extra, [name]: text });
+  const zh = text.slice(0, splitAt);
+  const en = text.slice(splitAt + 3);
+  const mode = currentLang();
+  if (mode === "zh") return tLang(key, "zh", { ...extra, [name]: zh });
+  if (mode === "en") return tLang(key, "en", { ...extra, [name]: en });
+  return `${tLang(key, "zh", { ...extra, [name]: zh })} / ${tLang(key, "en", { ...extra, [name]: en })}`;
+}
+
+function stateText(state) {
+  if (state === "ok") return `✓ ${t("state.ok")}`;
+  if (state === "stale") return `↻ ${t("state.stale")}`;
+  if (state === "edited") return `✎ ${t("state.edited")}`;
+  if (state === "error") return `✗ ${t("state.error")}`;
+  if (state === "never-run") return `○ ${t("state.neverRun")}`;
+  if (state === "waiting-upstream") return `… ${t("state.waitingUpstream")}`;
+  if (state) return `• ${state}`;
+  return `• ${t("state.unknown")}`;
+}
+
+function titled(name, key) {
+  const who = name || "";
+  const label = t(key);
+  return who ? `${who} · ${label}` : label;
+}
+
+function noteText(note) {
+  if (typeof note === "function") return note();
+  return note || "";
+}
+
+function showNotice(key, vars) {
+  noticeKey = key;
+  noticeVars = vars || null;
+  noticeEl.hidden = false;
+  noticeEl.textContent = t(key, vars);
+}
+
+function clearNotice() {
+  noticeKey = "";
+  noticeVars = null;
+  noticeEl.textContent = "";
+  noticeEl.hidden = true;
+}
+
 function captureModelDrafts() {
   for (const input of document.querySelectorAll("input[data-model-for]")) {
     modelDrafts.set(input.getAttribute("data-model-for"), input.value);
@@ -120,8 +186,8 @@ function stageUsageLine(stageId) {
   const input = Number(row.input) || 0;
   const output = Number(row.output) || 0;
   const calls = Number(row.calls) || 0;
-  if (!calls) return "用量 / usage · 0 tokens";
-  return `用量 / usage · ${input + output} tokens（${input} 输入 input + ${output} 输出 output，${calls} 次 / ${calls} call(s)）`;
+  if (!calls) return t("usage.none");
+  return t("usage.line", { total: input + output, input, output, calls });
 }
 
 function paintUsageTotal() {
@@ -129,7 +195,7 @@ function paintUsageTotal() {
   const input = Number(usageTotal.input) || 0;
   const output = Number(usageTotal.output) || 0;
   const calls = Number(usageTotal.calls) || 0;
-  usageTotalEl.textContent = `模型用量合计 / total model usage: ${input} 输入 input + ${output} 输出 output tokens（${calls} 次模型调用 / model calls）`;
+  usageTotalEl.textContent = t("usage.total", { input, output, calls });
 }
 
 function applyUsage(text) {
@@ -146,8 +212,10 @@ function applyUsage(text) {
 }
 
 function render(data) {
-  document.getElementById("flow-name").textContent = data.name || "看板 / Board";
-  document.title = `${data.name || "Flowgit"} · 看板 / Board`;
+  lastFlow = data;
+  const flowName = data.name || t("doc.boardName");
+  document.getElementById("flow-name").textContent = flowName;
+  document.title = `${data.name || "Flowgit"} · ${t("doc.boardName")}`;
   paintUsageTotal();
 
   const missing = Array.isArray(data.missingInputs) ? data.missingInputs : [];
@@ -155,8 +223,8 @@ function render(data) {
   if (missing.length) {
     bannerEl.hidden = false;
     bannerEl.append(
-      el("p", null, `还没填流程输入 / flow inputs not set: ${missing.join(", ")}`),
-      el("p", "banner-hint", "在下面的表单里填写，或 / or: flowgit inputs set " + missing[0] + "=..."),
+      el("p", null, t("banner.missing", { names: missing.join(", ") })),
+      el("p", "banner-hint", t("banner.hint", { name: missing[0] })),
     );
   } else {
     bannerEl.hidden = true;
@@ -215,7 +283,7 @@ function setView(next) {
     return;
   }
   graphPayload = null;
-  graphError = "";
+  graphError = null;
   paintBoard();
   void loadAndPaintGraph();
 }
@@ -228,15 +296,15 @@ async function reloadGraph() {
     if (ticket !== graphTicket) return;
     if (!res.ok) {
       graphPayload = null;
-      graphError = data.error || `无法加载流程图 / could not load the graph (${res.status})`;
+      graphError = data.error ? { api: data.error } : { key: "graph.loadFailedStatus", vars: { status: res.status } };
       return;
     }
     graphPayload = data;
-    graphError = "";
+    graphError = null;
   } catch {
     if (ticket !== graphTicket) return;
     graphPayload = null;
-    graphError = "无法加载流程图 / could not load the graph";
+    graphError = { key: "graph.loadFailed" };
   }
 }
 
@@ -249,11 +317,11 @@ async function loadAndPaintGraph() {
 function renderGraphView() {
   const wrap = el("div", "graph-view");
   if (graphError) {
-    wrap.append(el("p", "graph-empty", graphError));
+    wrap.append(el("p", "graph-empty", textOf(graphError)));
     return wrap;
   }
   if (!graphPayload) {
-    wrap.append(el("p", "graph-empty", "加载流程图 / loading graph…"));
+    wrap.append(el("p", "graph-empty", t("graph.loading")));
     return wrap;
   }
   wrap.append(renderLegend(), drawGraph(graphPayload));
@@ -262,12 +330,12 @@ function renderGraphView() {
 
 function renderLegend() {
   const legend = el("div", "graph-legend");
-  for (const [state, label] of Object.entries(STATES)) {
+  for (const state of ["ok", "stale", "edited", "error", "never-run", "waiting-upstream"]) {
     const item = el("span", "legend-item");
     item.dataset.state = state;
     const swatch = el("span", "legend-swatch");
     swatch.setAttribute("aria-hidden", "true");
-    item.append(swatch, document.createTextNode(`${label.icon} ${label.zh} ${label.en}`));
+    item.append(swatch, document.createTextNode(stateText(state)));
     legend.append(item);
   }
   return legend;
@@ -311,7 +379,7 @@ function drawGraph(payload) {
   const edges = Array.isArray(payload.edges) ? payload.edges : [];
   const scroll = el("div", "graph-scroll");
   if (!nodes.length) {
-    scroll.append(el("p", "graph-empty", "还没有阶段 / no stages yet"));
+    scroll.append(el("p", "graph-empty", t("graph.empty")));
     return scroll;
   }
 
@@ -346,7 +414,7 @@ function drawGraph(payload) {
     height,
     viewBox: `0 0 ${width} ${height}`,
     role: "group",
-    "aria-label": "流程图 / Graph",
+    "aria-label": t("graph.aria"),
   });
   const marker = svgEl("marker", {
     id: "flow-arrow",
@@ -384,7 +452,7 @@ function drawGraph(payload) {
     const place = pos.get(node.id);
     if (!place) continue;
     const stage = stageForNode(node);
-    const state = STATES[node.state] ?? { icon: "•", zh: node.state || "未知", en: node.state || "unknown" };
+    const state = stateText(node.state);
     const selected = node.id === selectedId;
     const g = svgEl("g", {
       class: selected ? "flow-node is-selected" : "flow-node",
@@ -393,7 +461,7 @@ function drawGraph(payload) {
       "data-id": node.id,
       "data-state": node.state || "",
       "aria-pressed": selected ? "true" : "false",
-      "aria-label": `${node.name || node.id} · ${node.type || ""} · ${state.zh} ${state.en} · ${stageUsageLine(node.id)}`,
+      "aria-label": `${node.name || node.id} · ${node.type || ""} · ${state} · ${stageUsageLine(node.id)}`,
     });
     g.append(svgEl("rect", {
       class: "flow-box",
@@ -403,7 +471,7 @@ function drawGraph(payload) {
       height: NODE_H,
     }));
     const title = svgEl("title");
-    title.textContent = `${node.name || node.id} · ${node.type || ""} · ${state.icon} ${state.zh} ${state.en} · ${stageUsageLine(node.id)}`;
+    title.textContent = `${node.name || node.id} · ${node.type || ""} · ${state} · ${stageUsageLine(node.id)}`;
     const name = svgEl("text", {
       class: "flow-name",
       x: place.x + NODE_W / 2,
@@ -447,7 +515,7 @@ function stageBack(stage) {
       const fresh = boardStages.find((item) => item.id === stage.id) || stage;
       openStage(fresh);
     },
-    backLabel: "返回阶段 Back to stage",
+    backKey: "action.backStage",
   };
 }
 
@@ -455,24 +523,24 @@ function openStage(stage) {
   selectedId = stage.id || "";
   returnToStage = stage;
   panelMode = "stage";
+  viewState = null;
   markSelected();
   releaseBlob();
   panelEl.hidden = false;
   document.body.classList.add("panel-open");
   panelTitle.textContent = stage.name || stage.id || "";
-  const label = STATES[stage.state] ?? { icon: "•", zh: stage.state || "未知", en: stage.state || "unknown" };
-  const badge = el("p", "badge", `${label.icon} ${label.zh} ${label.en}`);
+  const badge = el("p", "badge", stateText(stage.state));
   badge.dataset.state = stage.state || "";
   const version = el("p", "version");
   version.textContent = stage.latest
     ? `v${stage.latest.n} · ${formatTime(stage.latest.time)}`
-    : "还没有版本 / no runs yet";
+    : t("card.noRuns");
 
   const actions = el("div", "stage-actions");
   const history = document.createElement("button");
   history.type = "button";
   history.className = "history";
-  history.textContent = "历史 History";
+  history.textContent = t("action.history");
   history.addEventListener("click", () => {
     panelMode = "other";
     void openHistory(stage);
@@ -480,25 +548,25 @@ function openStage(stage) {
   const run = document.createElement("button");
   run.type = "button";
   run.className = "run";
-  run.textContent = "运行这一步 Run";
+  run.textContent = t("action.run");
   run.dataset.waiting = stage.state === "waiting-upstream" ? "1" : "0";
-  if (stage.state === "waiting-upstream") run.title = "等上游完成 / waiting for upstream";
+  if (stage.state === "waiting-upstream") run.title = t("run.waitingTitle");
   run.addEventListener("click", () => startRun(stage.id, modelForStage(stage.id)));
   const remove = document.createElement("button");
   remove.type = "button";
   remove.className = "danger";
-  remove.textContent = "删除阶段 / Remove stage";
+  remove.textContent = t("action.removeStage");
   remove.addEventListener("click", () => openRemove(stage));
   actions.append(history, run, remove);
 
   const nodes = [
     badge,
-    el("p", "executor", `执行 / executor · ${stage.executor || ""}`),
+    el("p", "executor", `${t("card.executor")} · ${stage.executor || ""}`),
     version,
-    el("p", "runs", `${stage.runs ?? 0} 个版本 / ${stage.runs ?? 0} run(s)`),
+    el("p", "runs", t("card.runs", { n: stage.runs ?? 0 })),
     el("p", "usage", stageUsageLine(stage.id)),
   ];
-  if (stage.state === "edited") nodes.push(el("p", "edit-note", EDIT_NOTE));
+  if (stage.state === "edited") nodes.push(el("p", "edit-note", t("edit.note")));
   nodes.push(actions);
   if (stage.executor === "human" && stage.state !== "waiting-upstream") {
     if (stage.instructions) nodes.push(foldedInstructions(stage.instructions));
@@ -508,7 +576,7 @@ function openStage(stage) {
   if (stage.executor === "llm") nodes.push(modelField(stage.id));
 
   const outputs = el("div", "outputs");
-  outputs.append(el("p", "outputs-label", "产物 / outputs"));
+  outputs.append(el("p", "outputs-label", t("card.outputs")));
   for (const output of stage.outputs ?? []) {
     const button = document.createElement("button");
     button.type = "button";
@@ -529,29 +597,27 @@ function humanDir(stage) {
 function renderCard(stage) {
   const card = el("article", "card");
   card.dataset.state = stage.state || "";
-  const label = STATES[stage.state] ?? { icon: "•", zh: stage.state || "未知", en: stage.state || "unknown" };
-
   const head = el("div", "card-head");
   head.append(el("h2", null, stage.name || stage.id || ""), cardMenu(stage));
   card.append(
     head,
     el("p", "stage-id", stage.id || ""),
-    el("p", "executor", `执行 / executor · ${stage.executor || ""}`),
-    el("p", "badge", `${label.icon} ${label.zh} ${label.en}`),
+    el("p", "executor", `${t("card.executor")} · ${stage.executor || ""}`),
+    el("p", "badge", stateText(stage.state)),
   );
-  if (stage.state === "edited") card.append(el("p", "edit-note", EDIT_NOTE));
+  if (stage.state === "edited") card.append(el("p", "edit-note", t("edit.note")));
 
   const version = el("p", "version");
   if (stage.latest) {
     version.textContent = `v${stage.latest.n} · ${formatTime(stage.latest.time)}`;
   } else {
-    version.textContent = "还没有版本 / no runs yet";
+    version.textContent = t("card.noRuns");
   }
-  card.append(version, el("p", "runs", `${stage.runs ?? 0} 个版本 / ${stage.runs ?? 0} run(s)`), el("p", "usage", stageUsageLine(stage.id)));
+  card.append(version, el("p", "runs", t("card.runs", { n: stage.runs ?? 0 })), el("p", "usage", stageUsageLine(stage.id)));
   const history = document.createElement("button");
   history.type = "button";
   history.className = "history";
-  history.textContent = "历史 History";
+  history.textContent = t("action.history");
   history.addEventListener("click", () => {
     returnToStage = null;
     panelMode = "other";
@@ -571,14 +637,14 @@ function renderCard(stage) {
   const run = document.createElement("button");
   run.type = "button";
   run.className = "run";
-  run.textContent = "运行这一步 Run";
+  run.textContent = t("action.run");
   run.dataset.waiting = stage.state === "waiting-upstream" ? "1" : "0";
-  if (stage.state === "waiting-upstream") run.title = "等上游完成 / waiting for upstream";
+  if (stage.state === "waiting-upstream") run.title = t("run.waitingTitle");
   run.addEventListener("click", () => startRun(stage.id, modelForStage(stage.id)));
   card.append(run);
 
   const outputs = el("div", "outputs");
-  outputs.append(el("p", "outputs-label", "产物 / outputs"));
+  outputs.append(el("p", "outputs-label", t("card.outputs")));
   for (const [index, output] of (stage.outputs ?? []).entries()) {
     outputs.append(outputThumb(output, stage, index));
   }
@@ -673,12 +739,12 @@ function summarizeJson(text) {
   } catch {
     return stripMarkdown(text);
   }
-  if (Array.isArray(value)) return `${value.length} 项 / ${value.length} items`;
+  if (Array.isArray(value)) return t("count.items", { n: value.length });
   if (!value || typeof value !== "object") return String(value);
   const lines = [];
   for (const [key, val] of Object.entries(value)) {
-    if (Array.isArray(val)) lines.push(`${key}: ${val.length} 项 / ${val.length} items`);
-    else if (val && typeof val === "object") lines.push(`${key}: ${Object.keys(val).length} 项 / ${Object.keys(val).length} items`);
+    if (Array.isArray(val)) lines.push(`${key}: ${t("count.items", { n: val.length })}`);
+    else if (val && typeof val === "object") lines.push(`${key}: ${t("count.items", { n: Object.keys(val).length })}`);
     else if (typeof val === "string") lines.push(`${key}: ${val.length > 48 ? `${val.slice(0, 48)}…` : val}`);
     else lines.push(`${key}: ${String(val)}`);
   }
@@ -686,9 +752,9 @@ function summarizeJson(text) {
 }
 
 function formatDuration(seconds) {
-  if (typeof seconds !== "number" || !Number.isFinite(seconds) || seconds < 0) return "时长未知 / length unknown";
+  if (typeof seconds !== "number" || !Number.isFinite(seconds) || seconds < 0) return t("thumb.lengthUnknown");
   const rounded = seconds >= 10 ? String(Math.round(seconds)) : seconds.toFixed(1);
-  return `${rounded} 秒 / ${rounded} s`;
+  return t("thumb.seconds", { n: rounded });
 }
 
 function waveform() {
@@ -703,12 +769,12 @@ function waveform() {
 
 function videoMark() {
   const box = el("div", "video-mark");
-  box.append(el("span", "video-icon", "▶"), el("span", "video-label", "视频 / video"));
+  box.append(el("span", "video-icon", "▶"), el("span", "video-label", t("thumb.video")));
   return box;
 }
 
 function thumbText(text) {
-  return el("p", "thumb-text", text || "空文件 / empty");
+  return el("p", "thumb-text", text || t("thumb.empty"));
 }
 
 function scheduleThumb(node, load) {
@@ -730,7 +796,7 @@ function outputThumb(output, stage, index, options) {
   button.type = "button";
   button.className = "thumb";
   const label = output.directory ? `${output.path}/` : output.path;
-  button.setAttribute("aria-label", `${label} · 打开产物 / open output`);
+  button.setAttribute("aria-label", `${label} · ${t("thumb.open")}`);
   button.addEventListener("click", () => openOutput(output, stage, options));
   button.append(el("span", "thumb-name", label));
   const body = el("div", "thumb-body");
@@ -756,7 +822,7 @@ async function fillThumb(body, output, stage, index, gen) {
     }
     await fillTextThumb(body, output, gen, kind === "json");
   } catch {
-    if (gen === thumbGen && body.isConnected) body.replaceChildren(thumbText("无法预览 / no preview"));
+    if (gen === thumbGen && body.isConnected) body.replaceChildren(thumbText(t("thumb.noPreview")));
   }
 }
 
@@ -782,12 +848,12 @@ async function fillMediaThumb(body, stage, index, gen, kind) {
     return;
   }
   if (!res.ok) {
-    body.replaceChildren(thumbText("还没有这个产物 / not yet"));
+    body.replaceChildren(thumbText(t("thumb.notYet")));
     return;
   }
   const type = (res.headers.get("content-type") || "").toLowerCase();
   if (!type.startsWith("image/")) {
-    body.replaceChildren(kind === "video" ? videoMark() : thumbText("无法预览 / no preview"));
+    body.replaceChildren(kind === "video" ? videoMark() : thumbText(t("thumb.noPreview")));
     return;
   }
   const blob = await res.blob();
@@ -808,7 +874,7 @@ async function fillTextThumb(body, output, gen, json) {
   });
   if (gen !== thumbGen || !body.isConnected) return;
   if (!res.ok) {
-    body.replaceChildren(thumbText("还没有这个产物 / not yet"));
+    body.replaceChildren(thumbText(t("thumb.notYet")));
     return;
   }
   const text = await res.text();
@@ -824,7 +890,7 @@ async function fillDirThumb(body, output, gen) {
   });
   if (gen !== thumbGen || !body.isConnected) return;
   if (!res.ok) {
-    body.replaceChildren(thumbText("还没有这个产物 / not yet"));
+    body.replaceChildren(thumbText(t("thumb.notYet")));
     return;
   }
   const data = await res.json().catch(() => ({}));
@@ -855,8 +921,7 @@ async function fillDirThumb(body, output, gen) {
   }
   if (gen !== thumbGen || !body.isConnected) return;
   const n = files.length;
-  const filesEn = n === 1 ? "1 file" : `${n} files`;
-  setThumbCaption(body, `共 ${n} 个文件 / ${filesEn}`);
+  setThumbCaption(body, n === 1 ? t("thumb.filesOne", { n }) : t("thumb.files", { n }));
 }
 
 function setThumbCaption(body, text) {
@@ -877,11 +942,14 @@ function foldedInstructions(text) {
   more.type = "button";
   more.className = "more";
   more.hidden = true;
-  more.textContent = "展开 / more";
+  const paintMore = () => {
+    more.textContent = p.classList.contains("is-open") ? t("fold.less") : t("fold.more");
+  };
+  paintMore();
   more.addEventListener("click", () => {
     const open = p.classList.toggle("is-open");
     p.classList.toggle("is-clamped", !open);
-    more.textContent = open ? "收起 / less" : "展开 / more";
+    paintMore();
   });
   wrap.append(p, more);
   requestAnimationFrame(() => {
@@ -893,10 +961,10 @@ function foldedInstructions(text) {
 
 function modelField(stageId) {
   const label = el("label", "model-field");
-  label.append(el("span", null, "模型 model（可选 optional）"));
+  label.append(el("span", null, t("model.label")));
   const input = document.createElement("input");
   input.type = "text";
-  input.placeholder = "provider/model";
+  input.placeholder = t("model.placeholder");
   input.autocomplete = "off";
   input.spellcheck = false;
   input.setAttribute("data-model-for", stageId);
@@ -938,7 +1006,7 @@ function modelForAll() {
   const unique = [...new Set(values)];
   if (unique.length > 1) {
     return {
-      error: "各阶段填的模型不一样。全部运行请留空，或填成同一个。 / Model fields differ. For run all, leave them blank or use the same one.",
+      error: t("model.differ"),
     };
   }
   return { model: unique[0] };
@@ -978,26 +1046,35 @@ async function fetchPlan(model) {
   const path = model ? `/api/plan?model=${encodeURIComponent(model)}` : "/api/plan";
   const res = await fetch(path, { headers: headers(), cache: "no-store" });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) return { ok: false, error: data.error || `无法预演 / could not preview (${res.status})` };
+  if (!res.ok) return { ok: false, error: data.error ? apiText(data.error) : t("plan.failedStatus", { status: res.status }) };
   return { ok: true, data };
 }
 
+function planLabel(action) {
+  if (action === "skip") return t("plan.skip");
+  if (action === "keep-edit") return t("plan.keepEdit");
+  if (action === "run") return t("plan.run");
+  if (action === "wait") return t("plan.wait");
+  if (action === "cannot-run") return t("plan.cannotRun");
+  if (action === "not-reached") return t("plan.notReached");
+  return action || "";
+}
+
 function planLines(data) {
-  const lines = ["预演 / Preview · 不会运行 / runs nothing"];
+  const lines = [t("plan.header")];
   const steps = Array.isArray(data.steps) ? data.steps : [];
   for (const step of steps) {
-    const label = PLAN_LABEL[step.action] || step.action || "";
+    const label = planLabel(step.action);
     const detail = step.detail ? ` · ${step.detail}` : "";
     lines.push(`${step.name || step.id} ${step.id} · ${label}${detail}`);
   }
-  const n = modelCallCount(data);
-  lines.push(`最多调用 ${n} 次模型 / at most ${n} model calls`);
+  lines.push(t("plan.atMost", { n: modelCallCount(data) }));
   return lines;
 }
 
 async function previewAll() {
   if (runBusy) {
-    appendLog("已有运行在进行 / a run is already in progress");
+    appendLog(t("run.busy"));
     return;
   }
   const picked = modelForAll();
@@ -1015,13 +1092,13 @@ async function previewAll() {
     logEl.textContent = planLines(plan.data).join("\n");
     logEl.scrollTop = logEl.scrollHeight;
   } catch {
-    appendLog("无法预演 / could not preview");
+    appendLog(t("plan.failed"));
   }
 }
 
 async function runAll() {
   if (runBusy) {
-    appendLog("已有运行在进行 / a run is already in progress");
+    appendLog(t("run.busy"));
     return;
   }
   const picked = modelForAll();
@@ -1040,7 +1117,7 @@ async function runAll() {
     }
     calls = modelCallCount(plan.data);
   } catch {
-    appendLog("无法预演 / could not preview");
+    appendLog(t("plan.failed"));
     return;
   } finally {
     if (runBusy) {
@@ -1049,7 +1126,7 @@ async function runAll() {
     }
   }
   if (calls > 0) {
-    const ok = window.confirm(`这次最多调用 ${calls} 次模型，继续吗？/ This run makes at most ${calls} model calls. Continue?`);
+    const ok = window.confirm(t("run.confirmCalls", { calls }));
     if (!ok) return;
   }
   await startRun("all", picked.model);
@@ -1057,14 +1134,14 @@ async function runAll() {
 
 async function startRun(stage, model) {
   if (runBusy) {
-    appendLog("已有运行在进行 / a run is already in progress");
+    appendLog(t("run.busy"));
     return;
   }
   const gen = ++runGen;
   runBusy = true;
   syncRunButtons();
   clearLog();
-  appendLog(stage === "all" ? "全部运行 Run all" : `运行 / run ${stage}${model ? ` · ${model}` : ""}`);
+  appendLog(stage === "all" ? t("action.runAll") : `${t("log.run")} ${stage}${model ? ` · ${model}` : ""}`);
   try {
     const body = { stage };
     if (model) body.model = model;
@@ -1075,10 +1152,10 @@ async function startRun(stage, model) {
       cache: "no-store",
     });
     const data = await res.json().catch(() => ({}));
-    if (res.status === 409) appendLog(data.error || "已有运行在进行 / a run is already in progress");
-    else if (!res.ok) appendLog(data.error || `运行失败 / run failed (${res.status})`);
+    if (res.status === 409) appendLog(data.error ? apiText(data.error) : t("run.busy"));
+    else if (!res.ok) appendLog(data.error ? apiText(data.error) : t("log.runFailedStatus", { status: res.status }));
   } catch {
-    appendLog("运行失败 / run failed");
+    appendLog(t("log.runFailed"));
   } finally {
     if (gen === runGen) {
       runBusy = false;
@@ -1093,6 +1170,7 @@ function closePanel() {
   document.body.classList.remove("panel-open");
   panelMode = "";
   returnToStage = null;
+  viewState = null;
   releaseBlob();
 }
 
@@ -1101,7 +1179,12 @@ function makeBack(options) {
   const button = document.createElement("button");
   button.type = "button";
   button.className = "back";
-  button.textContent = options.backLabel || "返回 Back";
+  const backKey = options.backKey;
+  button.textContent = backKey === "action.backHistory"
+    ? t("action.backHistory")
+    : backKey === "action.backStage"
+      ? t("action.backStage")
+      : t("action.back");
   button.addEventListener("click", () => options.onBack());
   return button;
 }
@@ -1119,18 +1202,18 @@ function historyOptions(stage) {
     onBack: () => {
       void openHistory(stage);
     },
-    backLabel: "返回历史 Back to history",
+    backKey: "action.backHistory",
   };
 }
 
 function executorLabel(run) {
-  if (run.executor === "manual") return "手动修改 manual edit";
+  if (run.executor === "manual") return t("runStatus.manual");
   return run.executor || "";
 }
 
 function resultLabel(run) {
-  if (run.status === "ok") return "成功 ok";
-  if (run.status === "error") return "失败 error";
+  if (run.status === "ok") return t("runStatus.ok");
+  if (run.status === "error") return t("runStatus.error");
   return run.status || "";
 }
 
@@ -1163,37 +1246,59 @@ function releaseBlob() {
   currentBlob = null;
 }
 
+function showMessage(className, spec, options, heading) {
+  viewState = { kind: "message", className, spec, options, heading: heading || null };
+  if (typeof heading === "function") panelTitle.textContent = heading();
+  const node = el("p", className || null, textOf(spec));
+  if (options) showPanel([node], options);
+  else panelBody.replaceChildren(node);
+}
+
+function readCompare() {
+  const form = panelBody.querySelector("form.compare");
+  if (!form) return null;
+  const from = form.querySelector('select[name="a"]');
+  const to = form.querySelector('select[name="b"]');
+  if (!from || !to) return null;
+  return { a: from.value, b: to.value };
+}
+
 async function openHistory(stage, note) {
   panelMode = "other";
   releaseBlob();
   panelEl.hidden = false;
   document.body.classList.add("panel-open");
-  panelTitle.textContent = `${stage.name || stage.id || ""} · 历史 History`;
-  panelBody.replaceChildren(el("p", null, "加载中 / loading…"));
+  const heading = () => titled(stage.name || stage.id || "", "action.history");
+  panelTitle.textContent = heading();
+  showMessage(null, { key: "common.loading" }, null, heading);
   let res;
   try {
     res = await fetch(`/api/runs?stage=${encodeURIComponent(stage.id)}`, { headers: headers(), cache: "no-store" });
   } catch {
-    panelBody.replaceChildren(el("p", "panel-error", "无法打开历史 / could not open history"));
+    showMessage("panel-error", { key: "history.openFailed" }, null, heading);
     return;
   }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    panelBody.replaceChildren(el("p", "panel-error", data.error || `无法打开历史 / could not open history (${res.status})`));
+    const spec = data.error ? { api: data.error } : { key: "history.openFailedStatus", vars: { status: res.status } };
+    showMessage("panel-error", spec, null, heading);
     return;
   }
   renderHistory(stage, Array.isArray(data.runs) ? data.runs : [], note);
 }
 
-function renderHistory(stage, runs, note) {
-  panelTitle.textContent = `${stage.name || stage.id || ""} · 历史 History`;
+function renderHistory(stage, runs, note, selected, errorSpec) {
+  viewState = { kind: "history", stage, runs, note, selected: selected || null, errorSpec: errorSpec || null };
+  panelTitle.textContent = titled(stage.name || stage.id || "", "action.history");
   const back = returnToStage && returnToStage.id === stage.id ? stageBack(returnToStage) : undefined;
   const nodes = [];
-  if (note) nodes.push(el("p", "save-ok", note));
-  nodes.push(el("p", "history-hint", "点一个版本看当时的产物。 / Click a version to see what it produced."));
-  nodes.push(renderCompare(stage, runs));
+  if (errorSpec) nodes.push(el("p", "panel-error", textOf(errorSpec)));
+  const shown = noteText(note);
+  if (shown) nodes.push(el("p", "save-ok", shown));
+  nodes.push(el("p", "history-hint", t("history.hint")));
+  nodes.push(renderCompare(stage, runs, selected));
   if (!runs.length) {
-    nodes.push(el("p", null, "还没有版本 / no runs yet"));
+    nodes.push(el("p", null, t("card.noRuns")));
     showPanel(nodes, back);
     return;
   }
@@ -1203,19 +1308,19 @@ function renderHistory(stage, runs, note) {
   showPanel(nodes, back);
 }
 
-function renderCompare(stage, runs) {
+function renderCompare(stage, runs, selected) {
   const form = el("form", "compare");
   const fromLabel = el("label");
-  fromLabel.append(el("span", null, "版本 A / version A"));
+  fromLabel.append(el("span", null, t("diff.versionA")));
   const from = document.createElement("select");
   from.name = "a";
   const toLabel = el("label");
-  toLabel.append(el("span", null, "版本 B / version B"));
+  toLabel.append(el("span", null, t("diff.versionB")));
   const to = document.createElement("select");
   to.name = "b";
   const current = document.createElement("option");
   current.value = "";
-  current.textContent = "当前文件 current";
+  current.textContent = t("diff.current");
   to.append(current);
   const ordered = runs.slice().reverse();
   for (const run of ordered) {
@@ -1229,7 +1334,10 @@ function renderCompare(stage, runs) {
     right.textContent = label;
     to.append(right);
   }
-  if (ordered[1]) {
+  if (selected) {
+    if ([...from.options].some((option) => option.value === selected.a)) from.value = selected.a;
+    if ([...to.options].some((option) => option.value === selected.b)) to.value = selected.b;
+  } else if (ordered[1]) {
     from.value = String(ordered[1].n);
     to.value = String(ordered[0].n);
   } else if (ordered[0]) {
@@ -1240,7 +1348,7 @@ function renderCompare(stage, runs) {
   status.hidden = true;
   const go = document.createElement("button");
   go.type = "submit";
-  go.textContent = "对比 Compare";
+  go.textContent = t("action.compare");
   go.disabled = runs.length === 0;
   fromLabel.append(from);
   toLabel.append(to);
@@ -1249,12 +1357,12 @@ function renderCompare(stage, runs) {
     event.preventDefault();
     if (!from.value) {
       status.hidden = false;
-      status.textContent = "先选一个版本 / pick a version first";
+      status.textContent = t("history.pickFirst");
       return;
     }
     if (to.value && from.value === to.value) {
       status.hidden = false;
-      status.textContent = "选两个不同的版本，或一个版本和当前文件。 / Pick two different versions, or one version and the current files.";
+      status.textContent = t("history.pickDifferent");
       return;
     }
     void openDiff(stage, from.value, to.value);
@@ -1272,7 +1380,7 @@ function renderVersion(stage, run) {
   const detail = runDetail(run);
   if (detail) button.append(el("span", "version-detail", detail));
   const failure = errorLine(run);
-  if (failure) button.append(el("span", "version-error", `错误 / error: ${failure}`));
+  if (failure) button.append(el("span", "version-error", tApi("history.errorLine", failure)));
   button.addEventListener("click", () => {
     void openVersion(stage, run);
   });
@@ -1281,7 +1389,7 @@ function renderVersion(stage, run) {
     const restore = document.createElement("button");
     restore.type = "button";
     restore.className = "restore";
-    restore.textContent = "回退到这个版本 Restore";
+    restore.textContent = t("action.restore");
     restore.addEventListener("click", () => {
       void restoreVersion(stage, run.n, restore);
     });
@@ -1290,15 +1398,12 @@ function renderVersion(stage, run) {
   return item;
 }
 
-async function openVersion(stage, run) {
+function paintVersionList(stage, run) {
   const outputs = stage.outputs || [];
-  if (outputs.length === 1) {
-    await openSnapshot(stage, run, outputs[0]);
-    return;
-  }
   panelTitle.textContent = `v${run.n} · ${stage.name || stage.id || ""}`;
+  viewState = { kind: "version", stage, run };
   const nodes = [];
-  if (!outputs.length) nodes.push(el("p", null, "这个阶段没有产物 / this stage has no outputs"));
+  if (!outputs.length) nodes.push(el("p", null, t("history.noOutputs")));
   else {
     const list = el("ul", "file-list");
     for (const output of outputs) {
@@ -1317,6 +1422,15 @@ async function openVersion(stage, run) {
   showPanel(nodes, historyOptions(stage));
 }
 
+async function openVersion(stage, run) {
+  const outputs = stage.outputs || [];
+  if (outputs.length === 1) {
+    await openSnapshot(stage, run, outputs[0]);
+    return;
+  }
+  paintVersionList(stage, run);
+}
+
 async function openSnapshot(stage, run, output) {
   const rel = snapshotPath(stage.id, run.n, output.path);
   await openOutput(
@@ -1327,34 +1441,38 @@ async function openSnapshot(stage, run, output) {
 }
 
 async function openDiff(stage, a, b) {
+  panelMode = "other";
   releaseBlob();
   panelEl.hidden = false;
   document.body.classList.add("panel-open");
-  panelTitle.textContent = `${stage.name || stage.id || ""} · 对比 Compare`;
-  panelBody.replaceChildren(el("p", null, "加载中 / loading…"));
+  const heading = () => titled(stage.name || stage.id || "", "action.compare");
+  panelTitle.textContent = heading();
+  showMessage(null, { key: "common.loading" }, null, heading);
   const params = new URLSearchParams({ stage: stage.id, a: String(a) });
   if (b) params.set("b", String(b));
   let res;
   try {
     res = await fetch(`/api/diff?${params}`, { headers: headers(), cache: "no-store" });
   } catch {
-    showPanel([el("p", "panel-error", "无法对比 / could not compare")], historyOptions(stage));
+    showMessage("panel-error", { key: "diff.failed" }, historyOptions(stage), heading);
     return;
   }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    showPanel([el("p", "panel-error", data.error || `无法对比 / could not compare (${res.status})`)], historyOptions(stage));
+    const spec = data.error ? { api: data.error } : { key: "diff.failedStatus", vars: { status: res.status } };
+    showMessage("panel-error", spec, historyOptions(stage), heading);
     return;
   }
   renderDiff(stage, data);
 }
 
 function renderDiff(stage, diff) {
-  panelTitle.textContent = `${stage.name || stage.id || ""} · 对比 Compare`;
-  const right = diff.b == null ? "当前文件 current" : `v${diff.b}`;
+  viewState = { kind: "diff", stage, diff };
+  panelTitle.textContent = titled(stage.name || stage.id || "", "action.compare");
+  const right = diff.b == null ? t("diff.current") : `v${diff.b}`;
   const nodes = [el("p", "diff-summary", `v${diff.a} → ${right}`)];
   for (const output of diff.outputs || []) nodes.push(renderOutputDiff(output));
-  if (!(diff.outputs || []).length) nodes.push(el("p", null, "没有产物 / no outputs"));
+  if (!(diff.outputs || []).length) nodes.push(el("p", null, t("diff.none")));
   showPanel(nodes, historyOptions(stage));
 }
 
@@ -1362,24 +1480,24 @@ function renderOutputDiff(output) {
   const box = el("section", "diff-file");
   box.append(el("h3", "diff-path", output.path || ""));
   if (output.kind === "text") {
-    if (output.same || !output.diff) box.append(el("p", "diff-same", "相同 / same"));
+    if (output.same || !output.diff) box.append(el("p", "diff-same", t("diff.same")));
     else box.append(renderUnified(output.diff));
     return box;
   }
   if (output.kind === "binary") {
-    box.append(el("p", output.same ? "diff-same" : "diff-changed", output.same ? "二进制相同 / binary same" : "二进制不同 / binary differs"));
+    box.append(el("p", output.same ? "diff-same" : "diff-changed", output.same ? t("diff.binarySame") : t("diff.binaryDiffers")));
     return box;
   }
   if (output.kind === "dir") {
-    if (output.same) box.append(el("p", "diff-same", "文件夹相同 / directory same"));
+    if (output.same) box.append(el("p", "diff-same", t("diff.dirSame")));
     else {
-      if (output.added && output.added.length) box.append(fileLines("新增 / added", output.added, "diff-add"));
-      if (output.removed && output.removed.length) box.append(fileLines("删除 / removed", output.removed, "diff-del"));
-      if (output.changed && output.changed.length) box.append(fileLines("改动 / changed", output.changed, "diff-changed"));
+      if (output.added && output.added.length) box.append(fileLines(t("diff.added"), output.added, "diff-add"));
+      if (output.removed && output.removed.length) box.append(fileLines(t("diff.removed"), output.removed, "diff-del"));
+      if (output.changed && output.changed.length) box.append(fileLines(t("diff.changed"), output.changed, "diff-changed"));
     }
     return box;
   }
-  box.append(el("p", null, "无法显示这个差异 / could not show this diff"));
+  box.append(el("p", null, t("diff.cannotShow")));
   return box;
 }
 
@@ -1406,9 +1524,7 @@ function renderUnified(patch) {
 }
 
 async function restoreVersion(stage, n, button) {
-  const confirmed = window.confirm(
-    `确定回退到 v${n}？当前产物会被这个版本替换，下游阶段会变成需重跑。\nRestore v${n}? Current outputs will be replaced by this version, and downstream stages will show as stale.`,
-  );
+  const confirmed = window.confirm(t("restore.confirm", { n }));
   if (!confirmed) return;
   if (button) button.disabled = true;
   try {
@@ -1421,14 +1537,20 @@ async function restoreVersion(stage, n, button) {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       await openHistory(stage);
-      panelBody.prepend(el("p", "panel-error", data.error || `没有回退 / not restored (${res.status})`));
+      const spec = data.error ? { api: data.error } : { key: "restore.failedStatus", vars: { status: res.status } };
+      if (viewState && viewState.kind === "history") viewState.errorSpec = spec;
+      panelBody.prepend(el("p", "panel-error", textOf(spec)));
       return;
     }
     await refreshNow();
-    const kept = typeof data.kept === "number" ? ` · 你的手动修改已存为 v${data.kept} / your manual edit was saved as v${data.kept}` : "";
-    await openHistory(stage, `已回退到 v${n} / restored v${n}${kept}`);
+    const kept = data.kept;
+    await openHistory(stage, () => {
+      const done = t("restore.done", { n });
+      if (typeof kept !== "number") return done;
+      return `${done} · ${t("restore.kept", { n: kept })}`;
+    });
   } catch {
-    panelBody.prepend(el("p", "panel-error", "没有回退 / not restored"));
+    panelBody.prepend(el("p", "panel-error", t("restore.failed")));
   } finally {
     if (button) button.disabled = false;
   }
@@ -1440,8 +1562,9 @@ async function openOutput(output, stage, options) {
   const readOnly = Boolean(options && options.readOnly);
   panelEl.hidden = false;
   document.body.classList.add("panel-open");
-  panelTitle.textContent = (options && options.title) || rel;
-  panelBody.replaceChildren(el("p", null, "加载中 / loading…"));
+  const heading = () => (options && options.title) || rel;
+  panelTitle.textContent = heading();
+  showMessage(null, { key: "common.loading" }, null, heading);
   if (currentBlob) {
     URL.revokeObjectURL(currentBlob);
     currentBlob = null;
@@ -1450,7 +1573,7 @@ async function openOutput(output, stage, options) {
   try {
     res = await fetch(`/api/file?path=${encodeURIComponent(rel)}`, { headers: headers(), cache: "no-store" });
   } catch {
-    showPanel([el("p", "panel-error", "无法打开 / could not open")], options);
+    showMessage("panel-error", { key: "output.openFailed" }, options, heading);
     return;
   }
   if (!res.ok) {
@@ -1458,8 +1581,8 @@ async function openOutput(output, stage, options) {
       renderFileList(rel, [], stage, options);
       return;
     }
-    const message = res.status === 404 ? "找不到这个产物 / output not found" : `无法打开 / could not open (${res.status})`;
-    showPanel([el("p", "panel-error", message)], options);
+    const spec = res.status === 404 ? { key: "output.notFound" } : { key: "output.openFailedStatus", vars: { status: res.status } };
+    showMessage("panel-error", spec, options, heading);
     return;
   }
   if (res.headers.get("X-Flowgit-Kind") === "directory") {
@@ -1480,6 +1603,7 @@ async function openOutput(output, stage, options) {
     else media.alt = rel;
     media.src = currentBlob;
     showPanel([media], options);
+    viewState = { kind: "nodes", nodes: [media], options };
     return;
   }
   const text = await res.text();
@@ -1494,9 +1618,11 @@ async function openOutput(output, stage, options) {
     pre.textContent = text;
   }
   showPanel([pre], options);
+  viewState = { kind: "nodes", nodes: [pre], options };
 }
 
-function renderEditor(rel, text, options) {
+function renderEditor(rel, text, options, focus) {
+  viewState = { kind: "editor", rel, text, options };
   const wrap = el("div", "editor");
   const area = document.createElement("textarea");
   area.value = text;
@@ -1505,16 +1631,16 @@ function renderEditor(rel, text, options) {
   const save = document.createElement("button");
   save.type = "button";
   save.className = "save";
-  save.textContent = "保存 Save";
+  save.textContent = t("action.save");
   const status = el("p", "save-status");
   status.hidden = true;
   save.addEventListener("click", () => saveText(rel, area.value, save, status));
-  wrap.append(el("p", "edit-hint", EDIT_NOTE), area, save, status);
+  wrap.append(el("p", "edit-hint", t("edit.note")), area, save, status);
   panelBody.replaceChildren();
   const back = makeBack(options);
   if (back) panelBody.append(back);
   panelBody.append(wrap);
-  area.focus();
+  if (focus !== false) area.focus();
 }
 
 async function saveText(rel, text, button, status) {
@@ -1531,23 +1657,24 @@ async function saveText(rel, text, button, status) {
     if (!res.ok) {
       status.hidden = false;
       status.className = "panel-error";
-      status.textContent = data.error || `没有保存 / not saved (${res.status})`;
+      setBound(status, data.error ? { api: data.error } : { key: "save.failedStatus", vars: { status: res.status } });
       return;
     }
     status.hidden = false;
     status.className = "save-ok";
-    status.textContent = "已保存 / saved";
+    setBound(status, { key: "save.saved" });
     await refresh();
   } catch {
     status.hidden = false;
     status.className = "panel-error";
-    status.textContent = "没有保存 / not saved";
+    setBound(status, { key: "save.failed" });
   } finally {
     button.disabled = false;
   }
 }
 
 function renderFileList(dir, files, stage, options) {
+  viewState = { kind: "files", dir, files, stage, options };
   panelBody.replaceChildren();
   const back = makeBack(options);
   if (back) panelBody.append(back);
@@ -1557,7 +1684,7 @@ function renderFileList(dir, files, stage, options) {
   // Keep the way back (e.g. to the stage panel opened from the graph) after an upload from this list.
   if (stage && stage.executor === "human") panelBody.append(uploadControl(stage, dir, options));
   if (!files.length) {
-    panelBody.append(el("p", null, "空文件夹 / empty folder"));
+    panelBody.append(el("p", null, t("files.empty")));
     return;
   }
   const list = el("ul", "file-list");
@@ -1578,7 +1705,7 @@ function renderFileList(dir, files, stage, options) {
 function uploadControl(stage, dir, options) {
   const form = el("div", "upload");
   const label = el("label", "upload-label");
-  label.append(el("span", null, "上传文件 / Upload a file"));
+  label.append(el("span", null, t("upload.label")));
   const input = document.createElement("input");
   input.type = "file";
   const status = el("p", "upload-status");
@@ -1597,7 +1724,7 @@ async function uploadInto(stage, dir, file, status, options) {
   if (status) {
     status.hidden = false;
     status.className = "upload-status";
-    status.textContent = "上传中 / uploading…";
+    setBound(status, { key: "upload.uploading" });
   }
   try {
     const res = await fetch(
@@ -1606,13 +1733,13 @@ async function uploadInto(stage, dir, file, status, options) {
     );
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      if (status) status.textContent = data.error || `没有上传 / not uploaded (${res.status})`;
+      if (status) setBound(status, data.error ? { api: data.error } : { key: "upload.failedStatus", vars: { status: res.status } });
       return;
     }
     await refresh();
     await openOutput({ path: dir, directory: true, text: false, type: "dir" }, stage, options);
   } catch {
-    if (status) status.textContent = "没有上传 / not uploaded";
+    if (status) setBound(status, { key: "upload.failed" });
   }
 }
 
@@ -1636,9 +1763,10 @@ async function loadInputs() {
 }
 
 function renderInputs(fields) {
+  lastFields = fields;
   inputsEl.replaceChildren();
   if (!fields.length) {
-    inputsEl.append(el("p", "field-help", "这个流程没有输入 / This flow has no inputs."));
+    inputsEl.append(el("p", "field-help", t("inputs.none")));
     inputsSave.hidden = true;
     return;
   }
@@ -1650,7 +1778,7 @@ function renderInputs(fields) {
 function renderInput(field) {
   const wrap = el("label", "field");
   const name = el("span", "field-name", field.name || "");
-  if (field.required) name.append(el("span", "req", "必填 required"));
+  if (field.required) name.append(el("span", "req", t("input.required")));
   wrap.append(name, controlFor(field));
   if (field.description) wrap.append(el("span", "field-help", field.description));
   return wrap;
@@ -1721,7 +1849,7 @@ async function saveInputs(event) {
       if (!Number.isFinite(number)) {
         inputsStatus.hidden = false;
         inputsStatus.className = "inputs-status error";
-        inputsStatus.textContent = `输入 ${name} 必须是数字 / input "${name}" must be a number`;
+        setBound(inputsStatus, { key: "input.mustNumber", vars: { name } });
         return;
       }
       payload[name] = number;
@@ -1742,17 +1870,17 @@ async function saveInputs(event) {
     inputsStatus.hidden = false;
     if (!res.ok) {
       inputsStatus.className = "inputs-status error";
-      inputsStatus.textContent = data.error || `没有保存 / not saved (${res.status})`;
+      setBound(inputsStatus, data.error ? { api: data.error } : { key: "save.failedStatus", vars: { status: res.status } });
       return;
     }
     inputsStatus.className = "inputs-status ok";
-    inputsStatus.textContent = "已保存 / saved";
+    setBound(inputsStatus, { key: "save.saved" });
     lastInputValues = "";
     await refresh();
   } catch {
     inputsStatus.hidden = false;
     inputsStatus.className = "inputs-status error";
-    inputsStatus.textContent = "没有保存 / not saved";
+    setBound(inputsStatus, { key: "save.failed" });
   } finally {
     inputsSave.disabled = false;
   }
@@ -1766,33 +1894,31 @@ function onStreamEvent(type, data) {
   if (type === "stage:start") appendLog(`▶ ${data.name || data.stage} (${data.stage})`);
   else if (type === "stage:log") appendLog(`    ${data.line ?? ""}`);
   else if (type === "stage:done") appendLog(`✓ ${data.name || data.stage} → v${data.n}`);
-  else if (type === "stage:skip") appendLog(`· ${data.name || data.stage} 跳过 / skipped: ${data.reason ?? ""}`);
-  else if (type === "stage:error") appendLog(`✗ ${data.name || data.stage}: ${data.error ?? ""}`);
+  else if (type === "stage:skip") appendLog(tApi("log.skip", data.reason ?? "", { name: data.name || data.stage }, "reason"));
+  else if (type === "stage:error") appendLog(`✗ ${data.name || data.stage}: ${apiText(data.error ?? "")}`);
   else if (type === "run:end") {
     if (data.waiting) {
       const missing = Array.isArray(data.waiting.missing) ? data.waiting.missing.join(", ") : "";
-      appendLog(`「${data.waiting.name || data.waiting.stage}」在等你 / waiting for you: ${missing}`);
+      appendLog(t("log.waiting", { name: data.waiting.name || data.waiting.stage, missing }));
       if (data.waiting.instructions) appendLog(data.waiting.instructions);
-    } else if (data.ok) appendLog("运行结束 / run finished");
-    else appendLog(data.error || "运行失败 / run failed");
+    } else if (data.ok) appendLog(t("log.finished"));
+    else appendLog(data.error ? apiText(data.error) : t("log.runFailed"));
     void refresh();
   }
 }
 
 function setLiveHint(live) {
   if (!hintEl) return;
-  hintEl.textContent = live ? "实时更新 / live updates" : "每 3 秒刷新 / refreshes every 3s";
+  hintEl.textContent = live ? t("hint.live") : t("hint.poll");
 }
 
 function showLiveLost() {
-  noticeEl.hidden = false;
-  noticeEl.textContent = LIVE_LOST;
+  showNotice("hint.lost");
 }
 
 function hideLiveLost() {
-  if (noticeEl.textContent !== LIVE_LOST) return;
-  noticeEl.textContent = "";
-  noticeEl.hidden = true;
+  if (noticeKey !== "hint.lost") return;
+  clearNotice();
 }
 
 function startPolling() {
@@ -1887,8 +2013,7 @@ async function refresh() {
   try {
     const res = await fetch("/api/flow", { headers: headers(), cache: "no-store" });
     if (!res.ok) {
-      noticeEl.hidden = false;
-      noticeEl.textContent = `无法刷新看板 / could not refresh the board (${res.status})`;
+      showNotice("refresh.failedStatus", { status: res.status });
       return;
     }
     const text = await res.text();
@@ -1904,7 +2029,7 @@ async function refresh() {
       // Keep the totals already on screen. The next refresh tries again.
     }
     if (eventsState === "down") showLiveLost();
-    else noticeEl.hidden = true;
+    else clearNotice();
     if (text === lastJson && (!usageOk || nextUsage === usageText)) return;
     const flowChanged = text !== lastJson;
     lastJson = text;
@@ -1922,7 +2047,7 @@ async function refresh() {
     }
   } catch {
     noticeEl.hidden = false;
-    noticeEl.textContent = "无法刷新看板 / could not refresh the board";
+    showNotice("refresh.failed");
   } finally {
     refreshing = false;
   }
@@ -1945,7 +2070,7 @@ function cardMenu(stage) {
   button.type = "button";
   button.className = "menu-button";
   button.setAttribute("aria-haspopup", "menu");
-  button.setAttribute("aria-label", `菜单 / Menu · ${stage.id || ""}`);
+  button.setAttribute("aria-label", `${t("card.menu")} · ${stage.id || ""}`);
   button.textContent = "⋯";
   const menu = el("div", "menu");
   menu.hidden = true;
@@ -1954,7 +2079,7 @@ function cardMenu(stage) {
   remove.type = "button";
   remove.className = "menu-remove";
   remove.setAttribute("role", "menuitem");
-  remove.textContent = "删除阶段 / Remove stage";
+  remove.textContent = t("action.removeStage");
   remove.addEventListener("click", () => {
     menu.hidden = true;
     openRemove(stage);
@@ -1987,24 +2112,20 @@ function outputFromPath(p) {
   return { type: "application/octet-stream", path: normalized };
 }
 
-function issueLines(data, fallback) {
-  if (data && Array.isArray(data.issues) && data.issues.length) {
-    return data.issues.map((issue) => `${issue.path || "/"}: ${issue.message || ""}`).join("\n");
-  }
-  if (data && typeof data.error === "string" && data.error) return data.error;
-  return fallback;
-}
-
 function fillStageChoices() {
   const after = document.getElementById("stage-after");
   const inputs = document.getElementById("stage-inputs");
-  after.replaceChildren(new Option("加在最后 / at the end", ""));
+  const afterValue = after.value;
+  const selected = new Set([...inputs.selectedOptions].map((option) => option.value));
+  after.replaceChildren(new Option(t("stage.atEnd"), ""));
   inputs.replaceChildren();
   for (const stage of boardStages) {
     const label = stage.name && stage.name !== stage.id ? `${stage.name} (${stage.id})` : stage.id || "";
     after.append(new Option(label, stage.id || ""));
     inputs.append(new Option(label, stage.id || ""));
   }
+  if ([...after.options].some((option) => option.value === afterValue)) after.value = afterValue;
+  for (const option of inputs.options) option.selected = selected.has(option.value);
 }
 
 function syncStageFields() {
@@ -2014,10 +2135,14 @@ function syncStageFields() {
   document.getElementById("stage-agent-field").hidden = type !== "agent";
   document.getElementById("stage-run").required = type === "script";
   document.getElementById("stage-outputs").required = type === "script";
-  document.getElementById("stage-outputs-hint").textContent =
-    type === "script"
-      ? "script 阶段必须写产物路径和命令。一行一个路径。 / A script stage needs an output path and a command. One path per line."
-      : "一行一个路径。不填就用默认产物。 / One path per line. Leave empty for the default output.";
+  const hint = document.getElementById("stage-outputs-hint");
+  if (type === "script") {
+    hint.setAttribute("data-i18n", "stage.outputsHintScript");
+    hint.textContent = t("stage.outputsHintScript");
+  } else {
+    hint.setAttribute("data-i18n", "stage.outputsHint");
+    hint.textContent = t("stage.outputsHint");
+  }
 }
 
 function openAddStage() {
@@ -2027,6 +2152,7 @@ function openAddStage() {
   syncStageFields();
   stageStatus.hidden = true;
   stageStatus.textContent = "";
+  stageStatus._i18nSpec = null;
   stageDialog.showModal();
   document.getElementById("stage-id").focus();
 }
@@ -2061,14 +2187,14 @@ async function submitStage(event) {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       stageStatus.hidden = false;
-      stageStatus.textContent = issueLines(data, `没有添加 / not added (${res.status})`);
+      setBound(stageStatus, { issues: data, fallback: { key: "stage.notAddedStatus", vars: { status: res.status } } });
       return;
     }
     stageDialog.close();
     await refreshNow();
   } catch {
     stageStatus.hidden = false;
-    stageStatus.textContent = "没有添加 / not added";
+    setBound(stageStatus, { key: "stage.notAdded" });
   } finally {
     stageSave.disabled = false;
   }
@@ -2076,12 +2202,14 @@ async function submitStage(event) {
 
 function openRemove(stage) {
   removeId = stage.id || "";
-  const label = stage.name || stage.id || "";
-  removeText.textContent = `删除阶段「${label}」（${removeId}）？产物和 runs/ 都会留下。 / Remove stage "${label}" (${removeId})? Its outputs and runs/ stay.`;
+  removeLabel = stage.name || stage.id || "";
+  setBound(removeText, { key: "stage.removeAsk", vars: { label: removeLabel, id: removeId } });
   removeDeps.hidden = true;
   removeDeps.textContent = "";
+  removeDeps._i18nSpec = null;
   removeStatus.hidden = true;
   removeStatus.textContent = "";
+  removeStatus._i18nSpec = null;
   removeForce.hidden = true;
   removeConfirm.hidden = false;
   removeDialog.showModal();
@@ -2099,25 +2227,26 @@ async function requestRemove(force) {
     if (res.status === 409 && !force && Array.isArray(data.dependents) && data.dependents.length) {
       const names = data.dependents.join(", ");
       removeDeps.hidden = false;
-      removeDeps.textContent =
-        data.error ||
-        (names
-          ? `这些阶段还把「${removeId}」当作输入：${names} / These stages still use "${removeId}" as an input: ${names}`
-          : "还有阶段依赖它 / other stages still depend on it");
+      const spec = data.error
+        ? { api: data.error }
+        : names
+          ? { key: "stage.removeDeps", vars: { id: removeId, names } }
+          : { key: "stage.removeDepsShort" };
+      setBound(removeDeps, spec);
       removeForce.hidden = false;
       removeConfirm.hidden = true;
       return;
     }
     if (!res.ok) {
       removeStatus.hidden = false;
-      removeStatus.textContent = issueLines(data, `没有删除 / not removed (${res.status})`);
+      setBound(removeStatus, { issues: data, fallback: { key: "stage.notRemovedStatus", vars: { status: res.status } } });
       return;
     }
     removeDialog.close();
     await refreshNow();
   } catch {
     removeStatus.hidden = false;
-    removeStatus.textContent = "没有删除 / not removed";
+    setBound(removeStatus, { key: "stage.notRemoved" });
   } finally {
     removeConfirm.disabled = false;
     removeForce.disabled = false;
@@ -2175,5 +2304,61 @@ inputsForm.addEventListener("submit", (event) => {
   void saveInputs(event);
 });
 
+function replayEditor(state) {
+  const area = panelBody.querySelector(".editor textarea");
+  const value = area ? area.value : state.text;
+  const start = area ? area.selectionStart : 0;
+  const end = area ? area.selectionEnd : 0;
+  renderEditor(state.rel, value, state.options, false);
+  const next = panelBody.querySelector(".editor textarea");
+  if (!next) return;
+  try {
+    next.setSelectionRange(start, end);
+  } catch {
+    // The text is still there.
+  }
+}
+
+function replayView() {
+  const state = viewState;
+  if (!state || panelMode !== "other" || panelEl.hidden) return;
+  if (state.kind === "history") renderHistory(state.stage, state.runs, state.note, readCompare() || state.selected, state.errorSpec);
+  else if (state.kind === "diff") renderDiff(state.stage, state.diff);
+  else if (state.kind === "version") paintVersionList(state.stage, state.run);
+  else if (state.kind === "files") renderFileList(state.dir, state.files, state.stage, state.options);
+  else if (state.kind === "editor") replayEditor(state);
+  else if (state.kind === "nodes") showPanel(state.nodes, state.options);
+  else if (state.kind === "message") showMessage(state.className, state.spec, state.options, state.heading);
+}
+
+function retouchInputs() {
+  if (!lastFields) return;
+  for (const req of inputsEl.querySelectorAll(".req")) req.textContent = t("input.required");
+  if (!lastFields.length) {
+    const empty = inputsEl.querySelector(":scope > p.field-help");
+    if (empty) empty.textContent = t("inputs.none");
+  }
+}
+
+function repaintLanguage() {
+  paintUsageTotal();
+  if (eventsState === "live") setLiveHint(true);
+  else if (eventsState === "down") setLiveHint(false);
+  if (noticeKey) {
+    noticeEl.hidden = false;
+    noticeEl.textContent = t(noticeKey, noticeVars);
+  }
+  refreshBound();
+  retouchInputs();
+  if (stageDialog.open) {
+    fillStageChoices();
+    syncStageFields();
+  }
+  if (lastFlow) render(lastFlow);
+  else paintBoard();
+  if (panelMode === "other") replayView();
+}
+
+onLangChange(repaintLanguage);
 connectEvents();
 refresh();
