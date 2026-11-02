@@ -1,7 +1,7 @@
 {
   "name": "@flowgit/web",
   "version": "0.1.0",
-  "description": "Flowgit local web board: a node:http server on 127.0.0.1 and a static page. 本机网页看板。",
+  "description": "Flowgit local web board: view and edit stage outputs, served by node:http on 127.0.0.1. 本机网页看板，可查看和修改产物。",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",

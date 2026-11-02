@@ -4,6 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { loadFlow, resolveFlowInputs, statusAll } from "@flowgit/core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { startBoard, type BoardServer } from "./server.js";
 
@@ -18,26 +19,46 @@ function flowgit(args: string[], env: Record<string, string> = {}) {
   });
 }
 
-function httpGet(
+function httpCall(
   port: number,
+  method: string,
   reqPath: string,
+  body?: string | Buffer,
   headers: Record<string, string> = {},
 ): Promise<{ status: number; body: string; headers: http.IncomingHttpHeaders }> {
   return new Promise((resolve, reject) => {
-    const req = http.request({ hostname: "127.0.0.1", port, path: reqPath, method: "GET", headers }, (res) => {
-      const chunks: Buffer[] = [];
-      res.on("data", (chunk) => chunks.push(chunk as Buffer));
-      res.on("end", () => {
-        resolve({
-          status: res.statusCode ?? 0,
-          body: Buffer.concat(chunks).toString("utf8"),
-          headers: res.headers,
+    const payload = body === undefined ? null : Buffer.isBuffer(body) ? body : Buffer.from(body);
+    const req = http.request(
+      {
+        hostname: "127.0.0.1",
+        port,
+        path: reqPath,
+        method,
+        headers: {
+          ...(payload ? { "Content-Length": String(payload.length) } : {}),
+          ...headers,
+        },
+      },
+      (res) => {
+        const chunks: Buffer[] = [];
+        res.on("data", (chunk) => chunks.push(chunk as Buffer));
+        res.on("end", () => {
+          resolve({
+            status: res.statusCode ?? 0,
+            body: Buffer.concat(chunks).toString("utf8"),
+            headers: res.headers,
+          });
         });
-      });
-    });
+      },
+    );
     req.on("error", reject);
-    req.end();
+    if (payload) req.end(payload);
+    else req.end();
   });
+}
+
+function httpGet(port: number, reqPath: string, headers: Record<string, string> = {}) {
+  return httpCall(port, "GET", reqPath, undefined, headers);
 }
 
 describe("read-only board", () => {
@@ -99,6 +120,10 @@ describe("read-only board", () => {
     expect(body.stages[2].latest).toBeNull();
     expect(body.stages[0].outputs.map((o) => o.path)).toEqual(["script.md"]);
     expect(body.stages[2].outputs.map((o) => o.path)).toEqual(["assets"]);
+    expect(body.stages[0].outputs[0]).toMatchObject({ path: "script.md", type: "text/markdown", directory: false, text: true });
+    expect(body.stages[1].outputs[0]).toMatchObject({ path: "storyboard.json", directory: false, text: true });
+    expect(body.stages[2].outputs[0]).toMatchObject({ path: "assets", directory: true, text: false });
+    expect(body.stages[4].outputs[0]).toMatchObject({ path: "final.mp4", directory: false, text: false });
   });
 
   it("rejects /api/* without a token", async () => {
@@ -175,5 +200,112 @@ describe("read-only board", () => {
     } finally {
       await bareServer.close();
     }
+  });
+
+  it("rejects edits and uploads that omit the token", async () => {
+    const put = await httpCall(server.port, "PUT", "/api/file?path=script.md", "x");
+    expect(put.status).toBe(401);
+    const wrong = await httpCall(server.port, "PUT", "/api/file?path=script.md", "x", { "X-Flowgit-Token": "nope" });
+    expect(wrong.status).toBe(401);
+    const upload = await httpCall(server.port, "POST", "/api/upload?stage=assets&name=a.txt", "hi");
+    expect(upload.status).toBe(401);
+  });
+
+  it("returns 403 when writing a path that is not a declared output file", async () => {
+    const flowFile = path.join(flowDir, "flow.json");
+    const before = fs.readFileSync(flowFile);
+    const flowJson = await httpCall(server.port, "PUT", "/api/file?path=flow.json", "nope", authed());
+    expect(flowJson.status).toBe(403);
+    expect(fs.readFileSync(flowFile)).toEqual(before);
+
+    const snap = await httpCall(server.port, "PUT", "/api/file?path=runs/script/1/outputs/script.md", "nope", authed());
+    expect(snap.status).toBe(403);
+    const dir = await httpCall(server.port, "PUT", "/api/file?path=assets", "nope", authed());
+    expect(dir.status).toBe(403);
+    const inside = await httpCall(server.port, "PUT", "/api/file?path=assets/cat.txt", "nope", authed());
+    expect(inside.status).toBe(403);
+    const prompt = await httpCall(server.port, "PUT", "/api/file?path=prompts/script.md", "nope", authed());
+    expect(prompt.status).toBe(403);
+  });
+
+  it("returns 400 for invalid JSON and does not save it", async () => {
+    const file = path.join(flowDir, "storyboard.json");
+    const before = fs.readFileSync(file);
+    const res = await httpCall(server.port, "PUT", "/api/file?path=storyboard.json", "{not json", authed());
+    expect(res.status).toBe(400);
+    expect(res.body).toMatch(/JSON/);
+    expect(fs.readFileSync(file)).toEqual(before);
+    const loaded = loadFlow(flowDir);
+    const storyboard = statusAll(loaded, resolveFlowInputs(loaded.dir, loaded.flow)).find((s) => s.stage.id === "storyboard");
+    expect(storyboard?.state).toBe("ok");
+    expect(fs.readdirSync(flowDir).filter((name) => name.includes("flowgit-tmp"))).toEqual([]);
+  });
+
+  it("saves valid JSON and refuses uploads that are not a human directory", async () => {
+    const file = path.join(flowDir, "storyboard.json");
+    const next = `${JSON.stringify({ ...JSON.parse(fs.readFileSync(file, "utf8")), note: "board" }, null, 2)}\n`;
+    const saved = await httpCall(server.port, "PUT", "/api/file?path=storyboard.json", next, authed());
+    expect(saved.status).toBe(200);
+    expect(fs.readFileSync(file, "utf8")).toBe(next);
+    const refused = await httpCall(server.port, "POST", "/api/upload?stage=script&name=x.txt", "no", authed());
+    expect(refused.status).toBe(403);
+    expect(fs.existsSync(path.join(flowDir, "x.txt"))).toBe(false);
+  });
+
+  it("uploads a file into assets/", async () => {
+    const bytes = Buffer.from([0, 255, 10, 13, 0x68, 0x69]);
+    const res = await httpCall(
+      server.port,
+      "POST",
+      `/api/upload?stage=assets&name=${encodeURIComponent("clip.bin")}`,
+      bytes,
+      authed(),
+    );
+    expect(res.status).toBe(200);
+    expect(fs.readFileSync(path.join(flowDir, "assets", "clip.bin"))).toEqual(bytes);
+    const listed = await httpGet(server.port, "/api/file?path=assets", authed());
+    expect(JSON.parse(listed.body).files).toContain("clip.bin");
+  });
+
+  it("returns 400 when the upload file name contains ../", async () => {
+    const res = await httpCall(
+      server.port,
+      "POST",
+      `/api/upload?stage=assets&name=${encodeURIComponent("../evil.txt")}`,
+      "pwn",
+      authed(),
+    );
+    expect(res.status).toBe(400);
+    expect(fs.existsSync(path.join(flowDir, "evil.txt"))).toBe(false);
+    expect(fs.existsSync(path.join(work, "evil.txt"))).toBe(false);
+    const nested = await httpCall(
+      server.port,
+      "POST",
+      `/api/upload?stage=assets&name=${encodeURIComponent("nested/evil.txt")}`,
+      "pwn",
+      authed(),
+    );
+    expect(nested.status).toBe(400);
+  });
+
+  it("editing script.md makes statusAll report edited", async () => {
+    const snapshot = fs.readFileSync(path.join(flowDir, "runs/script/1/outputs/script.md"));
+    const next = "手工改过的脚本\n";
+    const res = await httpCall(server.port, "PUT", "/api/file?path=script.md", next, authed());
+    expect(res.status).toBe(200);
+    expect(fs.readFileSync(path.join(flowDir, "script.md"), "utf8")).toBe(next);
+    expect(fs.readFileSync(path.join(flowDir, "runs/script/1/outputs/script.md"))).toEqual(snapshot);
+    const loaded = loadFlow(flowDir);
+    const script = statusAll(loaded, resolveFlowInputs(loaded.dir, loaded.flow)).find((s) => s.stage.id === "script");
+    expect(script?.state).toBe("edited");
+    const board = JSON.parse((await httpGet(server.port, "/api/flow", authed())).body) as {
+      stages: Array<{ id: string; state: string }>;
+    };
+    expect(board.stages.find((s) => s.id === "script")?.state).toBe("edited");
+    const page = await httpGet(server.port, "/app.js");
+    expect(page.status).toBe(200);
+    expect(page.body).toContain("保存 Save");
+    expect(page.body).toContain("已手动修改");
+    expect(page.body).toContain("Before this stage next runs, the edit is saved as its own version and is not lost.");
   });
 });

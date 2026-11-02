@@ -10,7 +10,7 @@ npm install -g flowgit            # 需要 Node.js 22+ / needs Node.js 22+
 flowgit init my-video             # 用自带的短视频模板建流程 / new flow from the short-video template
 cd my-video
 flowgit status                    # 终端看板 / the board in the terminal
-flowgit board                     # 在浏览器打开看板 / the board in your browser
+flowgit board                     # 在浏览器打开看板，可以直接改产物 / the board in your browser, outputs editable
 flowgit inputs set topic="为什么猫喜欢纸箱"
 flowgit providers                 # 内置的模型供应商和密钥状态 / built-in providers and key status
 flowgit doctor                    # 跑之前检查密钥、FFmpeg、agent / check keys, FFmpeg and agents before a run

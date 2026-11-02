@@ -18,7 +18,7 @@ Open-source tool for turning any process into a visual, staged, versioned flow (
 
 - `packages/core`（`@flowgit/core`）：flow.json 的 schema（`schema/flow.schema.json` 是唯一标准，`src/types.ts` 跟它保持一致）、校验、`runs/<stage>/<n>/` 下的运行历史、阶段执行器（`human`、`llm`、`script`、`agent` 可运行；`workflow`/`service`/`mcp` 是预留）。
 - `packages/cli`（`flowgit`）：commander 命令行在 `src/index.ts`，自带模板在 `templates/`。
-- `packages/web`（`@flowgit/web`）：本机只读看板。`node:http` 只绑定 `127.0.0.1`，静态页面在 `public/`，`flowgit board` 打开它。
+- `packages/web`（`@flowgit/web`）：本机看板，可查看和修改阶段产物。`node:http` 只绑定 `127.0.0.1`，静态页面在 `public/`，`flowgit board` 打开它。文本产物用 `PUT /api/file` 保存；人工阶段的文件夹产物用 `POST /api/upload` 上传。
 - `docs/spec.md`：给人看的规范，改 schema 时一起改。
 - `docs/guide.md`：入门教程，照着做出自带的 `weekly-report` 模板（`packages/cli/templates/weekly-report`）。里面贴了真实的命令行输出，改了命令行输出或格式时要跟着改。
 - `examples/`：只在仓库里的示例流程。它们和 `packages/cli/templates/` 里的模板都由 `packages/core/src/examples.test.ts` 校验。发布流程见 `docs/releasing.md`。
@@ -26,7 +26,7 @@ Open-source tool for turning any process into a visual, staged, versioned flow (
 
 - `packages/core` (`@flowgit/core`): the flow.json schema (`schema/flow.schema.json` is the source of truth; `src/types.ts` mirrors it), validation, run history under `runs/<stage>/<n>/`, and stage executors (`human`, `llm`, `script`, `agent`; `workflow`/`service`/`mcp` are reserved).
 - `packages/cli` (`flowgit`): the commander CLI in `src/index.ts`, bundled templates in `templates/`.
-- `packages/web` (`@flowgit/web`): the local read-only board. `node:http` binds `127.0.0.1` only, static files live in `public/`, and `flowgit board` opens it.
+- `packages/web` (`@flowgit/web`): the local board, where stage outputs can be viewed and edited. `node:http` binds `127.0.0.1` only, static files live in `public/`, and `flowgit board` opens it. Text outputs are saved with `PUT /api/file`; files are uploaded into a human stage's directory output with `POST /api/upload`.
 - `docs/spec.md`: the human-readable spec. Change it together with the schema.
 - `docs/guide.md`: the starter tutorial; it builds the bundled `weekly-report` template (`packages/cli/templates/weekly-report`). It quotes real CLI output, so update it when CLI output or the format changes.
 - `examples/`: repo-only example flows. They and the templates in `packages/cli/templates/` are validated by `packages/core/src/examples.test.ts`. Releasing is in `docs/releasing.md`.

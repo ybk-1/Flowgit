@@ -729,7 +729,7 @@ program
 
 program
   .command("board")
-  .description("在浏览器打开本地只读看板 / open a local read-only board in the browser")
+  .description("在浏览器打开本地看板，可查看和修改产物 / open a local board in the browser to view and edit outputs")
   .option("--port <port>", "端口，只绑定 127.0.0.1 / port, bound to 127.0.0.1 only", "4747")
   .option("--no-open", "不打开浏览器 / do not open a browser")
   .action(async (opts: { port: string; open: boolean }) => {
@@ -741,7 +741,7 @@ program
       const dir = loadFlow(dirOf()).dir; // fail early, with the usual hint, when there is no flow.json
       const board = await startBoard({ dir, port, open: false });
       console.log(`${c.green("✓")} 看板 / board: ${board.url}`);
-      console.log(c.dim("只读，绑定 127.0.0.1。按 Ctrl+C 停止 / read-only, bound to 127.0.0.1. Press Ctrl+C to stop"));
+      console.log(c.dim("绑定 127.0.0.1。可以修改产物。按 Ctrl+C 停止 / bound to 127.0.0.1. Outputs can be edited. Press Ctrl+C to stop"));
       if (opts.open) openBrowser(board.url);
     } catch (err) {
       fail(err);
