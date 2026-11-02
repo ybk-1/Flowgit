@@ -42,7 +42,12 @@ To use another model for the script and storyboard, add `--model`, e.g. `flowgit
 No API key yet? Use the bundled demo replies (the demo content is in Chinese):
 
 ```bash
-FLOWGIT_LLM_MOCK_DIR=demo-replies flowgit run all --input topic=为什么猫喜欢纸箱
+export FLOWGIT_LLM_MOCK_DIR=demo-replies   # PowerShell: $env:FLOWGIT_LLM_MOCK_DIR = "demo-replies"
+flowgit inputs set topic=为什么猫喜欢纸箱
+flowgit run all                            # 停在素材阶段 / stops at the assets stage
+mkdir -p assets                            # PowerShell: mkdir assets
+flowgit run all                            # 剪辑 + 导出 → final.mp4 / edit + export → final.mp4
+unset FLOWGIT_LLM_MOCK_DIR                 # 换成真的模型之前 / before a real model (PowerShell: Remove-Item Env:FLOWGIT_LLM_MOCK_DIR)
 ```
 
 ## 素材 / Assets

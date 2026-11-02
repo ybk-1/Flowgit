@@ -119,7 +119,7 @@ function printEvent(e: RunEvent): void {
   }
 }
 
-function fail(err: unknown): never {
+function fail(err: unknown, ctx: { inputFlags?: string[] } = {}): never {
   const e = err as Error;
   // run all can stop (at a person, or on an error) after paying for model calls: end with what they used
   const exit = (code: number): never => {
@@ -130,6 +130,11 @@ function fail(err: unknown): never {
     console.log(`\n${c.yellow("⏸")} 「${e.stage.name}」在等你 / waiting for you: ${e.missing.join(", ")}`);
     if (e.instructions) console.log(`  ${e.instructions}`);
     console.log(`  放好文件后运行 / when ready: flowgit run ${e.stage.id}   (或 / or: flowgit run ${e.stage.id} --from <path>)`);
+    // --input lasts one run, so the command above would stop at "missing flow inputs".
+    if (ctx.inputFlags?.length) {
+      const pairs = ctx.inputFlags.map((kv) => (/\s/.test(kv) ? `"${kv}"` : kv)).join(" ");
+      console.log(`  --input 只管这一次，先存下来再接着跑 / --input lasts one run; save it before you continue: flowgit inputs set ${pairs}`);
+    }
     exit(2);
   }
   if (e instanceof FlowNotFoundError) {
@@ -348,10 +353,11 @@ function readSourceFlow(src: string): Flow {
   return data as Flow;
 }
 
+// Two lines rather than `cd … && flowgit status`: Windows PowerShell 5.1 has no `&&`.
 function nextStepLine(target: string): string {
   const rel = path.relative(process.cwd(), target);
   const shown = rel === "" ? "." : rel.startsWith("..") || path.isAbsolute(rel) ? target : rel;
-  return `  下一步 / next: cd ${/\s/.test(shown) ? `"${shown}"` : shown} && flowgit status`;
+  return `  下一步 / next:\n    cd ${/\s/.test(shown) ? `"${shown}"` : shown}\n    flowgit status`;
 }
 
 program
@@ -839,7 +845,7 @@ program
         if (hint) console.log(`\n${hint}`);
       }
     } catch (err) {
-      fail(err);
+      fail(err, { inputFlags: opts.input });
     }
   });
 

@@ -53,7 +53,12 @@ To use another model for the outline, draft and image plan, add `--model`, e.g. 
 No API key yet? Use the bundled demo replies (the demo content is in Chinese, written at Xiaohongshu length):
 
 ```bash
-FLOWGIT_LLM_MOCK_DIR=demo-replies flowgit run all --input topic=为什么猫喜欢纸箱
+export FLOWGIT_LLM_MOCK_DIR=demo-replies   # PowerShell: $env:FLOWGIT_LLM_MOCK_DIR = "demo-replies"
+flowgit inputs set topic=为什么猫喜欢纸箱
+flowgit run all                            # 停在照片阶段 / stops at the photos stage
+mkdir -p photos                            # PowerShell: mkdir photos
+flowgit run all                            # 导出 → post.md、post.html / export → post.md and post.html
+unset FLOWGIT_LLM_MOCK_DIR                 # 换成真的模型之前 / before a real model (PowerShell: Remove-Item Env:FLOWGIT_LLM_MOCK_DIR)
 ```
 
 ## 照片 / Photos

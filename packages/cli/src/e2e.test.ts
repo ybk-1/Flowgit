@@ -38,7 +38,9 @@ describe("flowgit CLI with the short-video template", () => {
     const init = spawnSync(process.execPath, [cli, "init", flowDir], { encoding: "utf8" });
     expect(init.status).toBe(0);
     // The flow is outside the current folder, so the hint shows its full path, not ../../..
-    expect(init.stdout).toContain(`next: cd ${/\s/.test(flowDir) ? `"${flowDir}"` : flowDir} && flowgit status`);
+    // Two lines, no `&&`, so it also works in Windows PowerShell 5.1.
+    expect(init.stdout).toContain(`next:\n    cd ${/\s/.test(flowDir) ? `"${flowDir}"` : flowDir}\n    flowgit status`);
+    expect(init.stdout).not.toContain("&&");
     expect(fs.existsSync(path.join(flowDir, "flow.json"))).toBe(true);
     expect(flowgit(["validate"])).toMatchObject({ code: 0 });
     const status = flowgit(["status"]);
@@ -80,7 +82,7 @@ describe("flowgit CLI with the short-video template", () => {
   it("shows a short, quoted path when the new flow is below the current folder", () => {
     const init = spawnSync(process.execPath, [cli, "init", "my video"], { cwd: work, encoding: "utf8" });
     expect(init.status).toBe(0);
-    expect(init.stdout).toContain('next: cd "my video" && flowgit status');
+    expect(init.stdout).toContain('next:\n    cd "my video"\n    flowgit status');
   });
 
   it("checks input names and values before saving them", () => {
@@ -95,10 +97,15 @@ describe("flowgit CLI with the short-video template", () => {
   });
 
   it("runs until the human stage and waits", () => {
+    // With --input only, the stop says how to keep the values for the next command.
+    const once = flowgit(["run", "all", "--input", "topic=为什么猫喜欢纸箱", "--input", "duration=25"], { FLOWGIT_LLM_MOCK_DIR: path.join(flowDir, "demo-replies") });
+    expect(once.code, once.out).toBe(2);
+    expect(once.out).toContain("save it before you continue: flowgit inputs set topic=为什么猫喜欢纸箱 duration=25");
     expect(flowgit(["inputs", "set", "topic=为什么猫喜欢纸箱", "duration=25"]).code).toBe(0);
     const r = flowgit(["run", "all"], { FLOWGIT_LLM_MOCK_DIR: path.join(flowDir, "demo-replies") });
     expect(r.code).toBe(2);
     expect(r.out).toContain("waiting for you: assets");
+    expect(r.out).not.toContain("--input lasts one run");
     expect(fs.existsSync(path.join(flowDir, "storyboard.json"))).toBe(true);
     const status = JSON.parse(flowgit(["status", "--json"]).out);
     expect(status.stages.map((s: { state: string }) => s.state)).toEqual(["ok", "ok", "never-run", "waiting-upstream", "waiting-upstream"]);
