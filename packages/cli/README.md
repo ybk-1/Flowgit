@@ -29,6 +29,7 @@ flowgit log                       # 整个流程的历史和 token 合计 / the 
 | `support-sop` | 客服 SOP：资料 → 汇总 → 规程 → 用例 → 检查 → 打包成 Skill | Customer-support SOP: knowledge → collect → SOP → cases → review → packaged as a Skill |
 | `job-application` | 求职材料：材料 → 分析 → 简历和求职信并行 → 检查 | Job application: materials → analysis → resume and letter in parallel → check |
 | `research-report` | 调研报告：子问题 → 资料 → 提纲 → 带引用的报告 → 检查出处 | Research report: questions → sources → outline → cited report → citation check |
+| `landing-page` | 落地页：简报 → 结构 → 文案 → 照片（可空）→ 生成网页 → 检查 | Landing page: brief → structure → copy → photos (optional) → build → check |
 
 ```bash
 flowgit templates                 # 列出模板和它们的阶段 / list templates and their stages

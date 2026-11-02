@@ -71,6 +71,7 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 - `support-sop`：客服 SOP，资料（人）→ 汇总（脚本）→ 规程 → 用例 → 检查（模型）→ 打包成 `skill/SKILL.md` 和评测用例。
 - `job-application`：对照职位描述改简历并写求职信。简历和求职信并行，最后脚本检查关键词、篇幅和占位符。
 - `research-report`：把题目拆成子问题、收集资料、写成带引用的报告。脚本检查没被引用的来源、不存在的引用、没被回答的子问题和没有出处的段落。
+- `landing-page`：落地页。简报（人）→ 结构 → 文案 → 照片（可空）→ 生成 `site/index.html` 和 `site/style.css` → 检查。缺图用色块加说明，页面不访问网络，用户写的文字都会转义。
 - `examples/agent-page`：用 agent 做一页介绍网页（只在仓库里）。
 - `short-video` (default): script → storyboard → assets → edit → export. FFmpeg renders a vertical video with zoom, blurred fill, gradient text cards, a title, transitions, background music and voiceover (clips follow the voice); the output language is Chinese or English.
 - `weekly-report`: a starter that turns rough notes (person) into a draft (model) and checks it (script); the [guide](docs/guide.md) builds it step by step.
@@ -78,6 +79,7 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 - `support-sop`: a customer-support SOP, knowledge (person) → collect (script) → SOP → test cases → review (model) → packaged as `skill/SKILL.md` with an eval set.
 - `job-application`: tailor a resume and write a cover letter for a job description. The resume and letter run in parallel, then a script checks keywords, length and placeholders.
 - `research-report`: split a topic into sub-questions, gather sources and write a cited report. A script checks uncited sources, citations of missing files, unanswered sub-questions and paragraphs with no citation.
+- `landing-page`: a landing page. Brief (person) → structure → copy → photos (optional) → build `site/index.html` and `site/style.css` → check. A missing image becomes a color block with a caption, the page loads nothing from the network, and user text is escaped.
 - `examples/agent-page`: a one-page explainer made by an agent (repo only).
 
 ### 项目 / Project
