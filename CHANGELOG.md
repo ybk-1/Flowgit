@@ -23,10 +23,12 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 - `llm`：接任何模型。模型写成 `<provider>/<model>`，内置 Anthropic、OpenAI、OpenRouter、智谱 GLM、DeepSeek、Moonshot、通义千问和本机 Ollama，其他兼容 Anthropic 或 OpenAI 接口的服务加一条配置就行。密钥只从环境变量读。每次调用后显示 token 用量，`run all` 调用了好几次时最后再显示合计。
 - `script`：在流程目录执行一条命令；`requires` 列出命令还要用到的程序（例如 `ffmpeg`）。
 - `agent`：以无界面模式启动 Claude Code、Codex、Cursor、Gemini 或自定义的 agent CLI，只用能写流程目录的最小权限。
+- `script` 和 `agent` 可以设 `timeoutSec`：到时间就停掉整棵进程树（macOS、Linux 先 `SIGTERM`、5 秒后 `SIGKILL`；Windows 用 `taskkill /T /F`），这次运行记为失败。按 Ctrl+C 时也会一起停掉子进程。
 - `human`: done by a person; when outputs are missing the flow stops and says what to put where.
 - `llm`: any model. Models are written `<provider>/<model>`, with Anthropic, OpenAI, OpenRouter, Zhipu GLM, DeepSeek, Moonshot, Qwen and local Ollama built in; any other Anthropic- or OpenAI-compatible service is one config entry. Keys are read only from environment variables. Each call shows its token usage, and `run all` ends with a total when it made several calls.
 - `script`: runs a command in the flow directory; `requires` lists other programs the command needs (e.g. `ffmpeg`).
 - `agent`: starts Claude Code, Codex, Cursor, Gemini or a custom agent CLI headless, with the least permission that still lets it write in the flow directory.
+- `script` and `agent` take `timeoutSec`: when it runs out, the whole process tree is stopped (`SIGTERM`, then `SIGKILL` after 5 seconds on macOS and Linux; `taskkill /T /F` on Windows) and the run is recorded as failed. Ctrl+C stops the child processes too.
 
 ### 命令行 / CLI
 
