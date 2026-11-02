@@ -4,9 +4,9 @@
 
 **Turn anything into a flow.** Break any piece of work into visual stages: each stage has artifacts and versions, people and AI can both pick it up, and finished flows can be shared and forked.
 
-> 状态：早期开发（spec v0.1）。目前有格式规范、核心库、命令行工具，以及本机看板（`flowgit board`，可查看和修改产物）。
+> 状态：早期开发（spec v0.1）。目前有格式规范、核心库、命令行工具，以及本机看板（`flowgit board`，可查看、修改、运行和填写输入）。
 >
-> Status: early (spec v0.1). The format, core library, CLI, and a local board (`flowgit board`, view and edit outputs) are here.
+> Status: early (spec v0.1). The format, core library, CLI, and a local board (`flowgit board`: view, edit, run, and fill in inputs) are here.
 
 ## 为什么 / Why
 
@@ -137,7 +137,7 @@ CLI messages and errors are bilingual. What a template produces (script, caption
 | `flowgit templates [--json]` | 列出自带的模板和它们的阶段 | List the bundled templates and their stages |
 | `flowgit validate` | 按规范检查 `flow.json` | Check `flow.json` against the spec |
 | `flowgit status [--json]` | 看板：每个阶段的状态、版本、产物和下一步 | The board: each stage's state, version, outputs, and the next step |
-| `flowgit board [--port 4747] [--no-open]` | 在浏览器打开本地看板（只监听 127.0.0.1），可查看和修改产物 | Open a local board in the browser (listens on 127.0.0.1 only) to view and edit outputs |
+| `flowgit board [--port 4747] [--no-open]` | 在浏览器打开本地看板（只监听 127.0.0.1），可查看和修改产物、运行阶段、填写输入 | Open a local board in the browser (listens on 127.0.0.1 only) to view and edit outputs, run stages, and edit inputs |
 | `flowgit inputs` / `flowgit inputs set k=v` | 查看 / 填写流程输入 | Show / set flow inputs |
 | `flowgit run <stage\|all>` | 跑一个阶段，或按顺序跑完所有需要跑的阶段 | Run one stage, or every stage that needs it, in order |
 | `flowgit run all --dry-run` | 预演：列出每个阶段会跳过、运行还是停下等你，以及最多调用几次模型；什么都不运行 | Dry run: whether each stage would be skipped, run or stop for you, and at most how many model calls; nothing runs |
@@ -268,7 +268,7 @@ packages/
   core/   @flowgit/core  格式、校验、版本记录、执行器 / format, validation, runs, executors
   cli/    flowgit        命令行工具和模板 / CLI and templates
     templates/             自带模板：short-video（短视频）、weekly-report（周报入门）/ bundled templates: short-video, weekly-report (starter)
-  web/    @flowgit/web   本机网页看板，可查看和修改产物 / local web board: view and edit outputs
+  web/    @flowgit/web   本机网页看板：查看、修改、运行，填写输入 / local web board: view, edit, run, fill in inputs
 docs/
   spec.md                  格式规范 / format spec
   guide.md                 教程：动手做一个流程 / tutorial: build your own flow

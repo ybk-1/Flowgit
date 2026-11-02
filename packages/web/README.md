@@ -11,9 +11,9 @@ const board = await startBoard({ dir: "my-flow", port: 0 });
 console.log(board.url);
 ```
 
-每个 `/api/*` 请求都要带启动时生成的令牌（`X-Flowgit-Token`），`Host` 也只能是 `127.0.0.1` 或 `localhost`。
+在看板上可以查看和修改产物、填写流程输入、运行阶段（同时只跑一个）。每个 `/api/*` 请求都要带启动时生成的令牌（`X-Flowgit-Token`；运行日志的 SSE 流 `/api/events` 用查询参数 `token`），`Host` 也只能是 `127.0.0.1` 或 `localhost`。
 
-Every `/api/*` request must carry the token generated at startup (`X-Flowgit-Token`), and the `Host` must be `127.0.0.1` or `localhost`.
+On the board you can view and edit outputs, fill in flow inputs, and run stages (one run at a time). Every `/api/*` request must carry the token generated at startup (`X-Flowgit-Token`; the `/api/events` SSE stream for the run log takes it as the `token` query parameter), and the `Host` must be `127.0.0.1` or `localhost`.
 
 规范和文档见 / Spec and docs: https://github.com/cgold9820-dotcom/Flowgit
 
