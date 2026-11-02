@@ -134,6 +134,7 @@ CLI messages and errors are bilingual. What a template produces (script, caption
 | 命令 / Command | 作用 | What it does |
 | --- | --- | --- |
 | `flowgit init [dir] [-t 模板\|目录\|Git 地址]` | 从模板、本地目录或 Git 地址新建流程。本地目录和 Git 默认不复制产物，`--with-outputs` 才复制；Git 可加 `--ref` 和 `--path` | Create a flow from a template, a local directory or a Git URL. A local directory or Git URL skips outputs unless `--with-outputs` is set; Git also takes `--ref` and `--path` |
+| `flowgit share <目录> [--with-outputs] [--force]` | 复制一份可以分享的流程：默认不带产物，发现密钥就拒绝写入，邮箱和本机路径只提醒 | Copy a flow that is safe to share: outputs stay behind by default, a secret refuses the write, emails and local paths are warnings |
 | `flowgit templates [--json]` | 列出自带的模板和它们的阶段 | List the bundled templates and their stages |
 | `flowgit validate` | 按规范检查 `flow.json` | Check `flow.json` against the spec |
 | `flowgit stage add <id> --type <类型>` | 加一个阶段。没写 `--after` 就加在最后，没写 `--input` 就用前一个阶段；llm / agent 会建提示词骨架 | Add a stage. Omit `--after` to append, omit `--input` to use the previous stage; llm / agent gets a prompt skeleton |
