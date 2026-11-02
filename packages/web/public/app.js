@@ -12,6 +12,33 @@ const STATES = {
 const EDIT_NOTE =
   "下次运行这个阶段前，这次修改会存成单独的版本，不会丢失。 / Before this stage next runs, the edit is saved as its own version and is not lost.";
 
+const VIEW_KEY = "flowgit.board.view";
+const SVG_NS = "http://www.w3.org/2000/svg";
+const NODE_W = 176;
+const NODE_H = 72;
+const GAP_X = 64;
+const GAP_Y = 28;
+const PAD = 20;
+
+/** "cards" or "graph". Storage can throw in private mode; the choice still works for this visit. */
+function storedView() {
+  try {
+    const value = window.localStorage.getItem(VIEW_KEY);
+    if (value === "graph" || value === "cards") return value;
+  } catch {
+    // private mode or blocked storage
+  }
+  return "cards";
+}
+
+function storeView(value) {
+  try {
+    window.localStorage.setItem(VIEW_KEY, value);
+  } catch {
+    // quota or private mode; the toggle still applies until reload
+  }
+}
+
 const boardEl = document.getElementById("board");
 const bannerEl = document.getElementById("banner");
 const inputsEl = document.getElementById("inputs");
@@ -35,6 +62,13 @@ let runGen = 0;
 let boardStages = [];
 let removeId = "";
 const modelDrafts = new Map();
+let view = storedView();
+let graphPayload = null;
+let graphError = "";
+let graphTicket = 0;
+let selectedId = "";
+let panelMode = "";
+let returnToStage = null;
 
 const LIVE_LOST = "实时更新已断开，改为每 3 秒刷新 / live updates lost, refreshing every 3 seconds";
 /** "connecting" until the first open or error, then "live" or "down". */
@@ -85,10 +119,357 @@ function render(data) {
 
   captureModelDrafts();
   boardStages = Array.isArray(data.stages) ? data.stages : [];
-  const scroll = boardEl.scrollLeft;
+  if (selectedId && !boardStages.some((stage) => stage.id === selectedId)) {
+    selectedId = "";
+    if (panelMode === "stage") closePanel();
+  }
+  paintBoard();
+  if (panelMode === "stage" && returnToStage) {
+    const fresh = boardStages.find((stage) => stage.id === returnToStage.id);
+    if (fresh) openStage(fresh);
+    else closePanel();
+  }
+}
+
+function paintBoard() {
+  const scroller = boardEl.querySelector(".graph-scroll");
+  const scroll = scroller ? scroller.scrollLeft : boardEl.scrollLeft;
   boardEl.replaceChildren();
-  for (const stage of boardStages) boardEl.append(renderCard(stage));
-  boardEl.scrollLeft = scroll;
+  boardEl.classList.toggle("is-graph", view === "graph");
+  if (view === "graph") {
+    const viewEl = renderGraphView();
+    boardEl.append(viewEl);
+    const next = viewEl.querySelector(".graph-scroll");
+    if (next) next.scrollLeft = scroll;
+  } else {
+    for (const stage of boardStages) boardEl.append(renderCard(stage));
+    boardEl.scrollLeft = scroll;
+  }
+  syncViewToggle();
+  syncRunButtons();
+}
+
+function syncViewToggle() {
+  const cards = document.getElementById("view-cards");
+  const graph = document.getElementById("view-graph");
+  if (cards) cards.setAttribute("aria-pressed", view === "cards" ? "true" : "false");
+  if (graph) graph.setAttribute("aria-pressed", view === "graph" ? "true" : "false");
+}
+
+function setView(next) {
+  if (next !== "cards" && next !== "graph") return;
+  if (next === view) return;
+  view = next;
+  storeView(view);
+  syncViewToggle();
+  if (view === "cards") {
+    graphTicket += 1;
+    paintBoard();
+    return;
+  }
+  graphPayload = null;
+  graphError = "";
+  paintBoard();
+  void loadAndPaintGraph();
+}
+
+async function reloadGraph() {
+  const ticket = ++graphTicket;
+  try {
+    const res = await fetch("/api/graph", { headers: headers(), cache: "no-store" });
+    const data = await res.json().catch(() => ({}));
+    if (ticket !== graphTicket) return;
+    if (!res.ok) {
+      graphPayload = null;
+      graphError = data.error || `无法加载流程图 / could not load the graph (${res.status})`;
+      return;
+    }
+    graphPayload = data;
+    graphError = "";
+  } catch {
+    if (ticket !== graphTicket) return;
+    graphPayload = null;
+    graphError = "无法加载流程图 / could not load the graph";
+  }
+}
+
+async function loadAndPaintGraph() {
+  await reloadGraph();
+  if (view !== "graph") return;
+  paintBoard();
+}
+
+function renderGraphView() {
+  const wrap = el("div", "graph-view");
+  if (graphError) {
+    wrap.append(el("p", "graph-empty", graphError));
+    return wrap;
+  }
+  if (!graphPayload) {
+    wrap.append(el("p", "graph-empty", "加载流程图 / loading graph…"));
+    return wrap;
+  }
+  wrap.append(renderLegend(), drawGraph(graphPayload));
+  return wrap;
+}
+
+function renderLegend() {
+  const legend = el("div", "graph-legend");
+  for (const [state, label] of Object.entries(STATES)) {
+    const item = el("span", "legend-item");
+    item.dataset.state = state;
+    const swatch = el("span", "legend-swatch");
+    swatch.setAttribute("aria-hidden", "true");
+    item.append(swatch, document.createTextNode(`${label.icon} ${label.zh} ${label.en}`));
+    legend.append(item);
+  }
+  return legend;
+}
+
+function stageForNode(node) {
+  const found = boardStages.find((stage) => stage.id === node.id);
+  if (found) return found;
+  return {
+    id: node.id,
+    name: node.name || node.id,
+    executor: node.type || "",
+    state: node.state || "",
+    runs: 0,
+    latest: null,
+    outputs: [],
+  };
+}
+
+function clipLabel(text, maxPx) {
+  const chars = Array.from(String(text ?? ""));
+  let width = 0;
+  for (let i = 0; i < chars.length; i += 1) {
+    const next = width + (chars[i].charCodeAt(0) > 255 ? 16 : 8.5);
+    if (next > maxPx) return chars.slice(0, Math.max(1, i - 1)).join("") + "…";
+    width = next;
+  }
+  return chars.join("");
+}
+
+function svgEl(name, attrs) {
+  const node = document.createElementNS(SVG_NS, name);
+  for (const [key, value] of Object.entries(attrs || {})) {
+    if (value != null) node.setAttribute(key, String(value));
+  }
+  return node;
+}
+
+function drawGraph(payload) {
+  const nodes = Array.isArray(payload.nodes) ? payload.nodes : [];
+  const edges = Array.isArray(payload.edges) ? payload.edges : [];
+  const scroll = el("div", "graph-scroll");
+  if (!nodes.length) {
+    scroll.append(el("p", "graph-empty", "还没有阶段 / no stages yet"));
+    return scroll;
+  }
+
+  let maxLayer = 0;
+  let maxRow = 0;
+  const pos = new Map();
+  for (const node of nodes) {
+    const layer = Number(node.layer) || 0;
+    const row = Number(node.row) || 0;
+    if (layer > maxLayer) maxLayer = layer;
+    if (row > maxRow) maxRow = row;
+    pos.set(node.id, { x: PAD + layer * (NODE_W + GAP_X), y: PAD + row * (NODE_H + GAP_Y), layer });
+  }
+
+  const routed = [];
+  let longLanes = 0;
+  for (const edge of edges) {
+    const from = pos.get(edge.from);
+    const to = pos.get(edge.to);
+    if (!from || !to) continue;
+    if (to.layer - from.layer > 1) routed.push({ from, to, lane: longLanes++ });
+    else routed.push({ from, to, lane: -1 });
+  }
+  const laneGap = 14;
+  const bottom = PAD + (maxRow + 1) * NODE_H + maxRow * GAP_Y + 12;
+  const width = PAD * 2 + (maxLayer + 1) * NODE_W + maxLayer * GAP_X;
+  const height = bottom + (longLanes > 0 ? 8 + longLanes * laneGap : 8);
+
+  const svg = svgEl("svg", {
+    class: "flow-graph",
+    width,
+    height,
+    viewBox: `0 0 ${width} ${height}`,
+    role: "group",
+    "aria-label": "流程图 / Graph",
+  });
+  const marker = svgEl("marker", {
+    id: "flow-arrow",
+    viewBox: "0 0 10 10",
+    refX: "8",
+    refY: "5",
+    markerWidth: "8",
+    markerHeight: "8",
+    orient: "auto",
+  });
+  marker.append(svgEl("path", { d: "M0 0 L10 5 L0 10 Z", class: "flow-arrow" }));
+  const defs = svgEl("defs");
+  defs.append(marker);
+  svg.append(defs);
+
+  for (const edge of routed) {
+    const x1 = edge.from.x + NODE_W;
+    const y1 = edge.from.y + NODE_H / 2;
+    const x2 = edge.to.x;
+    const y2 = edge.to.y + NODE_H / 2;
+    let d;
+    if (edge.lane >= 0) {
+      const yb = bottom + edge.lane * laneGap;
+      d = `M ${x1} ${y1} H ${x1 + 18} V ${yb} H ${x2 - 18} V ${y2} H ${x2}`;
+    } else if (Math.abs(y1 - y2) < 0.5) {
+      d = `M ${x1} ${y1} H ${x2}`;
+    } else {
+      const mid = (x1 + x2) / 2;
+      d = `M ${x1} ${y1} H ${mid} V ${y2} H ${x2}`;
+    }
+    svg.append(svgEl("path", { class: "flow-edge", d, "marker-end": "url(#flow-arrow)" }));
+  }
+
+  for (const node of nodes) {
+    const place = pos.get(node.id);
+    if (!place) continue;
+    const stage = stageForNode(node);
+    const state = STATES[node.state] ?? { icon: "•", zh: node.state || "未知", en: node.state || "unknown" };
+    const selected = node.id === selectedId;
+    const g = svgEl("g", {
+      class: selected ? "flow-node is-selected" : "flow-node",
+      role: "button",
+      tabindex: "0",
+      "data-id": node.id,
+      "data-state": node.state || "",
+      "aria-pressed": selected ? "true" : "false",
+      "aria-label": `${node.name || node.id} · ${node.type || ""} · ${state.zh} ${state.en}`,
+    });
+    g.append(svgEl("rect", {
+      class: "flow-box",
+      x: place.x,
+      y: place.y,
+      width: NODE_W,
+      height: NODE_H,
+    }));
+    const title = svgEl("title");
+    title.textContent = `${node.name || node.id} · ${node.type || ""} · ${state.icon} ${state.zh} ${state.en}`;
+    const name = svgEl("text", {
+      class: "flow-name",
+      x: place.x + NODE_W / 2,
+      y: place.y + 30,
+      "text-anchor": "middle",
+    });
+    name.textContent = clipLabel(node.name || node.id, NODE_W - 28);
+    const type = svgEl("text", {
+      class: "flow-type",
+      x: place.x + NODE_W / 2,
+      y: place.y + 50,
+      "text-anchor": "middle",
+    });
+    type.textContent = node.type || "";
+    g.append(title, name, type);
+    const open = () => openStage(stage);
+    g.addEventListener("click", open);
+    g.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      open();
+    });
+    svg.append(g);
+  }
+
+  scroll.append(svg);
+  return scroll;
+}
+
+function markSelected() {
+  for (const node of boardEl.querySelectorAll(".flow-node")) {
+    const on = node.getAttribute("data-id") === selectedId;
+    node.classList.toggle("is-selected", on);
+    node.setAttribute("aria-pressed", on ? "true" : "false");
+  }
+}
+
+function stageBack(stage) {
+  return {
+    onBack: () => {
+      const fresh = boardStages.find((item) => item.id === stage.id) || stage;
+      openStage(fresh);
+    },
+    backLabel: "返回阶段 Back to stage",
+  };
+}
+
+function openStage(stage) {
+  selectedId = stage.id || "";
+  returnToStage = stage;
+  panelMode = "stage";
+  markSelected();
+  releaseBlob();
+  panelEl.hidden = false;
+  document.body.classList.add("panel-open");
+  panelTitle.textContent = stage.name || stage.id || "";
+  const label = STATES[stage.state] ?? { icon: "•", zh: stage.state || "未知", en: stage.state || "unknown" };
+  const badge = el("p", "badge", `${label.icon} ${label.zh} ${label.en}`);
+  badge.dataset.state = stage.state || "";
+  const version = el("p", "version");
+  version.textContent = stage.latest
+    ? `v${stage.latest.n} · ${formatTime(stage.latest.time)}`
+    : "还没有版本 / no runs yet";
+
+  const actions = el("div", "stage-actions");
+  const history = document.createElement("button");
+  history.type = "button";
+  history.className = "history";
+  history.textContent = "历史 History";
+  history.addEventListener("click", () => {
+    panelMode = "other";
+    void openHistory(stage);
+  });
+  const run = document.createElement("button");
+  run.type = "button";
+  run.className = "run";
+  run.textContent = "运行这一步 Run";
+  run.dataset.waiting = stage.state === "waiting-upstream" ? "1" : "0";
+  if (stage.state === "waiting-upstream") run.title = "等上游完成 / waiting for upstream";
+  run.addEventListener("click", () => startRun(stage.id, modelForStage(stage.id)));
+  const remove = document.createElement("button");
+  remove.type = "button";
+  remove.className = "danger";
+  remove.textContent = "删除阶段 / Remove stage";
+  remove.addEventListener("click", () => openRemove(stage));
+  actions.append(history, run, remove);
+
+  const nodes = [
+    badge,
+    el("p", "executor", `执行 / executor · ${stage.executor || ""}`),
+    version,
+    el("p", "runs", `${stage.runs ?? 0} 个版本 / ${stage.runs ?? 0} run(s)`),
+  ];
+  if (stage.state === "edited") nodes.push(el("p", "edit-note", EDIT_NOTE));
+  nodes.push(actions);
+  if (stage.executor === "human" && stage.state !== "waiting-upstream") {
+    if (stage.instructions) nodes.push(el("p", "instructions", stage.instructions));
+    const dir = humanDir(stage);
+    if (dir) nodes.push(uploadControl(stage, dir.path, stageBack(stage)));
+  }
+  if (stage.executor === "llm") nodes.push(modelField(stage.id));
+
+  const outputs = el("div", "outputs");
+  outputs.append(el("p", "outputs-label", "产物 / outputs"));
+  for (const output of stage.outputs ?? []) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = output.directory ? `${output.path}/` : output.path;
+    button.addEventListener("click", () => openOutput(output, stage, stageBack(stage)));
+    outputs.append(button);
+  }
+  nodes.push(outputs);
+  showPanel(nodes);
   syncRunButtons();
 }
 
@@ -124,6 +505,8 @@ function renderCard(stage) {
   history.className = "history";
   history.textContent = "历史 History";
   history.addEventListener("click", () => {
+    returnToStage = null;
+    panelMode = "other";
     void openHistory(stage);
   });
   card.append(history);
@@ -174,19 +557,32 @@ function modelField(stageId) {
   return label;
 }
 
-function modelForStage(stageId) {
-  for (const input of document.querySelectorAll("input[data-model-for]")) {
-    if (input.getAttribute("data-model-for") === stageId) {
-      const value = input.value.trim();
-      return value || undefined;
-    }
+function fieldValue(stageId, root) {
+  if (!root) return undefined;
+  for (const input of root.querySelectorAll("input[data-model-for]")) {
+    if (input.getAttribute("data-model-for") !== stageId) continue;
+    return input.value.trim() || undefined;
   }
   return undefined;
 }
 
+function panelHasModel(stageId) {
+  for (const input of panelEl.querySelectorAll("input[data-model-for]")) {
+    if (input.getAttribute("data-model-for") === stageId) return true;
+  }
+  return false;
+}
+
+function modelForStage(stageId) {
+  // The open stage panel is what Run in that panel should use, even if a card also has a field.
+  if (panelMode === "stage" && panelHasModel(stageId)) return fieldValue(stageId, panelEl);
+  return fieldValue(stageId, boardEl);
+}
+
 function modelForAll() {
   const values = [];
-  for (const input of document.querySelectorAll("input[data-model-for]")) {
+  const root = view === "graph" ? panelEl : boardEl;
+  for (const input of root.querySelectorAll("input[data-model-for]")) {
     const value = input.value.trim();
     if (value) values.push(value);
   }
@@ -206,7 +602,7 @@ function syncRunButtons() {
   for (const button of document.querySelectorAll("button.run")) {
     button.disabled = runBusy || button.dataset.waiting === "1";
   }
-  for (const button of document.querySelectorAll("button.menu-button")) {
+  for (const button of document.querySelectorAll("button.menu-button, .stage-actions .danger")) {
     button.disabled = runBusy;
   }
 }
@@ -258,6 +654,8 @@ async function startRun(stage, model) {
 function closePanel() {
   panelEl.hidden = true;
   document.body.classList.remove("panel-open");
+  panelMode = "";
+  returnToStage = null;
   releaseBlob();
 }
 
@@ -329,6 +727,7 @@ function releaseBlob() {
 }
 
 async function openHistory(stage, note) {
+  panelMode = "other";
   releaseBlob();
   panelEl.hidden = false;
   document.body.classList.add("panel-open");
@@ -351,19 +750,20 @@ async function openHistory(stage, note) {
 
 function renderHistory(stage, runs, note) {
   panelTitle.textContent = `${stage.name || stage.id || ""} · 历史 History`;
+  const back = returnToStage && returnToStage.id === stage.id ? stageBack(returnToStage) : undefined;
   const nodes = [];
   if (note) nodes.push(el("p", "save-ok", note));
   nodes.push(el("p", "history-hint", "点一个版本看当时的产物。 / Click a version to see what it produced."));
   nodes.push(renderCompare(stage, runs));
   if (!runs.length) {
     nodes.push(el("p", null, "还没有版本 / no runs yet"));
-    showPanel(nodes);
+    showPanel(nodes, back);
     return;
   }
   const list = el("ul", "history-list");
   for (const run of runs.slice().reverse()) list.append(renderVersion(stage, run));
   nodes.push(list);
-  showPanel(nodes);
+  showPanel(nodes, back);
 }
 
 function renderCompare(stage, runs) {
@@ -598,6 +998,7 @@ async function restoreVersion(stage, n, button) {
 }
 
 async function openOutput(output, stage, options) {
+  panelMode = "other";
   const rel = output.path;
   const readOnly = Boolean(options && options.readOnly);
   panelEl.hidden = false;
@@ -630,7 +1031,7 @@ async function openOutput(output, stage, options) {
     return;
   }
   if (output.text && !readOnly) {
-    renderEditor(rel, await res.text());
+    renderEditor(rel, await res.text(), options);
     return;
   }
   const type = (res.headers.get("Content-Type") || "").toLowerCase();
@@ -658,7 +1059,7 @@ async function openOutput(output, stage, options) {
   showPanel([pre], options);
 }
 
-function renderEditor(rel, text) {
+function renderEditor(rel, text, options) {
   const wrap = el("div", "editor");
   const area = document.createElement("textarea");
   area.value = text;
@@ -672,7 +1073,10 @@ function renderEditor(rel, text) {
   status.hidden = true;
   save.addEventListener("click", () => saveText(rel, area.value, save, status));
   wrap.append(el("p", "edit-hint", EDIT_NOTE), area, save, status);
-  panelBody.replaceChildren(wrap);
+  panelBody.replaceChildren();
+  const back = makeBack(options);
+  if (back) panelBody.append(back);
+  panelBody.append(wrap);
   area.focus();
 }
 
@@ -713,7 +1117,8 @@ function renderFileList(dir, files, stage, options) {
   if (stage && stage.executor === "human" && stage.instructions) {
     panelBody.append(el("p", "instructions", stage.instructions));
   }
-  if (stage && stage.executor === "human") panelBody.append(uploadControl(stage, dir));
+  // Keep the way back (e.g. to the stage panel opened from the graph) after an upload from this list.
+  if (stage && stage.executor === "human") panelBody.append(uploadControl(stage, dir, options));
   if (!files.length) {
     panelBody.append(el("p", null, "空文件夹 / empty folder"));
     return;
@@ -733,7 +1138,7 @@ function renderFileList(dir, files, stage, options) {
   panelBody.append(list);
 }
 
-function uploadControl(stage, dir) {
+function uploadControl(stage, dir, options) {
   const form = el("div", "upload");
   const label = el("label", "upload-label");
   label.append(el("span", null, "上传文件 / Upload a file"));
@@ -744,14 +1149,14 @@ function uploadControl(stage, dir) {
   input.addEventListener("change", () => {
     const file = input.files && input.files[0];
     input.value = "";
-    if (file) void uploadInto(stage, dir, file, status);
+    if (file) void uploadInto(stage, dir, file, status, options);
   });
   label.append(input);
   form.append(label, status);
   return form;
 }
 
-async function uploadInto(stage, dir, file, status) {
+async function uploadInto(stage, dir, file, status, options) {
   if (status) {
     status.hidden = false;
     status.className = "upload-status";
@@ -768,7 +1173,7 @@ async function uploadInto(stage, dir, file, status) {
       return;
     }
     await refresh();
-    await openOutput({ path: dir, directory: true, text: false, type: "dir" }, stage);
+    await openOutput({ path: dir, directory: true, text: false, type: "dir" }, stage, options);
   } catch {
     if (status) status.textContent = "没有上传 / not uploaded";
   }
@@ -1055,6 +1460,7 @@ async function refresh() {
     if (text === lastJson) return;
     lastJson = text;
     const data = JSON.parse(text);
+    if (view === "graph") await reloadGraph();
     render(data);
     const signature = JSON.stringify(data.inputs ?? {});
     if (signature !== lastInputValues) {
@@ -1303,6 +1709,9 @@ document.getElementById("remove-cancel").addEventListener("click", () => removeD
 removeForce.addEventListener("click", () => {
   void requestRemove(true);
 });
+document.getElementById("view-cards").addEventListener("click", () => setView("cards"));
+document.getElementById("view-graph").addEventListener("click", () => setView("graph"));
+syncViewToggle();
 runAllButton.addEventListener("click", () => {
   const picked = modelForAll();
   if (picked.error) {

@@ -624,6 +624,155 @@ body {
 :root[data-theme="dark"] :is(#add-stage, .ghost) { border-width: 1px; border-color: var(--rule); }
 :root[data-theme="dark"] :is(#add-stage, .ghost):hover:not(:disabled) { background: var(--surface-2); color: var(--ink); }
 
+/* ---------- Cards / graph switch and the graph view ---------- */
+
+.view-switch {
+  display: inline-flex;
+  flex-wrap: wrap;
+  border: 2px solid var(--ink);
+  border-radius: var(--btn-radius);
+}
+
+.view-switch button {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  border: 0;
+  border-radius: 0;
+  padding: 7px 14px;
+  min-height: 36px;
+  background: transparent;
+  color: var(--ink);
+}
+
+.view-switch button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+
+.view-switch button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.board.is-graph {
+  display: block;
+  overflow: visible;
+  scroll-snap-type: none;
+  padding: 20px 28px 40px;
+}
+
+.graph-view { display: flex; flex-direction: column; gap: 14px; min-width: 0; width: 100%; }
+
+.graph-legend { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 0; }
+
+.legend-item {
+  --state: var(--wait);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.legend-swatch {
+  width: 12px;
+  height: 12px;
+  flex: 0 0 auto;
+  border: 2px solid var(--state);
+  background: color-mix(in srgb, var(--state) 18%, transparent);
+}
+
+:is(.legend-item, .flow-node)[data-state="ok"] { --state: var(--ok); }
+:is(.legend-item, .flow-node)[data-state="stale"] { --state: var(--stale); }
+:is(.legend-item, .flow-node)[data-state="edited"] { --state: var(--edited); }
+:is(.legend-item, .flow-node)[data-state="error"] { --state: var(--error); }
+:is(.legend-item, .flow-node)[data-state="never-run"] { --state: var(--never); }
+:is(.legend-item, .flow-node)[data-state="waiting-upstream"] { --state: var(--wait); }
+
+.graph-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  max-width: 100%;
+  min-width: 0;
+  padding-bottom: 10px;
+  overscroll-behavior-x: contain;
+}
+
+.graph-empty { margin: 0; color: var(--muted); }
+
+.flow-graph { display: block; font-family: var(--font-ui); }
+
+.flow-edge { fill: none; stroke: var(--muted); stroke-width: 1.5px; }
+.flow-arrow { fill: var(--muted); }
+
+.flow-node { --state: var(--wait); cursor: pointer; }
+.flow-node text { pointer-events: none; }
+.flow-node:focus { outline: none; }
+
+.flow-box {
+  rx: var(--card-radius);
+  ry: var(--card-radius);
+  fill: color-mix(in srgb, var(--state) 12%, var(--surface));
+  stroke: var(--state);
+  stroke-width: 2px;
+}
+
+.flow-node.is-selected .flow-box, .flow-node:focus-visible .flow-box { stroke-width: 4px; }
+
+.flow-name { fill: var(--ink); font-size: 16px; font-weight: 800; }
+.flow-type { fill: var(--muted); font-family: var(--font-mono); font-size: 12px; }
+
+/* The stage you can run now: a solid block in the Swiss look, like its card. */
+.flow-node[data-state="never-run"] .flow-box { fill: var(--never); }
+.flow-node[data-state="never-run"] :is(.flow-name, .flow-type) { fill: var(--accent-ink); }
+
+/* The stage panel shows a stage's details when it is picked in the graph. */
+#panel-body .badge { align-self: stretch; margin: 0; padding: 0 0 0 10px; border-top: 0; border-left: 3px solid var(--state, var(--wait)); color: var(--code-ink); }
+#panel-body .badge[data-state="ok"] { --state: var(--ok); }
+#panel-body .badge[data-state="stale"] { --state: var(--stale); }
+#panel-body .badge[data-state="edited"] { --state: var(--edited); }
+#panel-body .badge[data-state="error"] { --state: var(--error); }
+#panel-body .badge[data-state="never-run"] { --state: var(--never); }
+#panel-body .badge[data-state="waiting-upstream"] { --state: var(--wait); }
+
+#panel-body :is(.executor, .runs, .outputs-label, .instructions) { color: var(--code-muted); }
+#panel-body .edit-note { color: color-mix(in srgb, var(--edited) 55%, var(--code-ink)); }
+
+.stage-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+#panel-body .outputs { margin-top: 4px; }
+
+#panel-body .history {
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid var(--code-line);
+  background: transparent;
+  color: var(--code-ink);
+  border-radius: 8px;
+  padding: 8px 14px;
+}
+
+#panel-body .history:hover { background: var(--code-bg-2); }
+#panel-body :is(.run, .danger) { border-radius: 8px; }
+
+#panel-body .outputs button, #panel-body .model-field input {
+  background: var(--code-bg-2);
+  color: var(--code-ink);
+  border-color: var(--code-line);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .view-switch { border-width: 1px; border-color: var(--rule); }
+  :root:not([data-theme="light"]) .view-switch button[aria-pressed="true"] { background: var(--surface-2); color: var(--ink); }
+  :root:not([data-theme="light"]) .flow-node[data-state="never-run"] .flow-box { fill: var(--surface); }
+  :root:not([data-theme="light"]) .flow-node[data-state="never-run"] .flow-name { fill: var(--ink); }
+  :root:not([data-theme="light"]) .flow-node[data-state="never-run"] .flow-type { fill: var(--muted); }
+}
+
+:root[data-theme="dark"] .view-switch { border-width: 1px; border-color: var(--rule); }
+:root[data-theme="dark"] .view-switch button[aria-pressed="true"] { background: var(--surface-2); color: var(--ink); }
+:root[data-theme="dark"] .flow-node[data-state="never-run"] .flow-box { fill: var(--surface); }
+:root[data-theme="dark"] .flow-node[data-state="never-run"] .flow-name { fill: var(--ink); }
+:root[data-theme="dark"] .flow-node[data-state="never-run"] .flow-type { fill: var(--muted); }
+
 /* ---------- Side panel (dark in both themes) ---------- */
 
 .panel {
@@ -891,6 +1040,9 @@ body {
   .top { grid-template-columns: 1fr; }
   .brand-block { padding: 18px 16px 12px; }
   .top-side { align-items: flex-start; border-left: 0; border-top: var(--rule-w) solid var(--rule); padding: 12px 16px; }
+  .view-switch { width: 100%; }
+  .view-switch button { flex: 1 1 auto; }
+  .board.is-graph { padding: 16px 16px 32px; }
   .banner, .inputs-panel, .log { padding-left: 16px; padding-right: 16px; }
   .notice { margin-left: 16px; margin-right: 16px; }
   :root { --num-size: 64px; }

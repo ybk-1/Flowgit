@@ -15,6 +15,7 @@ import {
   isDirOutput,
   isSafeRelative,
   isTextType,
+  layoutFlow,
   listFiles,
   listRuns,
   loadFlow,
@@ -138,6 +139,13 @@ export interface BoardInputField {
   default?: unknown;
   /** null when the input has no value yet. */
   value: unknown;
+}
+
+/** JSON body of GET /api/graph: columns from layoutFlow, states from statusAll. */
+export function flowGraph(dir: string) {
+  const loaded = loadFlow(dir);
+  const inputs = resolveFlowInputs(loaded.dir, loaded.flow);
+  return layoutFlow(loaded.flow, statusAll(loaded, inputs));
 }
 
 /** JSON body of GET /api/flow. `inputs` is exactly resolveFlowInputs. */
@@ -394,6 +402,10 @@ function handle(req: http.IncomingMessage, res: http.ServerResponse, ctx: Handle
     }
     if (pathname === "/api/flow") {
       sendJson(res, 200, flowBoard(ctx.dir));
+      return;
+    }
+    if (pathname === "/api/graph") {
+      sendJson(res, 200, flowGraph(ctx.dir));
       return;
     }
     if (pathname === "/api/file") {
