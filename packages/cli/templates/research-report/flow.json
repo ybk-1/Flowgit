@@ -1,0 +1,73 @@
+{
+  "format": "flowgit",
+  "version": "0.1",
+  "id": "research-report",
+  "name": "调研报告",
+  "description": "把一个问题拆成子问题，收集资料，写成带引用的报告，再用脚本检查每个结论有没有出处。 / Break a question into parts, gather sources, write a cited report, then check that every claim has a source.",
+  "language": "zh",
+  "author": { "name": "Flowgit" },
+  "license": "Apache-2.0",
+  "tags": ["writing", "research", "starter"],
+  "inputs": {
+    "topic": {
+      "type": "string",
+      "description": "调研题目，例如：为什么猫喜欢纸箱 / The question, e.g. why cats like boxes",
+      "required": true
+    },
+    "audience": {
+      "type": "string",
+      "description": "写给谁看 / Who will read it",
+      "default": "管理层 / leadership"
+    },
+    "language": {
+      "type": "string",
+      "enum": ["zh", "en"],
+      "default": "zh",
+      "description": "输出语言：zh 中文，en English / Output language: zh or en"
+    }
+  },
+  "stages": [
+    {
+      "id": "questions",
+      "name": "子问题",
+      "description": "把题目拆成 3 到 6 个要回答的子问题。 / Split the topic into 3 to 6 sub-questions to answer.",
+      "executor": { "type": "llm", "prompt": "prompts/questions.md", "effort": "low" },
+      "outputs": [{ "type": "application/json", "path": "questions.json" }]
+    },
+    {
+      "id": "sources",
+      "name": "资料",
+      "description": "每个来源一个 Markdown：开头写标题和链接。 / One Markdown file per source, starting with its title and link.",
+      "inputs": ["questions"],
+      "executor": {
+        "type": "human",
+        "instructions": "把资料放进 sources/，一个来源一个 .md 文件，开头写标题和链接。模板里有 3 份自己写的示例，用之前换成你的笔记。 / Put sources in sources/, one .md file each, starting with a title and a link. The template has 3 short samples written for it; replace them with your own notes."
+      },
+      "outputs": [{ "type": "dir", "path": "sources/" }]
+    },
+    {
+      "id": "outline",
+      "name": "提纲",
+      "description": "每节标出回答哪个子问题、用哪些来源。 / Each section notes which sub-question it answers and which sources it uses.",
+      "inputs": ["questions", "sources"],
+      "executor": { "type": "llm", "prompt": "prompts/outline.md", "effort": "medium" },
+      "outputs": [{ "type": "text/markdown", "path": "outline.md" }]
+    },
+    {
+      "id": "report",
+      "name": "报告",
+      "description": "写成报告，每个结论后面用 [来源文件名] 标出处。 / Write the report, with [source file name] after each claim.",
+      "inputs": ["questions", "sources", "outline"],
+      "executor": { "type": "llm", "prompt": "prompts/report.md", "effort": "medium" },
+      "outputs": [{ "type": "text/markdown", "path": "report.md" }]
+    },
+    {
+      "id": "check",
+      "name": "检查",
+      "description": "找出不存在的引用、没被引用的来源、没被回答的子问题，以及没有出处的段落。 / Find citations of missing sources, sources never cited, unanswered sub-questions, and paragraphs with no citation.",
+      "inputs": ["questions", "sources", "report"],
+      "executor": { "type": "script", "run": "node scripts/check.mjs" },
+      "outputs": [{ "type": "text/markdown", "path": "check-report.md" }]
+    }
+  ]
+}
