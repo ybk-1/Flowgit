@@ -18,7 +18,7 @@ let flowDir: string;
 function flowgit(args: string[], env: Record<string, string> = {}) {
   const r = spawnSync(process.execPath, [cli, "-C", flowDir, ...args], {
     encoding: "utf8",
-    env: { ...process.env, NO_COLOR: "1", ...env },
+    env: { ...process.env, NO_COLOR: "1", FLOWGIT_TTS_API_KEY: "", ...env },
   });
   return { code: r.status, out: `${r.stdout}${r.stderr}` };
 }
@@ -53,13 +53,17 @@ describe("flowgit CLI with the short-video template", () => {
     expect(noKey.out).toContain("! 还没填流程输入 / flow inputs not set: topic");
     expect(noKey.out).toContain("✗ script, storyboard: 模型 claude-opus-5-5 的密钥 ANTHROPIC_API_KEY 没有设置");
     expect(noKey.out).toContain("FLOWGIT_LLM_MOCK_DIR=demo-replies");
-    expect(noKey.out).toContain("✓ edit, export: 找到 / found node");
+    expect(noKey.out).toContain("voice: 没有设置 FLOWGIT_TTS_API_KEY");
+    expect(noKey.out).toContain("✓ voice, edit, export: 找到 / found node");
 
     const demo = flowgit(["doctor", "--json"], { FLOWGIT_LLM_MOCK_DIR: path.join(flowDir, "demo-replies") });
     const report = JSON.parse(demo.out);
     expect(report.ok).toBe(hasFfmpeg);
     expect(demo.code).toBe(hasFfmpeg ? 0 : 1);
     expect(report.checks).toContainEqual({ level: "ok", stage: "script", message: `用固定回复 / canned reply ${path.join("demo-replies", "script.md")}` });
+    expect(report.checks).toContainEqual(
+      expect.objectContaining({ level: "warn", stage: "voice", message: expect.stringContaining("FLOWGIT_TTS_API_KEY is not set") }),
+    );
     expect(report.checks).toContainEqual(expect.objectContaining({ level: hasFfmpeg ? "ok" : "error", stage: "export", message: expect.stringContaining("ffmpeg") }));
     // when nothing blocks, doctor points at the dry run, with the same --model
     const text = flowgit(["doctor", "--model", "glm/glm-5.3"], { FLOWGIT_LLM_MOCK_DIR: path.join(flowDir, "demo-replies") });
@@ -107,21 +111,33 @@ describe("flowgit CLI with the short-video template", () => {
     expect(r.out).toContain("waiting for you: assets");
     expect(r.out).not.toContain("--input lasts one run");
     expect(fs.existsSync(path.join(flowDir, "storyboard.json"))).toBe(true);
+    expect(fs.readFileSync(path.join(flowDir, "voice", "README.md"), "utf8")).toBe(
+      "没有配置语音合成，跳过自动配音；可以自己录 assets/voice.mp3，或设置 FLOWGIT_TTS_API_KEY / No text-to-speech configured, so no voiceover was made; record assets/voice.mp3 yourself or set FLOWGIT_TTS_API_KEY\n",
+    );
+    expect(fs.existsSync(path.join(flowDir, "voice", "voice.mp3"))).toBe(false);
     const status = JSON.parse(flowgit(["status", "--json"]).out);
-    expect(status.stages.map((s: { state: string }) => s.state)).toEqual(["ok", "ok", "never-run", "waiting-upstream", "waiting-upstream"]);
+    expect(status.stages.map((s: { id: string; state: string }) => [s.id, s.state])).toEqual([
+      ["script", "ok"],
+      ["voice", "ok"],
+      ["storyboard", "ok"],
+      ["assets", "never-run"],
+      ["edit", "waiting-upstream"],
+      ["export", "waiting-upstream"],
+    ]);
   });
 
   it("draws the flow as a Mermaid diagram, colored by state", () => {
     const plain = flowgit(["graph"]);
     expect(plain.code).toBe(0);
     expect(plain.out).toMatch(/^flowchart LR\n {2}s1\["脚本<br\/>llm"\]/);
-    expect(plain.out).toContain("  s2 --> s4\n  s3 --> s4\n");
+    expect(plain.out).toContain('s2["配音<br/>script"]');
+    expect(plain.out).toContain("  s1 --> s2\n  s1 --> s3\n  s3 --> s4\n  s3 --> s5\n  s4 --> s5\n  s2 --> s5\n  s5 --> s6\n");
     const md = flowgit(["graph", "--status", "--md"]);
     expect(md.out.startsWith("```mermaid\nflowchart LR\n")).toBe(true);
     expect(md.out.trimEnd().endsWith("```")).toBe(true);
-    expect(md.out).toContain('s3["素材<br/>human · ○ never-run"]');
-    expect(md.out).toContain("  class s1,s2 ok");
-    expect(md.out).toContain("  class s4,s5 waitingUpstream");
+    expect(md.out).toContain('s4["素材<br/>human · ○ never-run"]');
+    expect(md.out).toContain("  class s1,s2,s3 ok");
+    expect(md.out).toContain("  class s5,s6 waitingUpstream");
 
     // --out writes UTF-8 next to the flow; a .md file gets the code block
     expect(flowgit(["graph", "--out", "flow.md"]).out).toContain("is the flow file's name; pick another, e.g. graph.md");
@@ -163,7 +179,14 @@ describe("flowgit CLI with the short-video template", () => {
     sb.shots = sb.shots.slice(0, 2);
     fs.writeFileSync(sbFile, JSON.stringify(sb, null, 2));
     const status = JSON.parse(flowgit(["status", "--json"]).out);
-    expect(status.stages.map((s: { state: string }) => s.state)).toEqual(["ok", "edited", "stale", "stale", "stale"]);
+    expect(status.stages.map((s: { id: string; state: string }) => [s.id, s.state])).toEqual([
+      ["script", "ok"],
+      ["voice", "ok"],
+      ["storyboard", "edited"],
+      ["assets", "stale"],
+      ["edit", "stale"],
+      ["export", "stale"],
+    ]);
     const again = flowgit(["run", "all"]);
     expect(again.code, again.out).toBe(0);
     expect(again.out).toContain("kept your manual edit as v2");

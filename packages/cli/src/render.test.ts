@@ -116,3 +116,63 @@ describe.skipIf(!hasFfmpeg)("short-video export script", () => {
     expect(probe(path.join(dir, "final.mp4"), "stream=codec_type", "a")).toBe("");
   });
 });
+
+describe("short-video timeline voiceover choice", () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-voice-choice-"));
+    fs.cpSync(path.join(template, "scripts"), path.join(dir, "scripts"), { recursive: true });
+    fs.mkdirSync(path.join(dir, "assets"));
+    fs.writeFileSync(
+      path.join(dir, "storyboard.json"),
+      JSON.stringify({
+        title: "Voice",
+        shots: [
+          { id: "s1", duration: 3, caption: "a", narration: "one two" },
+          { id: "s2", duration: 3, caption: "b", narration: "three" },
+        ],
+      }),
+    );
+  });
+
+  afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  function build() {
+    const r = spawnSync(process.execPath, [path.join(dir, "scripts", "build-timeline.mjs")], {
+      cwd: dir,
+      encoding: "utf8",
+      env: { ...process.env, FLOWGIT_PROJECT_DIR: dir, FLOWGIT_FLOW_INPUTS: JSON.stringify({ language: "en" }) },
+    });
+    expect(r.status, `${r.stdout}${r.stderr}`).toBe(0);
+    return {
+      out: `${r.stdout}${r.stderr}`,
+      timeline: JSON.parse(fs.readFileSync(path.join(dir, "timeline.json"), "utf8")) as { voice?: { path: string } },
+    };
+  }
+
+  it("uses voice/voice.mp3 when nothing was recorded in assets/", () => {
+    fs.mkdirSync(path.join(dir, "voice"));
+    fs.writeFileSync(path.join(dir, "voice", "voice.mp3"), "not really audio");
+    const { out, timeline } = build();
+    expect(timeline.voice).toEqual({ path: "voice/voice.mp3", volume: 1 });
+    expect(out).toContain("voiceover voice/voice.mp3");
+  });
+
+  it("prefers a recorded voiceover in assets/ over the generated file", () => {
+    fs.mkdirSync(path.join(dir, "voice"));
+    fs.writeFileSync(path.join(dir, "voice", "voice.mp3"), "generated");
+    fs.writeFileSync(path.join(dir, "assets", "voice.mp3"), "recorded");
+    const { out, timeline } = build();
+    expect(timeline.voice).toEqual({ path: "assets/voice.mp3", volume: 1 });
+    expect(out).toContain("voiceover voice.mp3");
+    expect(out).not.toContain("voice/voice.mp3");
+  });
+
+  it("ignores the skip note and does not treat it as audio", () => {
+    fs.mkdirSync(path.join(dir, "voice"));
+    fs.writeFileSync(path.join(dir, "voice", "README.md"), "skipped");
+    const { timeline } = build();
+    expect(timeline.voice).toBeUndefined();
+  });
+});

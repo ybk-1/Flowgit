@@ -165,6 +165,39 @@ describe("doctor", () => {
     expect(proxy(doctor(loaded, { env: { ...env, FLOWGIT_LLM_MOCK_DIR: path.join(dir, "replies") }, systemProxy: none }))).toBeUndefined();
   });
 
+  it("warns, and does not fail, when a short-video flow has no speech key", () => {
+    fakeProgram("node");
+    const voice = setup({
+      id: "short-video",
+      stages: [
+        {
+          id: "voice",
+          name: "配音",
+          executor: { type: "script", run: "node scripts/tts.mjs" },
+          outputs: [{ type: "dir", path: "voice/" }],
+        },
+      ],
+    });
+    const missing = doctor(voice, { env: pathEnv() });
+    expect(missing.some((c) => c.level === "error")).toBe(false);
+    expect(missing).toContainEqual(
+      expect.objectContaining({
+        level: "warn",
+        stage: "voice",
+        message: expect.stringContaining("FLOWGIT_TTS_API_KEY is not set"),
+        hint: expect.stringContaining("assets/voice.mp3"),
+      }),
+    );
+    const set = doctor(voice, { env: { ...pathEnv(), FLOWGIT_TTS_API_KEY: "sk-test" } });
+    expect(set).toContainEqual(expect.objectContaining({ level: "ok", stage: "voice", message: expect.stringContaining("FLOWGIT_TTS_API_KEY is set") }));
+    expect(set.some((c) => c.level === "warn")).toBe(false);
+
+    const other = setup({
+      stages: [{ id: "build", name: "build", executor: { type: "script", run: "node build.mjs" }, outputs: [{ type: "text/plain", path: "c.txt" }] }],
+    });
+    expect(doctor(other, { env: pathEnv() }).some((c) => c.message.includes("FLOWGIT_TTS_API_KEY"))).toBe(false);
+  });
+
   it("reports flow inputs outside their enum as errors", () => {
     const loaded = setup({
       inputs: { language: { type: "string", enum: ["zh", "en"], default: "zh" } },

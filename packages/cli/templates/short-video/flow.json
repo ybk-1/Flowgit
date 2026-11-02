@@ -3,7 +3,7 @@
   "version": "0.1",
   "id": "short-video",
   "name": "短视频制作",
-  "description": "从一个主题做出一条竖屏短视频：脚本 → 分镜 → 素材 → 剪辑 → 导出。每一步都可以回看、修改、重跑。 / Make a vertical short video from a topic: script → storyboard → assets → edit → export. Every step can be reviewed, edited and re-run.",
+  "description": "从一个主题做出一条竖屏短视频：脚本 → 配音 → 分镜 → 素材 → 剪辑 → 导出。每一步都可以回看、修改、重跑。 / Make a vertical short video from a topic: script → voiceover → storyboard → assets → edit → export. Every step can be reviewed, edited and re-run.",
   "language": "zh",
   "author": { "name": "Flowgit" },
   "license": "Apache-2.0",
@@ -45,6 +45,14 @@
       "outputs": [{ "type": "text/markdown", "path": "script.md" }]
     },
     {
+      "id": "voice",
+      "name": "配音",
+      "description": "把脚本里要念的口播合成一条配音。没有 FLOWGIT_TTS_API_KEY 时跳过，你可以自己录。 / Synthesize the script's narration into one voiceover. Skipped when FLOWGIT_TTS_API_KEY is unset; you can record it yourself.",
+      "inputs": ["script"],
+      "executor": { "type": "script", "run": "node scripts/tts.mjs" },
+      "outputs": [{ "type": "dir", "path": "voice/" }]
+    },
+    {
       "id": "storyboard",
       "name": "分镜",
       "description": "把脚本拆成镜头：每个镜头的时长、画面、字幕和需要的素材文件名。 / Split the script into shots: duration, visual, caption and asset file name for each.",
@@ -59,7 +67,7 @@
       "inputs": ["storyboard"],
       "executor": {
         "type": "human",
-        "instructions": "把图片或视频放进 assets/，文件名对应 storyboard.json 里每个镜头的 asset 字段。缺的镜头导出时会用文字卡代替，所以也可以先放一个空的 assets/ 文件夹（mkdir assets）。可选：自己录的配音命名为 voice.mp3，背景音乐命名为 music.mp3，也放进 assets/。 / Put images or videos in assets/, named after each shot's asset field in storyboard.json. Missing shots become text cards on export, so an empty assets/ folder (mkdir assets) also works. Optional: a voiceover you recorded as voice.mp3 and background music as music.mp3, also in assets/."
+        "instructions": "把图片或视频放进 assets/，文件名对应 storyboard.json 里每个镜头的 asset 字段。缺的镜头导出时会用文字卡代替，所以也可以先放一个空的 assets/ 文件夹（mkdir assets）。可选：自己录的配音命名为 voice.mp3（优先于自动合成的 voice/voice.mp3），背景音乐命名为 music.mp3，也放进 assets/。 / Put images or videos in assets/, named after each shot's asset field in storyboard.json. Missing shots become text cards on export, so an empty assets/ folder (mkdir assets) also works. Optional: a voiceover you recorded as voice.mp3 (it wins over the generated voice/voice.mp3) and background music as music.mp3, also in assets/."
       },
       "outputs": [{ "type": "dir", "path": "assets/" }]
     },
@@ -67,7 +75,7 @@
       "id": "edit",
       "name": "剪辑",
       "description": "把分镜和素材排成时间线。生成后可以直接改 timeline.json 调整顺序、时长和字幕。 / Lay out the storyboard and assets as a timeline. You can edit timeline.json afterwards to change order, durations and captions.",
-      "inputs": ["storyboard", "assets"],
+      "inputs": ["storyboard", "assets", "voice"],
       "executor": { "type": "script", "run": "node scripts/build-timeline.mjs" },
       "outputs": [{ "type": "flowgit/timeline+json", "path": "timeline.json" }]
     },

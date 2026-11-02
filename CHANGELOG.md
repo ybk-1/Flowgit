@@ -87,7 +87,8 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 
 ### 模板和示例 / Templates and examples
 
-- `short-video`（默认）：脚本 → 分镜 → 素材 → 剪辑 → 导出。FFmpeg 渲染竖屏视频，支持推近、模糊背景、渐变文字卡、标题、转场、背景音乐和配音（镜头时长跟着配音走）；输出语言可选中文或英文。
+- `short-video`（默认）：脚本 → 配音 → 分镜 → 素材 → 剪辑 → 导出。FFmpeg 渲染竖屏视频，支持推近、模糊背景、渐变文字卡、标题、转场、背景音乐和配音（镜头时长跟着配音走）；输出语言可选中文或英文。
+- 配音阶段调用 OpenAI 兼容的语音接口，把口播合成 `voice/voice.mp3`。密钥用 `FLOWGIT_TTS_API_KEY`（不写进文件），`FLOWGIT_TTS_BASE_URL` 可以换成别的兼容服务。没配密钥就跳过，不报错；`assets/` 里自己录的配音优先。`doctor` 没配密钥时只提醒，不算错误。
 - `weekly-report`：周报入门示例，随手记（人）→ 草稿（模型）→ 检查（脚本），配合 [教程](docs/guide.md) 一步步做出来。
 - `article`：图文帖子，大纲 → 正文 → 配图方案 → 照片（人）→ 导出 `post.md` 和 `post.html`。篇幅和语气按平台（小红书、公众号、博客）变化，缺的照片用画面描述占位。
 - `support-sop`：客服 SOP，资料（人）→ 汇总（脚本）→ 规程 → 用例 → 检查（模型）→ 打包成 `skill/SKILL.md` 和评测用例。
@@ -99,7 +100,8 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 - `short-drama`：竖屏微短剧。设定和人物 → 分集节拍（钩子、压抑、爆发、悬念，付费卡点）→ 逐集剧本 → 按广电总局管理提示和创作标准审读 → 检查集数、估算时长、旁白开头、悬念和付费卡点。
 - `lesson-plan`：老师备课，按逆向设计。教学目标（布鲁姆层级）→ 评价任务 → 教案和分层练习（并行）→ 学生练习单和答案，并检查教学评一致性、时间和“双减”作业时长。
 - `examples/agent-page`：用 agent 做一页介绍网页（只在仓库里）。
-- `short-video` (default): script → storyboard → assets → edit → export. FFmpeg renders a vertical video with zoom, blurred fill, gradient text cards, a title, transitions, background music and voiceover (clips follow the voice); the output language is Chinese or English.
+- `short-video` (default): script → voiceover → storyboard → assets → edit → export. FFmpeg renders a vertical video with zoom, blurred fill, gradient text cards, a title, transitions, background music and voiceover (clips follow the voice); the output language is Chinese or English.
+- The voice stage calls an OpenAI-compatible speech API and writes `voice/voice.mp3`. The key is `FLOWGIT_TTS_API_KEY` (never written to a file); `FLOWGIT_TTS_BASE_URL` points it at another compatible service. With no key the stage skips instead of failing, and a voiceover you recorded in `assets/` wins. `doctor` warns when the key is missing, and that warning is not an error.
 - `weekly-report`: a starter that turns rough notes (person) into a draft (model) and checks it (script); the [guide](docs/guide.md) builds it step by step.
 - `article`: an illustrated post, outline → draft → image plan → photos (person) → export to `post.md` and `post.html`. Length and tone follow the platform (Xiaohongshu, WeChat, blog), and a missing photo becomes a placeholder with its scene description.
 - `support-sop`: a customer-support SOP, knowledge (person) → collect (script) → SOP → test cases → review (model) → packaged as `skill/SKILL.md` with an eval set.

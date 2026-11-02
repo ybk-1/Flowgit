@@ -23,7 +23,7 @@ flowgit log                       # 整个流程的历史和 token 合计 / the 
 
 | `-t` | 做什么 | What it makes |
 | --- | --- | --- |
-| `short-video`（默认 / default） | 竖屏短视频：脚本 → 分镜 → 素材 → 剪辑 → 导出 | A vertical short video: script → storyboard → assets → edit → export |
+| `short-video`（默认 / default） | 竖屏短视频：脚本 → 配音 → 分镜 → 素材 → 剪辑 → 导出 | A vertical short video: script → voiceover → storyboard → assets → edit → export |
 | `weekly-report` | 周报入门示例：随手记（人）→ 草稿（模型）→ 检查（脚本） | Starter: a weekly report from rough notes (person → model → script) |
 | `article` | 图文帖子（小红书、公众号、博客）：大纲 → 正文 → 配图方案 → 照片 → 导出 | An illustrated post (Xiaohongshu, WeChat, blog): outline → draft → image plan → photos → export |
 | `support-sop` | 客服 SOP：资料 → 汇总 → 规程 → 用例 → 检查 → 打包成 Skill | Customer-support SOP: knowledge → collect → SOP → cases → review → packaged as a Skill |
@@ -41,9 +41,9 @@ flowgit init my-report -t weekly-report
 flowgit -C my-report graph --md   # 画成 Mermaid 流程图贴进 README / a Mermaid diagram for your README
 ```
 
-密钥只从环境变量读（例如 `ANTHROPIC_API_KEY`、`DEEPSEEK_API_KEY`），不会写进任何文件。导出视频需要 [FFmpeg](https://ffmpeg.org/download.html)。
+密钥只从环境变量读（例如 `ANTHROPIC_API_KEY`、`DEEPSEEK_API_KEY`、`FLOWGIT_TTS_API_KEY`），不会写进任何文件。导出视频需要 [FFmpeg](https://ffmpeg.org/download.html)。
 
-Keys are read only from environment variables (such as `ANTHROPIC_API_KEY` or `DEEPSEEK_API_KEY`) and never written to a file. Exporting video needs [FFmpeg](https://ffmpeg.org/download.html).
+Keys are read only from environment variables (such as `ANTHROPIC_API_KEY`, `DEEPSEEK_API_KEY` or `FLOWGIT_TTS_API_KEY`) and never written to a file. Exporting video needs [FFmpeg](https://ffmpeg.org/download.html).
 
 完整说明、流程格式和模板见 / Full guide, flow format and templates: https://github.com/cgold9820-dotcom/Flowgit
 

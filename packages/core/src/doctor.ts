@@ -128,6 +128,22 @@ function keyChecks(loaded: LoadedFlow, stage: Stage, provider: ResolvedProvider,
   ];
 }
 
+/** The short-video template's voice stage. A missing key skips synthesis; that is a warning, not a failure. */
+function ttsCheck(stageId: string, command: string, env: NodeJS.ProcessEnv): DoctorCheck | undefined {
+  if (!/(?:^|\s)["']?scripts\/tts\.mjs["']?(?:\s|$)/.test(command)) return undefined;
+  if (env.FLOWGIT_TTS_API_KEY?.trim()) {
+    return { level: "ok", stage: stageId, message: "FLOWGIT_TTS_API_KEY 已设置 / FLOWGIT_TTS_API_KEY is set" };
+  }
+  return {
+    level: "warn",
+    stage: stageId,
+    message: "没有设置 FLOWGIT_TTS_API_KEY，配音阶段会跳过自动配音 / FLOWGIT_TTS_API_KEY is not set, so the voice stage skips automatic voiceover",
+    hint:
+      '可以自己录 assets/voice.mp3，或设置 FLOWGIT_TTS_API_KEY（PowerShell：$env:FLOWGIT_TTS_API_KEY="..."；macOS/Linux：export FLOWGIT_TTS_API_KEY=...）\n' +
+      'Record assets/voice.mp3 yourself, or set FLOWGIT_TTS_API_KEY (PowerShell: $env:FLOWGIT_TTS_API_KEY="..."; macOS/Linux: export FLOWGIT_TTS_API_KEY=...)',
+  };
+}
+
 function stageChecks(loaded: LoadedFlow, stage: Stage, opts: DoctorOptions, env: NodeJS.ProcessEnv): DoctorCheck[] {
   const ex = stage.executor;
   if (!isRunnableExecutor(ex.type)) {
@@ -140,7 +156,10 @@ function stageChecks(loaded: LoadedFlow, stage: Stage, opts: DoctorOptions, env:
       return llmChecks(loaded, stage, opts, env);
     case "script": {
       const programs = [commandProgram(ex.run), ...(ex.requires ?? [])].filter((p): p is string => !!p);
-      return [...new Set(programs)].map((p) => programCheck(stage.id, p, env));
+      const checks = [...new Set(programs)].map((p) => programCheck(stage.id, p, env));
+      const tts = ttsCheck(stage.id, ex.run, env);
+      if (tts) checks.push(tts);
+      return checks;
     }
     case "service":
       return headerEnvNames(ex.headers).map((name) =>
@@ -178,7 +197,8 @@ function stageChecks(loaded: LoadedFlow, stage: Stage, opts: DoctorOptions, env:
 /**
  * Check whether this machine can run a flow: Node version, flow inputs, model keys
  * (or canned replies), proxy settings, and the programs that script and agent
- * stages start. Makes no network calls and runs nothing.
+ * stages start. A short-video voice stage with no FLOWGIT_TTS_API_KEY is a
+ * warning, not an error. Makes no network calls and runs nothing.
  */
 export function doctor(loaded: LoadedFlow, opts: DoctorOptions = {}): DoctorCheck[] {
   const env = opts.env ?? process.env;

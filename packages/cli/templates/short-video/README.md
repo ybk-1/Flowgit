@@ -1,12 +1,13 @@
 # 短视频制作 / Short video
 
-脚本 → 分镜 → 素材 → 剪辑 → 导出。
+脚本 → 配音 → 分镜 → 素材 → 剪辑 → 导出。
 
-Script → storyboard → assets → edit → export.
+Script → voiceover → storyboard → assets → edit → export.
 
 | 阶段 / Stage | 谁来做 / Who | 产物 / Output |
 | --- | --- | --- |
 | 脚本 script | Claude（`prompts/script.md`） | `script.md` |
+| 配音 voice | `scripts/tts.mjs` | `voice/` |
 | 分镜 storyboard | Claude（`prompts/storyboard.md`） | `storyboard.json` |
 | 素材 assets | 你 / you | `assets/` |
 | 剪辑 edit | `scripts/build-timeline.mjs` | `timeline.json` |
@@ -28,6 +29,7 @@ Script → storyboard → assets → edit → export.
 flowgit inputs set topic="为什么猫喜欢纸箱"
 flowgit inputs set language=en     # 可选，想要英文视频时 / optional, for an English video
 export ANTHROPIC_API_KEY=...       # 脚本和分镜阶段调用 Claude / the script and storyboard stages call Claude
+export FLOWGIT_TTS_API_KEY=...     # 可选：自动配音 / optional: automatic voiceover
 flowgit run all                    # 跑到素材阶段会停下等你 / stops at the assets stage and waits for you
 mkdir -p assets                    # 放素材，或者先空着，导出时用文字卡 / add assets, or leave it empty for text cards
 flowgit run all                    # 剪辑 + 导出 → final.mp4 / edit + export → final.mp4
@@ -85,7 +87,32 @@ Set `transition.type` to `"none"` to turn transitions off; a clip's `motion` can
 
 ## 配音 / Voiceover
 
-照着 `script.md` 把旁白录成一条音频（手机录音就行），命名为 `voice.mp3`（或 `voice.m4a`、`voice.wav`、`配音.mp3`、`narration.mp3` 等）放进 `assets/`，然后重跑剪辑和导出。剪辑阶段会：
+配音阶段（`scripts/tts.mjs`）读 `script.md`，去掉标题、画面说明和其他不念出来的部分，调用语音接口把口播合成 `voice/voice.mp3`。一段太长时会拆开请求，再用 FFmpeg 拼成一条（导出视频本来就要装 FFmpeg）。
+
+The voice stage (`scripts/tts.mjs`) reads `script.md`, drops headings, visual notes and anything else that is not spoken, and calls a speech API to write `voice/voice.mp3`. A long script is split into several requests and joined with FFmpeg (you already need FFmpeg to export).
+
+密钥只从环境变量读，不会写进文件。没设置 `FLOWGIT_TTS_API_KEY` 时这一步不失败：它写下 `voice/README.md` 然后继续，你可以之后自己录音。
+
+The key is read only from the environment and never written to a file. With no `FLOWGIT_TTS_API_KEY` the stage does not fail: it writes `voice/README.md` and continues, so you can record the voice later.
+
+| 变量 / Variable | 默认 / Default | 说明 | Description |
+| --- | --- | --- | --- |
+| `FLOWGIT_TTS_API_KEY` | （没有 / unset） | 语音合成的密钥 | Speech API key |
+| `FLOWGIT_TTS_BASE_URL` | `https://api.openai.com/v1` | 兼容 OpenAI 语音接口的服务地址，不要自己加上 `/audio/speech` | Base URL of an OpenAI-compatible speech service; do not append `/audio/speech` |
+| `FLOWGIT_TTS_MODEL` | `gpt-4o-mini-tts` | 模型 | Model |
+| `FLOWGIT_TTS_VOICE` | `alloy` | 声音 | Voice |
+
+```bash
+export FLOWGIT_TTS_API_KEY=...
+# PowerShell: $env:FLOWGIT_TTS_API_KEY = "..."
+# 换一家兼容 OpenAI 语音接口的服务 / another OpenAI-compatible speech service
+export FLOWGIT_TTS_BASE_URL=https://example.com/v1
+export FLOWGIT_TTS_MODEL=tts-1
+export FLOWGIT_TTS_VOICE=nova
+flowgit run voice
+```
+
+自己录的配音优先。把旁白录成 `voice.mp3`（或 `voice.m4a`、`voice.wav`、`配音.mp3`、`narration.mp3` 等）放进 `assets/`，剪辑阶段会用它，而不是 `voice/voice.mp3`。然后重跑剪辑和导出。剪辑阶段会：
 
 - 把配音写进 `timeline.json`，导出时从头播放；
 - 让镜头时长跟着配音走：按每个镜头旁白的字数，把配音的总长分给各个镜头，每段画面大致对上它的那句话；
@@ -103,10 +130,14 @@ The automatic split is a starting point: if a cut comes too early or late, chang
 
 ```json
 {
-  "voice": { "path": "assets/voice.mp3", "volume": 1 },
+  "voice": { "path": "voice/voice.mp3", "volume": 1 },
   "music": { "path": "assets/music.mp3", "volume": 0.2 }
 }
 ```
+
+自己录进 `assets/` 时，`voice.path` 会是 `assets/voice.mp3`。
+
+When you record into `assets/`, `voice.path` is `assets/voice.mp3` instead.
 
 ## 背景音乐 / Music
 
