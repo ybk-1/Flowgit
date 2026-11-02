@@ -165,6 +165,7 @@ Every command accepts `-C <dir>` for the flow directory. `run` also takes `--inp
 | `article` | `flowgit init -t article` | 大纲 → 正文 → 配图方案 → 照片 → 导出 / outline → draft → image plan → photos → export |
 | `support-sop` | `flowgit init -t support-sop` | 资料（人）→ 汇总（脚本）→ 规程 → 用例 → 检查（模型）→ 技能（脚本）/ knowledge (person) → collect (script) → SOP → cases → check (model) → skill (script) |
 | `job-application` | `flowgit init -t job-application` | 材料（人）→ 分析 → 简历和求职信（模型，并行）→ 检查（脚本）/ materials (person) → analysis → resume and cover letter (model, in parallel) → check (script) |
+| `research-report` | `flowgit init -t research-report` | 子问题 → 资料（人）→ 提纲 → 带引用的报告（模型）→ 检查出处（脚本）/ questions → sources (person) → outline → cited report (model) → citation check (script) |
 
 图文模板按平台（小红书、公众号、博客）决定篇幅和语气，导出 `post.md` 和 `post.html`。说明见 [`packages/cli/templates/article/README.md`](packages/cli/templates/article/README.md)。客服 SOP 模板把你的资料整理成规程和测试用例，最后打包成 `skill/SKILL.md`，说明见 [`packages/cli/templates/support-sop/README.md`](packages/cli/templates/support-sop/README.md)。短视频见 [`packages/cli/templates/short-video/README.md`](packages/cli/templates/short-video/README.md)，周报入门见 [教程](docs/guide.md)。
 
@@ -293,7 +294,7 @@ To build your own flow from scratch, follow [docs/guide.md](docs/guide.md) (abou
 packages/
   core/   @flowgit/core  格式、校验、版本记录、执行器 / format, validation, runs, executors
   cli/    flowgit        命令行工具和模板 / CLI and templates
-    templates/             自带模板：short-video（短视频）、weekly-report（周报入门）、article（图文）、support-sop（客服 SOP）、job-application（求职材料）/ bundled templates: short-video, weekly-report (starter), article, support-sop, job-application
+    templates/             自带模板：short-video（短视频）、weekly-report（周报入门）、article（图文）、support-sop（客服 SOP）、job-application（求职材料）、research-report（调研报告）/ bundled templates: short-video, weekly-report (starter), article, support-sop, job-application, research-report
   web/    @flowgit/web   本机网页看板：查看、修改、运行、填写输入、看历史、对比和回退 / local web board: view, edit, run, fill in inputs, browse history, compare and restore
 docs/
   spec.md                  格式规范 / format spec
@@ -322,17 +323,17 @@ Everything on GitHub (commit messages, PRs, docs) is bilingual, Chinese first.
 
 ## 路线图 / Roadmap
 
-1. **格式 + 命令行**（本仓库现状，0.1.0 准备发布）：Flow 规范 v0.1；五个自带模板（短视频、周报入门、图文、客服 SOP、求职材料）；llm 阶段接任何模型，agent 阶段接 Claude Code、Codex、Cursor、Gemini；script 和 agent 阶段可以设超时；`diff`（版本对比）、`doctor`、`templates`、`graph`（流程图）等命令。更新记录见 [CHANGELOG.md](CHANGELOG.md)。
+1. **格式 + 命令行**（本仓库现状，0.1.0 准备发布）：Flow 规范 v0.1；六个自带模板（短视频、周报入门、图文、客服 SOP、求职材料、调研报告）；llm 阶段接任何模型，agent 阶段接 Claude Code、Codex、Cursor、Gemini；script 和 agent 阶段可以设超时；`diff`（版本对比）、`doctor`、`templates`、`graph`（流程图）等命令。更新记录见 [CHANGELOG.md](CHANGELOG.md)。
 2. **阶段看板**：本机看板已经有了（`flowgit board`），每张卡能看产物、改、运行、看历史、对比和回退。下一步是网站：在网上打开一个流程就是一块看板。
 3. **发布与复用**：从别人的流程开始（fork）、分享前自动去隐私、画廊。
-4. **更多领域**：更多模板（图文、客服 SOP 和求职材料已经自带，做网站有 `examples/agent-page` 示例）；`service` 执行器调用 HTTP 服务；之后让作者把流程变成 MCP 服务供别人调用。
+4. **更多领域**：更多模板（图文、客服 SOP、求职材料和调研报告已经自带，做网站有 `examples/agent-page` 示例）；`service` 执行器调用 HTTP 服务；之后让作者把流程变成 MCP 服务供别人调用。
 
 English:
 
-1. **Format + CLI** (this repo today, 0.1.0 getting ready to ship): Flow spec v0.1; five bundled templates (short video, weekly-report starter, article posts, support SOP, job application); llm stages on any model and agent stages on Claude Code, Codex, Cursor or Gemini; timeouts for script and agent stages; commands such as `diff` (compare versions), `doctor`, `templates` and `graph` (a diagram of the flow). See [CHANGELOG.md](CHANGELOG.md) for details.
+1. **Format + CLI** (this repo today, 0.1.0 getting ready to ship): Flow spec v0.1; six bundled templates (short video, weekly-report starter, article posts, support SOP, job application, research report); llm stages on any model and agent stages on Claude Code, Codex, Cursor or Gemini; timeouts for script and agent stages; commands such as `diff` (compare versions), `doctor`, `templates` and `graph` (a diagram of the flow). See [CHANGELOG.md](CHANGELOG.md) for details.
 2. **Stage board**: the local board is here (`flowgit board`); each card lets you see its outputs, edit them, run, browse history, compare and restore. Next is the web app: open a flow online and it is a board.
 3. **Publish and reuse**: start from someone else's flow (fork), strip private data before sharing, and a gallery.
-4. **More domains**: more templates (article posts, a support SOP and a job application are bundled; building a website has the `examples/agent-page` example); a `service` executor for HTTP services; later, authors can expose a flow as an MCP service for others to call.
+4. **More domains**: more templates (article posts, a support SOP, a job application and a research report are bundled; building a website has the `examples/agent-page` example); a `service` executor for HTTP services; later, authors can expose a flow as an MCP service for others to call.
 
 ## 许可证 / License
 

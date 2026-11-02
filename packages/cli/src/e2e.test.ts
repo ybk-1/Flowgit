@@ -69,12 +69,12 @@ describe("flowgit CLI with the short-video template", () => {
     expect(list.status).toBe(0);
     const templates = JSON.parse(list.stdout) as { id: string; default: boolean; stages: { executor: string }[] }[];
     expect(templates[0]).toMatchObject({ id: "short-video", default: true });
-    expect(templates.map((t) => t.id)).toEqual(expect.arrayContaining(["weekly-report", "article", "support-sop", "job-application"]));
+    expect(templates.map((t) => t.id)).toEqual(expect.arrayContaining(["weekly-report", "article", "support-sop", "job-application", "research-report"]));
     expect(spawnSync(process.execPath, [cli, "templates"], { encoding: "utf8", env: { ...process.env, NO_COLOR: "1" } }).stdout).toMatch(/weekly-report\s+周报（入门示例）\s+随手记 human → 周报草稿 llm → 检查 script/);
 
     const wrong = spawnSync(process.execPath, [cli, "init", path.join(work, "nope"), "-t", "no-such-template"], { encoding: "utf8" });
     expect(wrong.status).toBe(1);
-    expect(wrong.stderr).toContain("bundled templates: short-video, article, job-application, support-sop, weekly-report");
+    expect(wrong.stderr).toContain("bundled templates: short-video, article, job-application, research-report, support-sop, weekly-report");
   });
 
   it("shows a short, quoted path when the new flow is below the current folder", () => {
@@ -625,5 +625,37 @@ describe("job-application template", () => {
     expect(graph.out).toContain('s4["求职信<br/>llm"]');
     expect(graph.out).toContain("s2 --> s3");
     expect(graph.out).toContain("s2 --> s4");
+  });
+});
+
+describe("research-report template", () => {
+  let researchDir: string;
+
+  function run(args: string[], env: Record<string, string> = {}) {
+    const r = spawnSync(process.execPath, [cli, "-C", researchDir, ...args], {
+      encoding: "utf8",
+      env: { ...process.env, NO_COLOR: "1", ...env },
+    });
+    return { code: r.status, out: `${r.stdout}${r.stderr}` };
+  }
+
+  beforeAll(() => {
+    if (!fs.existsSync(cli)) throw new Error("Build the CLI first: pnpm -r run build");
+    researchDir = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-research-"));
+  });
+
+  afterAll(() => {
+    if (researchDir) fs.rmSync(researchDir, { recursive: true, force: true });
+  });
+
+  it("runs on demo replies and reports a source that was never cited", () => {
+    const init = spawnSync(process.execPath, [cli, "init", researchDir, "-t", "research-report"], { encoding: "utf8" });
+    expect(init.status, `${init.stdout}${init.stderr}`).toBe(0);
+    expect(run(["inputs", "set", "topic=为什么猫喜欢纸箱"]).code).toBe(0);
+    const ran = run(["run", "all"], { FLOWGIT_LLM_MOCK_DIR: path.join(researchDir, "demo-replies") });
+    expect(ran.code, ran.out).toBe(0);
+    const report = fs.readFileSync(path.join(researchDir, "check-report.md"), "utf8");
+    expect(report).toContain("没被引用的来源");
+    expect(report).toContain("shelter.md");
   });
 });

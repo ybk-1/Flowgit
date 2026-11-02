@@ -66,12 +66,14 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 - `article`：图文帖子，大纲 → 正文 → 配图方案 → 照片（人）→ 导出 `post.md` 和 `post.html`。篇幅和语气按平台（小红书、公众号、博客）变化，缺的照片用画面描述占位。
 - `support-sop`：客服 SOP，资料（人）→ 汇总（脚本）→ 规程 → 用例 → 检查（模型）→ 打包成 `skill/SKILL.md` 和评测用例。
 - `job-application`：对照职位描述改简历并写求职信。简历和求职信并行，最后脚本检查关键词、篇幅和占位符。
+- `research-report`：把题目拆成子问题、收集资料、写成带引用的报告。脚本检查没被引用的来源、不存在的引用、没被回答的子问题和没有出处的段落。
 - `examples/agent-page`：用 agent 做一页介绍网页（只在仓库里）。
 - `short-video` (default): script → storyboard → assets → edit → export. FFmpeg renders a vertical video with zoom, blurred fill, gradient text cards, a title, transitions, background music and voiceover (clips follow the voice); the output language is Chinese or English.
 - `weekly-report`: a starter that turns rough notes (person) into a draft (model) and checks it (script); the [guide](docs/guide.md) builds it step by step.
 - `article`: an illustrated post, outline → draft → image plan → photos (person) → export to `post.md` and `post.html`. Length and tone follow the platform (Xiaohongshu, WeChat, blog), and a missing photo becomes a placeholder with its scene description.
 - `support-sop`: a customer-support SOP, knowledge (person) → collect (script) → SOP → test cases → review (model) → packaged as `skill/SKILL.md` with an eval set.
 - `job-application`: tailor a resume and write a cover letter for a job description. The resume and letter run in parallel, then a script checks keywords, length and placeholders.
+- `research-report`: split a topic into sub-questions, gather sources and write a cited report. A script checks uncited sources, citations of missing files, unanswered sub-questions and paragraphs with no citation.
 - `examples/agent-page`: a one-page explainer made by an agent (repo only).
 
 ### 项目 / Project
