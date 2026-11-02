@@ -44,7 +44,7 @@ try {
     if (name === "@flowgit/core") {
       check(files.includes("dist/index.js") && files.includes("schema/flow.schema.json"), `${name}: ships dist and the schema`);
     } else if (name === "@flowgit/web") {
-      check(files.includes("dist/index.js") && files.includes("public/index.html") && files.includes("public/app.js"), `${name}: ships dist and the board page`);
+      check(files.includes("dist/index.js") && files.includes("public/index.html") && files.includes("public/app.js") && files.includes("public/i18n.js"), `${name}: ships dist and the board page`);
     } else {
       check(files.includes("dist/index.js"), `${name}: ships the CLI entry`);
       for (const t of ["short-video", "weekly-report", "article", "support-sop", "job-application", "research-report", "ecommerce-listing", "slides", "live-selling", "short-drama", "lesson-plan", "novel-serial", "business-plan", "event-plan", "hiring", "travel-guide", "online-course", "landing-page"]) check(files.includes(`templates/${t}/flow.json`), `${name}: ships the ${t} template`);

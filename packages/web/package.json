@@ -44,7 +44,8 @@
     "prepack": "node ../../scripts/copy-license.mjs"
   },
   "dependencies": {
-    "@flowgit/core": "workspace:*"
+    "@flowgit/core": "workspace:*",
+    "i18next": "26.4.7"
   },
   "publishConfig": {
     "access": "public"

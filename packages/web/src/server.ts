@@ -3,6 +3,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
+import { createRequire } from "node:module";
 import { pipeline } from "node:stream/promises";
 import { fileURLToPath } from "node:url";
 import {
@@ -57,6 +58,14 @@ import {
 
 const publicDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "public");
 
+/** i18next's browser build (https://www.i18next.com), served to the board as /vendor/i18next.js. */
+const i18nextFile = path.join(
+  path.dirname(createRequire(import.meta.url).resolve("i18next/package.json")),
+  "dist",
+  "umd",
+  "i18next.min.js",
+);
+
 const CSP = [
   "default-src 'none'",
   "style-src 'self'",
@@ -88,11 +97,14 @@ const LOCKED_PAGE = `<!doctype html>
 </html>
 `;
 
+/** Board files: names under public/, or an absolute path for a file from a dependency. */
 const STATIC: Record<string, { file: string; type: string }> = {
   "/": { file: "index.html", type: "text/html; charset=utf-8" },
   "/index.html": { file: "index.html", type: "text/html; charset=utf-8" },
   "/app.js": { file: "app.js", type: "text/javascript; charset=utf-8" },
   "/fx.js": { file: "fx.js", type: "text/javascript; charset=utf-8" },
+  "/i18n.js": { file: "i18n.js", type: "text/javascript; charset=utf-8" },
+  "/vendor/i18next.js": { file: i18nextFile, type: "text/javascript; charset=utf-8" },
   "/style.css": { file: "style.css", type: "text/css; charset=utf-8" },
 };
 
@@ -468,7 +480,7 @@ function handle(req: http.IncomingMessage, res: http.ServerResponse, ctx: Handle
     send(res, 401, body, { "Content-Type": "text/html; charset=utf-8" });
     return;
   }
-  const file = path.join(publicDir, asset.file);
+  const file = path.isAbsolute(asset.file) ? asset.file : path.join(publicDir, asset.file);
   let body: Buffer | string = fs.readFileSync(file);
   if (asset.file === "index.html") {
     body = body.toString("utf8").replaceAll("__FLOWGIT_TOKEN__", ctx.token);

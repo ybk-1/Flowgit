@@ -11,6 +11,11 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 - `flowgit prune` 清理旧版本：每个阶段默认保留最新 5 个，并留下所有手动修改、和当前文件一致的最新版本，以及最近一次成功的运行。`--dry-run` 只列出能腾出的空间；不在终端里必须加 `--yes` 才会删除。删掉的版本号不会再被使用。`runs/` 超过 500 MB 时，`flowgit status` 最后一行会提示可以清理。
 - `flowgit prune` deletes old versions: each stage keeps its newest 5, every manual edit, the newest version matching the current files, and the newest successful run. `--dry-run` only lists how much space that frees; outside a terminal nothing is deleted unless `--yes` is set. Deleted version numbers are never reused. When `runs/` is over 500 MB, the last line of `flowgit status` says so.
 
+### 看板 / Board
+
+- 看板界面一次只显示一种语言：右上角「中文 / EN」切换，选择记在浏览器里；第一次打开跟着浏览器语言（中文浏览器显示简体中文，其他显示英文）。文案在 `public/i18n.js`，用开源翻译库 [i18next](https://www.i18next.com)；服务器和流程文件里的双语提示（“中文 / English”）也只显示当前语言那一半。
+- The board shows one language at a time: switch with "中文 / EN" at the top right, remembered in the browser; the first visit follows the browser language (Simplified Chinese for a Chinese browser, English otherwise). Strings live in `public/i18n.js` on the open-source [i18next](https://www.i18next.com) library, and bilingual messages from the server and from flow files ("中文 / English") show only the current language's half.
+
 ## [0.1.0] - 2026-11-02
 
 第一个版本。/ The first release.

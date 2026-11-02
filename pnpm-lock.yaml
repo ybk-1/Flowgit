@@ -53,6 +53,9 @@ importers:
       '@flowgit/core':
         specifier: workspace:*
         version: link:../core
+      i18next:
+        specifier: 26.4.7
+        version: 26.4.7(typescript@5.9.3)
 
 packages:
 
@@ -263,6 +266,14 @@ packages:
     resolution: {integrity: sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw==}
     engines: {node: ^8.16.0 || ^10.6.0 || >=11.0.0}
     os: [darwin]
+
+  i18next@26.4.7:
+    resolution: {integrity: sha512-p/3hqy6EcuqRs6wNwBYwGGC1fzBJSMxV9zMuN814ab/7QjdZbXfjXwuPZdQbngX6KDOTxM01uUiZyqmMB8ghZg==}
+    peerDependencies:
+      typescript: ^5 || ^6 || ^7
+    peerDependenciesMeta:
+      typescript:
+        optional: true
 
   json-schema-to-ts@3.1.1:
     resolution: {integrity: sha512-+DWg8jCJG2TEnpy7kOm/7/AxaYoaRbjVB4LFZLySZlWn8exGs3A4OLJR966cVvU26N7X9TWxl+Jsw7dzAqKT6g==}
@@ -653,6 +664,10 @@ snapshots:
 
   fsevents@2.3.3:
     optional: true
+
+  i18next@26.4.7(typescript@5.9.3):
+    optionalDependencies:
+      typescript: 5.9.3
 
   json-schema-to-ts@3.1.1:
     dependencies:

@@ -360,9 +360,11 @@ describe("read-only board", () => {
     expect(board.stages.find((s) => s.id === "script")?.state).toBe("edited");
     const page = await httpGet(server.port, "/app.js");
     expect(page.status).toBe(200);
-    expect(page.body).toContain("保存 Save");
-    expect(page.body).toContain("已手动修改");
-    expect(page.body).toContain("Before this stage next runs, the edit is saved as its own version and is not lost.");
+    expect(page.body).toContain('I18N.text(save, "file.save")');
+    expect(page.body).toContain('"editNote"');
+    const i18n = await httpGet(server.port, "/i18n.js");
+    expect(i18n.body).toContain('edited: "已手动修改"');
+    expect(i18n.body).toContain("Before this stage next runs, the edit is saved as its own version and is not lost.");
   });
 
   it("rejects run, inputs, and the event stream without a token", async () => {
@@ -426,42 +428,52 @@ describe("read-only board", () => {
   it("offers run controls, a model field, and the human upload", async () => {
     const page = await httpGet(server.port, `/?token=${server.token}`);
     const app = await httpGet(server.port, "/app.js");
-    expect(page.body).toContain("全部运行 Run all");
-    expect(page.body).toContain("保存输入 Save inputs");
-    expect(page.body).toContain("新增阶段 / Add stage");
-    expect(page.body).toContain("删除阶段 / Remove stage");
-    expect(page.body).toContain("一起断开依赖 / detach downstream");
-    expect(app.body).toContain("删除阶段 / Remove stage");
+    const i18n = await httpGet(server.port, "/i18n.js");
+    // The page ships in Chinese; i18n.js switches every marked element to the chosen language.
+    expect(page.body).toContain('data-i18n="top.runAll">全部运行<');
+    expect(page.body).toContain('data-i18n="inputs.save">保存输入<');
+    expect(page.body).toContain('data-i18n="top.addStage">新增阶段<');
+    expect(page.body).toContain('data-i18n="remove.title">删除阶段<');
+    expect(page.body).toContain('data-i18n="remove.force">一起断开依赖<');
+    expect(page.body).toContain('data-i18n="live.on">实时更新<');
+    expect(page.body).toContain('data-i18n="view.cards">卡片<');
+    expect(page.body).toContain('data-i18n="view.graph">流程图<');
+    expect(page.body).toContain('data-i18n="top.preview">预演<');
+    expect(page.body).toContain('data-i18n="usage.label">模型用量合计<');
+    expect(app.body).toContain('"stage.remove"');
     expect(app.body).toContain('"/api/stage"');
-    expect(app.body).toContain("运行这一步 Run");
-    expect(app.body).toContain("全部运行 Run all");
+    expect(app.body).toContain('"stage.run"');
     expect(app.body).toContain('stage.state === "waiting-upstream"');
     expect(app.body).toContain("stage.instructions");
-    expect(app.body).toContain("上传文件 / Upload a file");
+    expect(app.body).toContain('"file.upload"');
     expect(app.body).toContain("provider/model");
-    expect(app.body).toContain("必填 required");
+    expect(app.body).toContain('"inputs.required"');
     expect(app.body).toContain("/api/events?token=");
     expect(app.body).toContain('type === "flow:changed"');
-    expect(app.body).toContain("实时更新已断开，改为每 3 秒刷新 / live updates lost, refreshing every 3 seconds");
+    expect(app.body).toContain('"live.lost"');
     expect(app.body).toContain("setInterval(refresh, 3000)");
-    expect(page.body).toContain("实时更新 / live updates");
-    expect(page.body).toContain("卡片 / Cards");
-    expect(page.body).toContain("流程图 / Graph");
-    expect(page.body).toContain("预演 / Preview");
-    expect(page.body).toContain("模型用量合计 / total model usage");
     expect(app.body).toContain('"/api/graph"');
     expect(app.body).toContain('"/api/plan"');
     expect(app.body).toContain('"/api/trust"');
     expect(app.body).toContain('"/api/usage"');
-    expect(app.body).toContain("最多调用 ");
-    expect(app.body).toContain("at most ");
-    expect(app.body).toContain("这次最多调用 ");
-    expect(app.body).toContain("This run makes at most ");
-    expect(app.body).toContain("model calls. Continue?");
-    expect(app.body).toContain("跳过 / skipped");
-    expect(app.body).toContain("等你 / wait for you");
-    expect(app.body).toContain("不能运行 / cannot run");
+    expect(app.body).toContain('t("plan.calls"');
+    expect(app.body).toContain('t("run.confirm"');
     expect(app.body).toContain("window.confirm");
+    for (const text of [
+      'calls_other: "最多调用 {{count}} 次模型"',
+      'calls_other: "At most {{count}} model calls"',
+      'confirm_other: "这次最多调用 {{count}} 次模型，继续吗？"',
+      'confirm_other: "This run makes at most {{count}} model calls. Continue?"',
+      'skip: "跳过"',
+      'skip: "Skipped"',
+      'wait: "等你"',
+      '"cannot-run": "不能运行"',
+      '"cannot-run": "Cannot run"',
+      'live: { on: "实时更新"',
+      'lost: "Live updates lost, refreshing every 3 seconds"',
+    ]) {
+      expect(i18n.body).toContain(text);
+    }
     expect(app.body).toContain("localStorage.getItem");
     expect(app.body).toContain("localStorage.setItem");
   });
@@ -477,7 +489,27 @@ describe("read-only board", () => {
     expect(page.body.indexOf('src="/fx.js"')).toBeLessThan(page.body.indexOf('src="/app.js"'));
     expect(page.body).toContain('aria-describedby="run-all-help"');
     expect(app.body).toContain("FX.hold(runAllButton");
-    expect(app.body).toContain("运行中");
+    expect(app.body).toContain('key: "state.running"');
+  });
+
+  it("serves i18next and the dictionaries before the app, with a language switch", async () => {
+    const page = await httpGet(server.port, `/?token=${server.token}`);
+    const vendor = await httpGet(server.port, "/vendor/i18next.js");
+    const i18n = await httpGet(server.port, "/i18n.js");
+    expect(vendor.status).toBe(200);
+    expect(vendor.headers["content-type"]).toBe("text/javascript; charset=utf-8");
+    expect(vendor.body).toContain("i18next");
+    expect(i18n.status).toBe(200);
+    expect(i18n.body).toContain("i18next.createInstance()");
+    const at = (src: string) => page.body.indexOf(`src="${src}"`);
+    expect(at("/vendor/i18next.js")).toBeGreaterThan(-1);
+    expect(at("/vendor/i18next.js")).toBeLessThan(at("/i18n.js"));
+    expect(at("/i18n.js")).toBeLessThan(at("/app.js"));
+    expect(page.body).toContain('data-lang="zh"');
+    expect(page.body).toContain('data-lang="en"');
+    // The visible labels are one language at a time: no "中文 / English" pairs left on the page.
+    const visible = page.body.replace(/<noscript>[\s\S]*?<\/noscript>/, "").replace(/aria-label="[^"]*"/g, "");
+    expect(visible).not.toMatch(/[\u4e00-\u9fff][^<]* \/ [A-Za-z]/);
   });
 });
 
@@ -841,10 +873,10 @@ describe("history, diff, and restore on the board", () => {
 
       const appJs = await httpGet(board.port, "/app.js");
       expect(appJs.status).toBe(200);
-      expect(appJs.body).toContain("历史 History");
-      expect(appJs.body).toContain("对比 Compare");
-      expect(appJs.body).toContain("回退到这个版本 Restore");
-      expect(appJs.body).toContain("手动修改 manual edit");
+      expect(appJs.body).toContain('"stage.history"');
+      expect(appJs.body).toContain('"compare.go"');
+      expect(appJs.body).toContain('"history.restore"');
+      expect(appJs.body).toContain('"history.manual"');
       expect(appJs.body).toContain("/api/diff");
       expect(appJs.body).toContain("/api/restore");
       const css = await httpGet(board.port, "/style.css");
