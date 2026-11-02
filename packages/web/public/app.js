@@ -44,12 +44,15 @@ function errorEl(className, message, key, status) {
 }
 
 const VIEW_KEY = "flowgit.board.view";
+const GRAPH_STYLE_KEY = "flowgit.board.graphStyle";
 const SVG_NS = "http://www.w3.org/2000/svg";
 const NODE_W = 176;
 const NODE_H = 72;
 const GAP_X = 64;
 const GAP_Y = 28;
 const PAD = 20;
+/** The 3D graph: taller blocks and wider gaps, so a block's front face never hides an edge behind it. */
+const GRID_3D = { w: NODE_W, h: 84, gx: 72, gy: 48, pad: 40 };
 
 /** "cards" or "graph". Storage can throw in private mode; the choice still works for this visit. */
 function storedView() {
@@ -70,6 +73,24 @@ function storeView(value) {
   }
 }
 
+/** "depth" (blocks on a tilted floor) or "flat" (the plain diagram). */
+function storedGraphStyle() {
+  try {
+    if (window.localStorage.getItem(GRAPH_STYLE_KEY) === "flat") return "flat";
+  } catch {
+    // private mode or blocked storage
+  }
+  return "depth";
+}
+
+function storeGraphStyle(value) {
+  try {
+    window.localStorage.setItem(GRAPH_STYLE_KEY, value);
+  } catch {
+    // quota or private mode; the switch still applies until reload
+  }
+}
+
 const boardEl = document.getElementById("board");
 const bannerEl = document.getElementById("banner");
 const inputsEl = document.getElementById("inputs");
@@ -87,6 +108,18 @@ const previewButton = document.getElementById("preview");
 const usageTotalEl = document.getElementById("usage-total");
 const panelPortal = FX.portal(panelEl);
 
+// Depth: the card under the mouse tilts; the 3D graph's floor turns a little. A card stays flat
+// while it waits for upstream (it sits pressed into the page), while one of its fields has focus,
+// or while its menu is open (the menu is position: fixed, so a transformed card would move it).
+FX.tilt(boardEl, {
+  selector: ".card",
+  skip: (card) =>
+    card.dataset.state === "waiting-upstream" ||
+    Boolean(card.querySelector(".menu:not([hidden])")) ||
+    (card.contains(document.activeElement) && document.activeElement.matches("input, select, textarea")),
+});
+FX.orbit(boardEl, { area: ".graph-3d", plane: ".iso-plane" });
+
 let lastJson = "";
 /** The flow JSON the board last showed. Unlike lastJson, a forced refresh does not empty it. */
 let shownJson = "";
@@ -99,6 +132,7 @@ let boardStages = [];
 let removeId = "";
 const modelDrafts = new Map();
 let view = storedView();
+let graphStyle = storedGraphStyle();
 let graphPayload = null;
 let graphError = "";
 let graphTicket = 0;
@@ -305,6 +339,9 @@ function setRunning(id) {
   for (const node of boardEl.querySelectorAll(".flow-node")) {
     node.toggleAttribute("data-running", runningId !== "" && node.getAttribute("data-id") === runningId);
   }
+  for (const edge of boardEl.querySelectorAll(".flow-edge[data-to]")) {
+    edge.toggleAttribute("data-running", runningId !== "" && edge.getAttribute("data-to") === runningId);
+  }
   const panelBadge = panelMode === "stage" ? panelBody.querySelector(".badge[data-stage]") : null;
   if (panelBadge && stage && panelBadge.getAttribute("data-stage") === runningId) {
     paintBadge(panelBadge, runningId, "panel", RUNNING);
@@ -331,7 +368,9 @@ function followStage(id) {
     return;
   }
   const card = [...boardEl.querySelectorAll(".card")].find((item) => item.dataset.id === id);
-  FX.follow(boardEl, card, { right });
+  // Keep the board's side padding, so a lifted card's shadow is not cut at the edge.
+  const margin = Number.parseFloat(getComputedStyle(boardEl).scrollPaddingLeft) || 0;
+  FX.follow(boardEl, card, { right, margin });
 }
 
 /** Shows the side panel. When it was closed, it opens as a circle from the last click or key press. */
@@ -469,8 +508,30 @@ function renderGraphView() {
     wrap.append(elt("p", "graph-empty", "graph.loading"));
     return wrap;
   }
-  wrap.append(renderLegend(), drawGraph(graphPayload));
+  const bar = el("div", "graph-bar");
+  bar.append(renderLegend(), renderGraphStyleSwitch());
+  wrap.append(bar, graphStyle === "flat" ? drawGraph(graphPayload) : drawGraph3d(graphPayload));
   return wrap;
+}
+
+function renderGraphStyleSwitch() {
+  const group = el("div", "view-switch graph-style");
+  group.setAttribute("role", "group");
+  I18N.attr(group, "aria-label", "graph.mode");
+  for (const [value, key] of [["depth", "graph.depth"], ["flat", "graph.flat"]]) {
+    const button = elt("button", null, key);
+    button.type = "button";
+    button.dataset.style = value;
+    button.setAttribute("aria-pressed", graphStyle === value ? "true" : "false");
+    button.addEventListener("click", () => {
+      if (graphStyle === value) return;
+      graphStyle = value;
+      storeGraphStyle(value);
+      paintBoard();
+    });
+    group.append(button);
+  }
+  return group;
 }
 
 function renderLegend() {
@@ -525,15 +586,12 @@ function svgEl(name, attrs) {
   return node;
 }
 
-function drawGraph(payload) {
-  const nodes = Array.isArray(payload.nodes) ? payload.nodes : [];
-  const edges = Array.isArray(payload.edges) ? payload.edges : [];
-  const scroll = el("div", "graph-scroll");
-  if (!nodes.length) {
-    scroll.append(elt("p", "graph-empty", "graph.empty"));
-    return scroll;
-  }
-
+/**
+ * Where each stage sits and how each edge runs, in px: one column per layer, rows inside it.
+ * An edge that skips layers runs along its own lane under the stages.
+ */
+function graphLayout(nodes, edges, grid) {
+  const { w, h, gx, gy, pad } = grid;
   let maxLayer = 0;
   let maxRow = 0;
   const pos = new Map();
@@ -542,33 +600,48 @@ function drawGraph(payload) {
     const row = Number(node.row) || 0;
     if (layer > maxLayer) maxLayer = layer;
     if (row > maxRow) maxRow = row;
-    pos.set(node.id, { x: PAD + layer * (NODE_W + GAP_X), y: PAD + row * (NODE_H + GAP_Y), layer });
+    pos.set(node.id, { x: pad + layer * (w + gx), y: pad + row * (h + gy), layer });
   }
 
-  const routed = [];
+  const laneGap = 14;
+  const bottom = pad + (maxRow + 1) * h + maxRow * gy + 12;
+  const routes = [];
   let longLanes = 0;
   for (const edge of edges) {
     const from = pos.get(edge.from);
     const to = pos.get(edge.to);
     if (!from || !to) continue;
-    if (to.layer - from.layer > 1) routed.push({ from, to, lane: longLanes++ });
-    else routed.push({ from, to, lane: -1 });
+    const x1 = from.x + w;
+    const y1 = from.y + h / 2;
+    const x2 = to.x;
+    const y2 = to.y + h / 2;
+    let d;
+    if (to.layer - from.layer > 1) {
+      const yb = bottom + longLanes++ * laneGap;
+      d = `M ${x1} ${y1} H ${x1 + 18} V ${yb} H ${x2 - 18} V ${y2} H ${x2}`;
+    } else if (Math.abs(y1 - y2) < 0.5) {
+      d = `M ${x1} ${y1} H ${x2}`;
+    } else {
+      const mid = (x1 + x2) / 2;
+      d = `M ${x1} ${y1} H ${mid} V ${y2} H ${x2}`;
+    }
+    routes.push({ from: edge.from, to: edge.to, d });
   }
-  const laneGap = 14;
-  const bottom = PAD + (maxRow + 1) * NODE_H + maxRow * GAP_Y + 12;
-  const width = PAD * 2 + (maxLayer + 1) * NODE_W + maxLayer * GAP_X;
+  const width = pad * 2 + (maxLayer + 1) * w + maxLayer * gx;
   const height = bottom + (longLanes > 0 ? 8 + longLanes * laneGap : 8);
+  return { pos, routes, width, height };
+}
 
+/** The edges as SVG paths with an arrowhead. data-to lets a run mark the edges into its stage. */
+function graphEdges(layout, className) {
   const svg = svgEl("svg", {
-    class: "flow-graph",
-    width,
-    height,
-    viewBox: `0 0 ${width} ${height}`,
-    role: "group",
-    "aria-label": t("graph.label"),
+    class: className,
+    width: layout.width,
+    height: layout.height,
+    viewBox: `0 0 ${layout.width} ${layout.height}`,
   });
   const marker = svgEl("marker", {
-    id: "flow-arrow",
+    id: `flow-arrow-${className}`,
     viewBox: "0 0 10 10",
     refX: "8",
     refY: "5",
@@ -580,31 +653,56 @@ function drawGraph(payload) {
   const defs = svgEl("defs");
   defs.append(marker);
   svg.append(defs);
+  for (const route of layout.routes) {
+    const path = svgEl("path", { class: "flow-edge", d: route.d, "marker-end": `url(#flow-arrow-${className})`, "data-to": route.to });
+    if (runningId && route.to === runningId) path.setAttribute("data-running", "");
+    svg.append(path);
+  }
+  return svg;
+}
 
-  for (const edge of routed) {
-    const x1 = edge.from.x + NODE_W;
-    const y1 = edge.from.y + NODE_H / 2;
-    const x2 = edge.to.x;
-    const y2 = edge.to.y + NODE_H / 2;
-    let d;
-    if (edge.lane >= 0) {
-      const yb = bottom + edge.lane * laneGap;
-      d = `M ${x1} ${y1} H ${x1 + 18} V ${yb} H ${x2 - 18} V ${y2} H ${x2}`;
-    } else if (Math.abs(y1 - y2) < 0.5) {
-      d = `M ${x1} ${y1} H ${x2}`;
-    } else {
-      const mid = (x1 + x2) / 2;
-      d = `M ${x1} ${y1} H ${mid} V ${y2} H ${x2}`;
-    }
-    svg.append(svgEl("path", { class: "flow-edge", d, "marker-end": "url(#flow-arrow)" }));
+/** What a graph node says to a screen reader and in its tooltip. */
+function nodeLabels(node) {
+  const state = stateLabel(node.state);
+  const nodeName = I18N.pick(node.name || node.id);
+  const usage = stageUsageLine(node.id);
+  return {
+    nodeName,
+    aria: `${nodeName} · ${node.type || ""} · ${labelText(state)} · ${usage}`,
+    title: `${nodeName} · ${node.type || ""} · ${state.icon} ${labelText(state)} · ${usage}`,
+  };
+}
+
+/** Click or Enter / Space on a graph node opens its stage in the side panel. */
+function wireNode(target, node) {
+  const stage = stageForNode(node);
+  const open = () => openStage(stage);
+  target.addEventListener("click", open);
+  target.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    open();
+  });
+}
+
+function drawGraph(payload) {
+  const nodes = Array.isArray(payload.nodes) ? payload.nodes : [];
+  const edges = Array.isArray(payload.edges) ? payload.edges : [];
+  const scroll = el("div", "graph-scroll");
+  if (!nodes.length) {
+    scroll.append(elt("p", "graph-empty", "graph.empty"));
+    return scroll;
   }
 
+  const layout = graphLayout(nodes, edges, { w: NODE_W, h: NODE_H, gx: GAP_X, gy: GAP_Y, pad: PAD });
+  const svg = graphEdges(layout, "flow-graph");
+  svg.setAttribute("role", "group");
+  svg.setAttribute("aria-label", t("graph.label"));
+
   for (const node of nodes) {
-    const place = pos.get(node.id);
+    const place = layout.pos.get(node.id);
     if (!place) continue;
-    const stage = stageForNode(node);
-    const state = stateLabel(node.state);
-    const nodeName = I18N.pick(node.name || node.id);
+    const labels = nodeLabels(node);
     const selected = node.id === selectedId;
     const g = svgEl("g", {
       class: selected ? "flow-node is-selected" : "flow-node",
@@ -613,7 +711,7 @@ function drawGraph(payload) {
       "data-id": node.id,
       "data-state": node.state || "",
       "aria-pressed": selected ? "true" : "false",
-      "aria-label": `${nodeName} · ${node.type || ""} · ${labelText(state)} · ${stageUsageLine(node.id)}`,
+      "aria-label": labels.aria,
     });
     if (runningId && node.id === runningId) g.setAttribute("data-running", "");
     g.append(svgEl("rect", {
@@ -624,14 +722,14 @@ function drawGraph(payload) {
       height: NODE_H,
     }));
     const title = svgEl("title");
-    title.textContent = `${nodeName} · ${node.type || ""} · ${state.icon} ${labelText(state)} · ${stageUsageLine(node.id)}`;
+    title.textContent = labels.title;
     const name = svgEl("text", {
       class: "flow-name",
       x: place.x + NODE_W / 2,
       y: place.y + 30,
       "text-anchor": "middle",
     });
-    name.textContent = clipLabel(nodeName, NODE_W - 28);
+    name.textContent = clipLabel(labels.nodeName, NODE_W - 28);
     const type = svgEl("text", {
       class: "flow-type",
       x: place.x + NODE_W / 2,
@@ -642,18 +740,117 @@ function drawGraph(payload) {
     type.textContent = node.type || "";
     g.append(title, name, type);
     paintPlanNode(g);
-    const open = () => openStage(stage);
-    g.addEventListener("click", open);
-    g.addEventListener("keydown", (event) => {
-      if (event.key !== "Enter" && event.key !== " ") return;
-      event.preventDefault();
-      open();
-    });
+    wireNode(g, node);
     svg.append(g);
   }
 
   scroll.append(svg);
   return scroll;
+}
+
+/*
+ * The 3D graph: each stage is a block (a top face and three side faces, CSS 3D) standing on a
+ * tilted floor, the edges are drawn on the floor, and every block casts a soft shadow. A stage you
+ * can run floats; the running one bobs. The blocks stay buttons, so keyboard and screen readers
+ * work as in the flat graph, and the flat graph is one click away.
+ */
+function drawGraph3d(payload) {
+  const nodes = Array.isArray(payload.nodes) ? payload.nodes : [];
+  const edges = Array.isArray(payload.edges) ? payload.edges : [];
+  const scroll = el("div", "graph-scroll graph-3d");
+  if (!nodes.length) {
+    scroll.append(elt("p", "graph-empty", "graph.empty"));
+    return scroll;
+  }
+
+  const layout = graphLayout(nodes, edges, GRID_3D);
+  const stage = el("div", "iso-stage");
+  const plane = el("div", "iso-plane");
+  plane.setAttribute("role", "group");
+  I18N.attr(plane, "aria-label", "graph.label");
+  plane.style.width = `${layout.width}px`;
+  plane.style.height = `${layout.height}px`;
+  const floor = el("div", "iso-floor");
+  floor.setAttribute("aria-hidden", "true");
+  const svg = graphEdges(layout, "iso-edges");
+  svg.setAttribute("aria-hidden", "true");
+  const states = new Map(nodes.map((node) => [node.id, node.state || ""]));
+  const paths = svg.querySelectorAll(".flow-edge");
+  layout.routes.forEach((route, i) => {
+    // Finished work flowing into a stage you can run now.
+    const ready = states.get(route.to) === "never-run" && ["ok", "edited"].includes(states.get(route.from));
+    if (ready && paths[i]) paths[i].setAttribute("data-ready", "");
+  });
+  plane.append(floor, svg);
+
+  for (const node of nodes) {
+    const place = layout.pos.get(node.id);
+    if (!place) continue;
+    const labels = nodeLabels(node);
+    const selected = node.id === selectedId;
+    const block = el("div", selected ? "flow-node iso-node is-selected" : "flow-node iso-node");
+    block.setAttribute("role", "button");
+    block.tabIndex = 0;
+    block.dataset.id = node.id;
+    block.dataset.state = node.state || "";
+    block.setAttribute("aria-pressed", selected ? "true" : "false");
+    block.setAttribute("aria-label", labels.aria);
+    block.title = labels.title;
+    if (runningId && node.id === runningId) block.setAttribute("data-running", "");
+    block.style.left = `${place.x}px`;
+    block.style.top = `${place.y}px`;
+    block.style.width = `${GRID_3D.w}px`;
+    block.style.height = `${GRID_3D.h}px`;
+    const top = el("span", "iso-top");
+    const name = el("span", "flow-name", labels.nodeName);
+    const type = el("span", "flow-type", node.type || "");
+    type.setAttribute("data-type", node.type || "");
+    top.append(name, type);
+    // The ring (focus, selection) is its own plane: an outline or box-shadow on the top face
+    // ends up partly hidden under it in Chromium.
+    const faces = ["iso-shadow", "iso-face iso-front", "iso-face iso-left", "iso-face iso-right", "iso-ring"].map((cls) => el("span", cls));
+    for (const face of faces) face.setAttribute("aria-hidden", "true");
+    block.append(...faces, top);
+    paintPlanNode(block);
+    wireNode(block, node);
+    plane.append(block);
+  }
+
+  stage.append(plane);
+  scroll.append(stage);
+  fitGraph3d(scroll, stage, plane, layout);
+  watchGraph3d(scroll, () => fitGraph3d(scroll, stage, plane, layout));
+  return scroll;
+}
+
+/**
+ * Scales the floor to the width the board has (never below half size: a big flow scrolls
+ * sideways instead) and gives the stage the height the tilted floor needs.
+ */
+function fitGraph3d(scroll, stage, plane, layout) {
+  const avail = scroll.clientWidth || boardEl.clientWidth || 960;
+  const scale = Math.max(0.5, Math.min(1, (avail - 24) / (layout.width * 1.04)));
+  plane.style.setProperty("--s", scale.toFixed(3));
+  stage.style.width = `${Math.max(avail, Math.round(layout.width * scale * 1.04 + 24))}px`;
+  stage.style.height = `${Math.round(layout.height * scale * 0.8 + 150 * scale)}px`;
+}
+
+/** One observer for the 3D graph on show, so it refits when the board's width changes. */
+let graphResize = null;
+function watchGraph3d(scroll, refit) {
+  if (typeof ResizeObserver !== "function") return;
+  if (graphResize) graphResize.disconnect();
+  let width = 0;
+  graphResize = new ResizeObserver(() => {
+    if (!scroll.isConnected) {
+      graphResize.disconnect();
+      return;
+    }
+    if (scroll.clientWidth === width) return;
+    width = scroll.clientWidth;
+    refit();
+  });
+  graphResize.observe(scroll);
 }
 
 function markSelected() {

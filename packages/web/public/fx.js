@@ -7,6 +7,10 @@
  *             there, scrolling drives the flow; here, the flow drives the scroll).
  *   portal  - a layer opens as a circle from what was clicked and closes back into it (Overworld Audio).
  *   deck    - versions as discs: drag, flick, then a spring to the nearest one (A24 tribute).
+ * Two more give the board depth:
+ *   tilt    - the card under the mouse turns toward it and its contents separate into layers
+ *             (the layered hover card of many award sites, in CSS 3D only).
+ *   orbit   - the 3D graph's floor turns a little with the mouse.
  * prefers-reduced-motion is read each time an effect runs, so changing the setting applies at once.
  */
 "use strict";
@@ -393,5 +397,125 @@ const FX = (() => {
     return { go, wasDrag: () => moved > 6, front: () => settled, refresh: draw };
   }
 
-  return { reduced, decode, hold, follow, portal, deck };
+  /** Mouse only, and only on a device that can hover: touch and pens never tilt or orbit. */
+  const fine = typeof window.matchMedia === "function" ? window.matchMedia("(hover: hover) and (pointer: fine)") : null;
+  const mouse = (event) => event.pointerType === "mouse" && (!fine || fine.matches) && !reduced();
+  const clamp01 = (v) => Math.min(1, Math.max(0, v));
+
+  /*
+   * 06 tilt. The card under the mouse turns toward it. The CSS caps the angle at 7 degrees, reads
+   * --tx and --ty (-1..1) for the angle and the shadow and --gx and --gy for the sheen, and lifts the
+   * card's contents to different depths while it has the fx-tilting class. On leave the card settles back
+   * (fx-tilt-settling keeps the layers in 3D while it turns back). A press settles it at once, so a
+   * click lands where the button was, and skip(card) keeps a card flat, e.g. while one of its fields
+   * has focus or its menu is open: a transformed card would become the containing block of that
+   * position: fixed menu. Delegated, so cards the board draws again keep working.
+   */
+  function tilt(container, { selector = ".card", skip = () => false } = {}) {
+    let card = null;
+    let box = null;
+    let last = null;
+    let raf = 0;
+    let pressed = false;
+    const timers = new WeakMap();
+    const VARS = ["--tx", "--ty", "--gx", "--gy"];
+
+    function settle(el, instant) {
+      if (!el) return;
+      clearTimeout(timers.get(el));
+      el.classList.remove("fx-tilting");
+      if (instant) {
+        el.classList.add("fx-tilt-instant");
+        el.classList.remove("fx-tilt-settling");
+        for (const name of VARS) el.style.removeProperty(name);
+        void el.offsetWidth;
+        el.classList.remove("fx-tilt-instant");
+        return;
+      }
+      el.classList.add("fx-tilt-settling");
+      for (const name of VARS) el.style.removeProperty(name);
+      timers.set(el, setTimeout(() => el.classList.remove("fx-tilt-settling"), 600));
+    }
+
+    function drop(instant) {
+      settle(card, instant);
+      card = null;
+      box = null;
+    }
+
+    function apply() {
+      raf = 0;
+      if (!card || !last || !box) return;
+      if (!card.isConnected || skip(card)) {
+        drop(true);
+        return;
+      }
+      const px = clamp01((last.clientX - box.left) / box.width);
+      const py = clamp01((last.clientY - box.top) / box.height);
+      clearTimeout(timers.get(card));
+      card.classList.remove("fx-tilt-settling");
+      card.style.setProperty("--tx", (px * 2 - 1).toFixed(3));
+      card.style.setProperty("--ty", (py * 2 - 1).toFixed(3));
+      card.style.setProperty("--gx", `${(px * 100).toFixed(1)}%`);
+      card.style.setProperty("--gy", `${(py * 100).toFixed(1)}%`);
+      card.classList.add("fx-tilting");
+    }
+
+    container.addEventListener("pointermove", (event) => {
+      if (pressed || !mouse(event)) {
+        if (card && !pressed) drop(false);
+        return;
+      }
+      const hit = event.target instanceof Element ? event.target.closest(selector) : null;
+      const next = hit && container.contains(hit) && !skip(hit) ? hit : null;
+      if (next !== card) {
+        settle(card, false);
+        card = next;
+        // Measured flat, before it turns, so the angle never feeds back into the measurement.
+        box = next ? next.getBoundingClientRect() : null;
+      }
+      if (!card) return;
+      last = event;
+      if (!raf) raf = requestAnimationFrame(apply);
+    });
+    container.addEventListener("pointerleave", () => drop(false));
+    container.addEventListener("pointerdown", () => {
+      pressed = true;
+      drop(true);
+    });
+    window.addEventListener("pointerup", () => { pressed = false; });
+    window.addEventListener("pointercancel", () => { pressed = false; });
+    container.addEventListener("scroll", () => drop(true), { passive: true });
+    container.addEventListener("focusin", () => { if (card && skip(card)) drop(true); });
+    return { settle: () => drop(true) };
+  }
+
+  /*
+   * 07 orbit. While the mouse is over an `area` inside the container, its `plane` turns a little
+   * (--rx / --rz, read by the CSS); it eases back when the mouse leaves. The CSS transition smooths it.
+   */
+  function orbit(container, { area, plane, rx = 50, rz = -9, range = [12, 14] } = {}) {
+    let current = null;
+    const reset = () => {
+      if (!current) return;
+      current.style.removeProperty("--rx");
+      current.style.removeProperty("--rz");
+      current = null;
+    };
+    container.addEventListener("pointermove", (event) => {
+      const zone = mouse(event) && event.target instanceof Element ? event.target.closest(area) : null;
+      const target = zone ? zone.querySelector(plane) : null;
+      if (target !== current) reset();
+      if (!zone || !target) return;
+      current = target;
+      const r = zone.getBoundingClientRect();
+      const px = clamp01((event.clientX - r.left) / r.width) - 0.5;
+      const py = clamp01((event.clientY - r.top) / r.height) - 0.5;
+      target.style.setProperty("--rx", `${(rx - py * range[0]).toFixed(2)}deg`);
+      target.style.setProperty("--rz", `${(rz + px * range[1]).toFixed(2)}deg`);
+    });
+    container.addEventListener("pointerleave", reset);
+  }
+
+  return { reduced, decode, hold, follow, portal, deck, tilt, orbit };
 })();

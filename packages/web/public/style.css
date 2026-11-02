@@ -41,9 +41,9 @@
   --code-changed: #f0c674;
 
   /* Layout values that differ between the two looks. */
-  --board-gap: 0px;
+  --board-gap: 14px;
   --card-radius: 0px;
-  --card-bg: transparent;
+  --card-bg: var(--surface);
   --card-border: 0;
   --rule-w: 2px;
   --num-size: 88px;
@@ -51,6 +51,28 @@
   --num-font: var(--font-display);
   --btn-radius: 0px;
   --h1-size: clamp(40px, 7vw, 76px);
+
+  /* Depth: one light from the top left. Shadows are stacked layers tinted with the ink's hue. */
+  --sh: 228 40% 22%;
+  --elev-1: 0 1px 1px hsl(var(--sh) / 0.07), 0 2px 3px hsl(var(--sh) / 0.06), 0 6px 10px hsl(var(--sh) / 0.06), 0 14px 24px hsl(var(--sh) / 0.05);
+  --elev-2: 0 1px 1px hsl(var(--sh) / 0.07), 0 3px 5px hsl(var(--sh) / 0.07), 0 10px 16px hsl(var(--sh) / 0.08), 0 26px 44px hsl(var(--sh) / 0.1);
+  --elev-3: 0 2px 2px hsl(232 70% 25% / 0.14), 0 6px 10px hsl(232 70% 30% / 0.16), 0 16px 26px hsl(232 75% 35% / 0.2), 0 36px 64px hsl(232 85% 45% / 0.28);
+  --sunk: inset 0 2px 0 hsl(var(--sh) / 0.05), inset 0 10px 20px -12px hsl(var(--sh) / 0.3), inset 0 0 0 1px hsl(var(--sh) / 0.05);
+  --sunk-bg: color-mix(in srgb, var(--bg) 82%, var(--hair));
+  --shade: hsl(var(--sh) / 0.32);
+  --sheen: linear-gradient(transparent, transparent);
+  --lit-edge: 0 0 #0000;
+  --well: inset 0 2px 3px hsl(var(--sh) / 0.1);
+  --grid: rgba(10, 10, 11, 0.07);
+  --key-depth: 4px;
+  --key-hl: transparent;
+  --key-hl-soft: transparent;
+  --key-glow: transparent;
+  --key-press: transparent;
+  --edge-outline: var(--ink);
+  --btn-sheen: linear-gradient(transparent, transparent);
+  --btn-sheen-soft: linear-gradient(transparent, transparent);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 
   --font-ui: "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
   --font-display: "Helvetica Neue", "Arial Black", Arial, "PingFang SC", "Microsoft YaHei", sans-serif;
@@ -88,6 +110,27 @@
     --num-font: var(--font-mono);
     --btn-radius: 8px;
     --h1-size: clamp(30px, 4vw, 40px);
+
+    /* Depth in the studio look: deeper shadows, a lit top edge, recessed wells. */
+    --sh: 222 60% 2%;
+    --elev-1: 0 1px 1px hsl(var(--sh) / 0.5), 0 4px 8px hsl(var(--sh) / 0.32), 0 12px 24px hsl(var(--sh) / 0.3);
+    --elev-2: 0 1px 1px hsl(var(--sh) / 0.5), 0 6px 12px hsl(var(--sh) / 0.38), 0 18px 36px hsl(var(--sh) / 0.4), 0 40px 70px hsl(var(--sh) / 0.38);
+    --elev-3: 0 1px 1px hsl(var(--sh) / 0.55), 0 8px 16px hsl(var(--sh) / 0.42), 0 24px 44px hsl(var(--sh) / 0.46), 0 48px 84px hsl(var(--sh) / 0.42);
+    --sunk: inset 0 3px 10px rgb(0 0 0 / 0.55), inset 0 0 0 1px rgb(255 255 255 / 0.02), 0 1px 0 rgb(255 255 255 / 0.04);
+    --sunk-bg: color-mix(in srgb, var(--bg), #000 18%);
+    --shade: hsl(var(--sh) / 0.8);
+    --sheen: linear-gradient(180deg, rgb(255 255 255 / 0.035), transparent 36%, rgb(0 0 0 / 0.2));
+    --lit-edge: inset 0 1px 0 rgb(255 255 255 / 0.07);
+    --well: inset 0 1px 3px rgb(0 0 0 / 0.55);
+    --grid: rgba(231, 235, 242, 0.06);
+    --key-depth: 1px;
+    --key-hl: rgb(255 255 255 / 0.35);
+    --key-hl-soft: rgb(255 255 255 / 0.06);
+    --key-glow: color-mix(in srgb, var(--accent) 70%, transparent);
+    --key-press: rgb(0 0 0 / 0.35);
+    --edge-outline: rgb(0 0 0 / 0.45);
+    --btn-sheen: linear-gradient(180deg, rgb(255 255 255 / 0.16), rgb(255 255 255 / 0) 60%);
+    --btn-sheen-soft: linear-gradient(180deg, rgb(255 255 255 / 0.07), rgb(255 255 255 / 0));
   }
 }
 
@@ -120,6 +163,27 @@
   --num-font: var(--font-mono);
   --btn-radius: 8px;
   --h1-size: clamp(30px, 4vw, 40px);
+
+  /* Depth in the studio look: deeper shadows, a lit top edge, recessed wells. */
+  --sh: 222 60% 2%;
+  --elev-1: 0 1px 1px hsl(var(--sh) / 0.5), 0 4px 8px hsl(var(--sh) / 0.32), 0 12px 24px hsl(var(--sh) / 0.3);
+  --elev-2: 0 1px 1px hsl(var(--sh) / 0.5), 0 6px 12px hsl(var(--sh) / 0.38), 0 18px 36px hsl(var(--sh) / 0.4), 0 40px 70px hsl(var(--sh) / 0.38);
+  --elev-3: 0 1px 1px hsl(var(--sh) / 0.55), 0 8px 16px hsl(var(--sh) / 0.42), 0 24px 44px hsl(var(--sh) / 0.46), 0 48px 84px hsl(var(--sh) / 0.42);
+  --sunk: inset 0 3px 10px rgb(0 0 0 / 0.55), inset 0 0 0 1px rgb(255 255 255 / 0.02), 0 1px 0 rgb(255 255 255 / 0.04);
+  --sunk-bg: color-mix(in srgb, var(--bg), #000 18%);
+  --shade: hsl(var(--sh) / 0.8);
+  --sheen: linear-gradient(180deg, rgb(255 255 255 / 0.035), transparent 36%, rgb(0 0 0 / 0.2));
+  --lit-edge: inset 0 1px 0 rgb(255 255 255 / 0.07);
+  --well: inset 0 1px 3px rgb(0 0 0 / 0.55);
+  --grid: rgba(231, 235, 242, 0.06);
+  --key-depth: 1px;
+  --key-hl: rgb(255 255 255 / 0.35);
+  --key-hl-soft: rgb(255 255 255 / 0.06);
+  --key-glow: color-mix(in srgb, var(--accent) 70%, transparent);
+  --key-press: rgb(0 0 0 / 0.35);
+  --edge-outline: rgb(0 0 0 / 0.45);
+  --btn-sheen: linear-gradient(180deg, rgb(255 255 255 / 0.16), rgb(255 255 255 / 0) 60%);
+  --btn-sheen-soft: linear-gradient(180deg, rgb(255 255 255 / 0.07), rgb(255 255 255 / 0));
 }
 
 * { box-sizing: border-box; }
@@ -322,7 +386,8 @@ body {
   gap: var(--board-gap);
   align-items: stretch;
   overflow-x: auto;
-  padding: 0 0 40px;
+  padding: 32px 28px 40px;
+  scroll-padding-inline: 28px;
   scroll-snap-type: x proximity;
   counter-reset: stage;
 }
@@ -337,14 +402,11 @@ body {
   flex-direction: column;
   gap: 8px;
   padding: 18px 22px 20px;
-  background: var(--card-bg);
+  background-color: var(--card-bg);
   border: var(--card-border);
-  border-right: 1px solid var(--rule);
   border-radius: var(--card-radius);
   counter-increment: stage;
 }
-
-.card:last-child { border-right: var(--card-border); }
 
 .card[data-state="ok"] { --state: var(--ok); }
 .card[data-state="stale"] { --state: var(--stale); }
@@ -454,7 +516,7 @@ body {
 
 /* The stage you can run now stands out: a blue block in the Swiss look, a glowing card in the studio look. */
 .card[data-state="never-run"] {
-  background: var(--never);
+  background-color: var(--never);
   color: var(--accent-ink);
 }
 
@@ -1113,17 +1175,19 @@ body {
 /* ---------- Studio look (dark): cards float in a row on a lit rail ---------- */
 
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .board { padding: 28px 28px 40px; }
   :root:not([data-theme="light"]) .card { padding-top: 34px; }
   :root:not([data-theme="light"]) .card::after,
-  :root:not([data-theme="light"]) .card[data-state="never-run"]::after { content: ""; position: absolute; top: 14px; left: 22px; width: 10px; height: 10px; border-radius: 50%; background: var(--state); box-shadow: 0 0 12px var(--state); }
-  :root:not([data-theme="light"]) .card::before { position: absolute; top: 12px; right: 22px; margin: 0; letter-spacing: 0.04em; color: var(--muted); -webkit-text-stroke: 0; }
-  :root:not([data-theme="light"]) .card[data-state="never-run"] { background: var(--surface); box-shadow: 0 0 0 1px var(--never), 0 18px 40px -24px var(--never); color: var(--ink); }
+  :root:not([data-theme="light"]) .card[data-state="never-run"]::after { content: ""; position: absolute; top: 14px; left: 22px; width: 10px; height: 10px; border-radius: 50%; background: radial-gradient(circle at 34% 30%, color-mix(in srgb, var(--state), #fff 62%) 0 16%, var(--state) 50%, color-mix(in srgb, var(--state), #000 50%) 100%); box-shadow: 0 0 12px var(--state), 0 1px 2px rgb(0 0 0 / 0.7); }
+  :root:not([data-theme="light"]) .card[data-state="waiting-upstream"]::after { background: color-mix(in srgb, var(--state), #000 30%); box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.6); }
+  :root:not([data-theme="light"]) .card[data-state="waiting-upstream"] { border-color: color-mix(in srgb, var(--rule), transparent 40%); }
+  :root:not([data-theme="light"]) .card::before { position: absolute; top: 12px; right: 22px; margin: 0; letter-spacing: 0.04em; color: var(--muted); -webkit-text-stroke: 0; text-shadow: none; }
+  :root:not([data-theme="light"]) .card.fx-tilting::before { transform: translateZ(14px); }
+  :root:not([data-theme="light"]) .card[data-state="never-run"] { background-color: var(--surface); --ring: 0 0 0 1px var(--never), 0 0 0 5px color-mix(in srgb, var(--never) 12%, transparent); --elev: var(--elev-3), 0 30px 60px -34px var(--never); color: var(--ink); }
   :root:not([data-theme="light"]) .card[data-state="never-run"] :is(.stage-id, .executor, .runs, .usage, .outputs-label, .instructions, .model-field) { color: var(--muted); }
   :root:not([data-theme="light"]) .card[data-state="never-run"] .version { color: var(--ink); }
   :root:not([data-theme="light"]) .card[data-state="never-run"] .badge { color: var(--never); border-color: var(--never); }
-  :root:not([data-theme="light"]) .card[data-state="never-run"] .run { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
-  :root:not([data-theme="light"]) .card[data-state="never-run"] .history { border-color: var(--rule); color: var(--ink); }
+  :root:not([data-theme="light"]) .card[data-state="never-run"] .run { background-color: var(--accent); color: var(--accent-ink); border-color: var(--accent); --edge: color-mix(in srgb, var(--accent) 50%, #000); }
+  :root:not([data-theme="light"]) .card[data-state="never-run"] .history { border-color: var(--rule); color: var(--ink); --edge: var(--edge-outline); }
   :root:not([data-theme="light"]) .card .history { border-width: 1px; border-color: var(--rule); }
   :root:not([data-theme="light"]) .card .history:hover { background: var(--surface-2); color: var(--ink); }
   :root:not([data-theme="light"]) .badge { border-top: 0; padding: 0; font-weight: 600; }
@@ -1133,17 +1197,19 @@ body {
   :root:not([data-theme="light"]) .field input, :root:not([data-theme="light"]) .field select, :root:not([data-theme="light"]) .field textarea, :root:not([data-theme="light"]) .model-field input { background: var(--surface); }
 }
 
-:root[data-theme="dark"] .board { padding: 28px 28px 40px; }
 :root[data-theme="dark"] .card { padding-top: 34px; }
 :root[data-theme="dark"] .card::after,
-:root[data-theme="dark"] .card[data-state="never-run"]::after { content: ""; position: absolute; top: 14px; left: 22px; width: 10px; height: 10px; border-radius: 50%; background: var(--state); box-shadow: 0 0 12px var(--state); }
-:root[data-theme="dark"] .card::before { position: absolute; top: 12px; right: 22px; margin: 0; letter-spacing: 0.04em; color: var(--muted); -webkit-text-stroke: 0; }
-:root[data-theme="dark"] .card[data-state="never-run"] { background: var(--surface); box-shadow: 0 0 0 1px var(--never), 0 18px 40px -24px var(--never); color: var(--ink); }
+:root[data-theme="dark"] .card[data-state="never-run"]::after { content: ""; position: absolute; top: 14px; left: 22px; width: 10px; height: 10px; border-radius: 50%; background: radial-gradient(circle at 34% 30%, color-mix(in srgb, var(--state), #fff 62%) 0 16%, var(--state) 50%, color-mix(in srgb, var(--state), #000 50%) 100%); box-shadow: 0 0 12px var(--state), 0 1px 2px rgb(0 0 0 / 0.7); }
+:root[data-theme="dark"] .card[data-state="waiting-upstream"]::after { background: color-mix(in srgb, var(--state), #000 30%); box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.6); }
+:root[data-theme="dark"] .card[data-state="waiting-upstream"] { border-color: color-mix(in srgb, var(--rule), transparent 40%); }
+:root[data-theme="dark"] .card::before { position: absolute; top: 12px; right: 22px; margin: 0; letter-spacing: 0.04em; color: var(--muted); -webkit-text-stroke: 0; text-shadow: none; }
+:root[data-theme="dark"] .card.fx-tilting::before { transform: translateZ(14px); }
+:root[data-theme="dark"] .card[data-state="never-run"] { background-color: var(--surface); --ring: 0 0 0 1px var(--never), 0 0 0 5px color-mix(in srgb, var(--never) 12%, transparent); --elev: var(--elev-3), 0 30px 60px -34px var(--never); color: var(--ink); }
 :root[data-theme="dark"] .card[data-state="never-run"] :is(.stage-id, .executor, .runs, .usage, .outputs-label, .instructions, .model-field) { color: var(--muted); }
 :root[data-theme="dark"] .card[data-state="never-run"] .version { color: var(--ink); }
 :root[data-theme="dark"] .card[data-state="never-run"] .badge { color: var(--never); border-color: var(--never); }
-:root[data-theme="dark"] .card[data-state="never-run"] .run { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
-:root[data-theme="dark"] .card[data-state="never-run"] .history { border-color: var(--rule); color: var(--ink); }
+:root[data-theme="dark"] .card[data-state="never-run"] .run { background-color: var(--accent); color: var(--accent-ink); border-color: var(--accent); --edge: color-mix(in srgb, var(--accent) 50%, #000); }
+:root[data-theme="dark"] .card[data-state="never-run"] .history { border-color: var(--rule); color: var(--ink); --edge: var(--edge-outline); }
 :root[data-theme="dark"] .card .history { border-width: 1px; border-color: var(--rule); }
 :root[data-theme="dark"] .card .history:hover { background: var(--surface-2); color: var(--ink); }
 :root[data-theme="dark"] .badge { border-top: 0; padding: 0; font-weight: 600; }
@@ -1168,7 +1234,7 @@ body {
 
 /* Run all fills from the left while it is held. */
 #run-all {
-  background-image: linear-gradient(90deg, color-mix(in srgb, var(--accent-ink) 30%, transparent) calc(var(--hold, 0) * 100%), transparent 0);
+  background-image: linear-gradient(90deg, color-mix(in srgb, var(--accent-ink) 30%, transparent) calc(var(--hold, 0) * 100%), transparent 0), var(--btn-sheen);
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
@@ -1245,6 +1311,224 @@ body {
   50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--state) 22%, transparent), 0 0 18px var(--state); }
 }
 
+/* ---------- Depth ---------- */
+
+/*
+ * One light from the top left for the whole board. Shadows are 3 or 4 stacked layers, larger and
+ * fainter the further they reach, tinted with the page's hue (https://www.joshwcomeau.com/css/designing-shadows/).
+ * Height is the state: the stage you can run now and the running stage float highest, finished
+ * stages rest on the page, stages waiting for upstream are pressed into it.
+ * The lift moves `top`, not a transform: a transformed card would become the containing block of
+ * its position: fixed menu.
+ */
+@property --glare { syntax: "<number>"; inherits: false; initial-value: 0; }
+@property --z { syntax: "<length>"; inherits: true; initial-value: 0px; }
+
+.card {
+  --deep: color-mix(in srgb, var(--state) 52%, #000);
+  --lift: 0px;
+  --hl: var(--lit-edge);
+  --ring: 0 0 #0000;
+  --elev: var(--elev-1);
+  --glare: 0;
+  top: var(--lift);
+  box-shadow: var(--hl), var(--ring), var(--elev);
+  background-image: radial-gradient(circle at var(--gx, 50%) var(--gy, 50%), rgb(255 255 255 / var(--glare)), rgb(255 255 255 / 0) 55%), var(--sheen);
+  transition: top 0.45s var(--ease-out), box-shadow 0.45s var(--ease-out), --glare 0.35s var(--ease-out);
+}
+
+.card:hover, .card:focus-within { --lift: -4px; --elev: var(--elev-2); z-index: 2; }
+.card[data-state="never-run"], .card[data-running] { --lift: -8px; --elev: var(--elev-3); z-index: 1; }
+.card[data-state="never-run"]:is(:hover, :focus-within), .card[data-running]:is(:hover, :focus-within) { --lift: -12px; z-index: 2; }
+.card[data-state="never-run"][data-running] { --deep: color-mix(in srgb, var(--never) 50%, #000); }
+.card[data-state="waiting-upstream"] { --lift: 0px; --hl: 0 0 #0000; --elev: var(--sunk); background-color: var(--sunk-bg); }
+
+/* Swiss look: the big stage numbers are solid type, 6px deep. */
+.card::before {
+  text-shadow: 1px 1px 0 var(--deep), 2px 2px 0 var(--deep), 3px 3px 0 var(--deep), 4px 4px 0 var(--deep),
+    5px 5px 0 var(--deep), 6px 6px 0 var(--deep), 9px 12px 16px hsl(var(--sh) / 0.22);
+}
+
+.card[data-state="waiting-upstream"]::before { text-shadow: none; }
+
+/* Buttons have a key's depth and sink when pressed. */
+#run-all, .run, #inputs-save, .save {
+  --edge: color-mix(in srgb, var(--accent) 50%, #000);
+  box-shadow: inset 0 1px 0 var(--key-hl), 0 var(--key-depth) 0 var(--edge), 0 10px 20px -10px var(--key-glow);
+  transition: transform 0.08s ease-out, box-shadow 0.08s ease-out;
+}
+
+.run, #inputs-save, .save { background-image: var(--btn-sheen); }
+
+.history, #add-stage, #preview {
+  --edge: var(--edge-outline);
+  box-shadow: inset 0 1px 0 var(--key-hl-soft), 0 var(--key-depth) 0 var(--edge);
+  background-image: var(--btn-sheen-soft);
+  transition: transform 0.08s ease-out, box-shadow 0.08s ease-out;
+}
+
+.card[data-state="never-run"] .run { --edge: color-mix(in srgb, var(--accent-ink) 55%, var(--never)); }
+.card[data-state="never-run"] .history { --edge: color-mix(in srgb, var(--never) 45%, #000); }
+
+#run-all:active:not(:disabled), .run:active:not(:disabled), #inputs-save:active:not(:disabled), .save:active:not(:disabled),
+.history:active:not(:disabled), #add-stage:active:not(:disabled), #preview:active:not(:disabled) {
+  transform: translateY(var(--key-depth));
+  box-shadow: inset 0 2px 5px var(--key-press);
+}
+
+#run-all:disabled, .run:disabled, #inputs-save:disabled, .save:disabled, #add-stage:disabled, #preview:disabled { box-shadow: none; }
+
+/* Fields and output slots are wells. */
+.field input, .field select, .field textarea, .model-field input, .outputs button { box-shadow: var(--well); }
+
+/*
+ * Tilt (FX.tilt in fx.js): the card under the mouse turns toward it, its contents float at
+ * different depths, a sheen follows the mouse and the shadow moves the other way.
+ */
+.card.fx-tilting, .card.fx-tilt-settling { transform-style: preserve-3d; }
+
+.card.fx-tilting {
+  z-index: 3;
+  --glare: 0.2;
+  --elev: calc(var(--tx, 0) * -16px) calc(18px + var(--ty, 0) * -12px) 44px -14px var(--shade), 0 2px 6px hsl(var(--sh) / 0.12);
+  transform: perspective(1000px) rotateX(calc(var(--ty, 0) * -7deg)) rotateY(calc(var(--tx, 0) * 7deg));
+  transition: top 0.45s var(--ease-out), transform 0.12s linear, box-shadow 0.12s linear, --glare 0.35s var(--ease-out);
+}
+
+.card.fx-tilt-settling {
+  transition: top 0.45s var(--ease-out), transform 0.55s var(--ease-out), box-shadow 0.45s var(--ease-out), --glare 0.35s var(--ease-out);
+}
+
+.card.fx-tilting > *, .card.fx-tilt-settling > *,
+.card.fx-tilting::before, .card.fx-tilt-settling::before,
+.card.fx-tilting::after, .card.fx-tilt-settling::after { transition: transform 0.55s var(--ease-out); }
+
+.card.fx-tilting::before { transform: translateZ(32px); }
+.card.fx-tilting::after { transform: translateZ(24px); }
+.card.fx-tilting > .card-head { transform: translateZ(24px); }
+.card.fx-tilting > :is(.badge, .plan-chip) { transform: translateZ(16px); }
+.card.fx-tilting > :is(.run, .history) { transform: translateZ(18px); }
+.card.fx-tilting > .outputs { transform: translateZ(10px); }
+
+.card.fx-tilt-instant, .card.fx-tilt-instant > *, .card.fx-tilt-instant::before, .card.fx-tilt-instant::after { transition: none !important; }
+
+/* ---------- The 3D graph ---------- */
+
+.graph-bar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px 16px; }
+.graph-style button { min-height: 32px; padding: 5px 12px; }
+
+.graph-3d { overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; }
+.iso-stage { position: relative; perspective: 1500px; perspective-origin: 50% 30%; }
+
+.iso-plane {
+  --rx: 50deg;
+  --rz: -9deg;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform-style: preserve-3d;
+  transform: translate(-50%, -50%) scale(var(--s, 1)) rotateX(var(--rx)) rotateZ(var(--rz));
+  transition: transform 1s var(--ease-out);
+}
+
+.iso-floor {
+  position: absolute;
+  inset: -150px -190px;
+  background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 44px 44px;
+  background-position: 190px 150px;
+  -webkit-mask-image: radial-gradient(closest-side, #000 55%, transparent);
+  mask-image: radial-gradient(closest-side, #000 55%, transparent);
+}
+
+.iso-edges { position: absolute; inset: 0; overflow: visible; transform: translateZ(1px); }
+.iso-edges .flow-edge { stroke-width: 2.5px; }
+.iso-edges .flow-edge[data-ready] { stroke: var(--never); stroke-dasharray: 10 8; animation: fx-flow 0.9s linear infinite; }
+.iso-edges .flow-edge[data-running] { stroke: var(--accent); stroke-dasharray: 10 8; animation: fx-flow 0.6s linear infinite; }
+
+@keyframes fx-flow {
+  to { stroke-dashoffset: -36; }
+}
+
+.iso-node {
+  --t: 22px;
+  --top: color-mix(in srgb, var(--state) 10%, var(--surface));
+  --top-ink: var(--ink);
+  --front: color-mix(in srgb, var(--state) 78%, #000);
+  --side: color-mix(in srgb, var(--state) 60%, #000);
+  position: absolute;
+  transform-style: preserve-3d;
+  transform: translateZ(var(--z));
+  transition: --z 0.5s var(--ease-out);
+}
+
+.iso-node[data-state="never-run"] {
+  --z: 8px;
+  --top: var(--never);
+  --top-ink: var(--accent-ink);
+  --front: color-mix(in srgb, var(--never) 62%, #000);
+  --side: color-mix(in srgb, var(--never) 46%, #000);
+  animation: fx-bob 2.6s ease-in-out infinite;
+}
+
+.iso-node:hover, .iso-node:focus-visible { --z: 14px; }
+.iso-node[data-running] { animation: fx-bob 1.2s ease-in-out infinite; }
+
+@keyframes fx-bob {
+  0%, 100% { --z: 8px; }
+  50% { --z: 20px; }
+}
+
+.iso-top {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  background: var(--top);
+  color: var(--top-ink);
+  border: 2px solid var(--state);
+  transform: translateZ(var(--t));
+  backface-visibility: hidden;
+  text-align: center;
+}
+
+.iso-top :is(.flow-name, .flow-type) { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.iso-top .flow-name { font-size: 20px; font-weight: 900; line-height: 1.15; }
+.iso-top .flow-type { font-family: var(--font-mono); font-size: 12px; opacity: 0.8; }
+.iso-top .flow-type.is-plan { opacity: 1; font-weight: 700; }
+.iso-node[data-running] .iso-top { border-style: dashed; border-color: var(--ink); }
+
+/* Focus and selection: a plane of its own just above the top face (see drawGraph3d). */
+.iso-ring { position: absolute; inset: -7px; border: 3px solid transparent; transform: translateZ(calc(var(--t) + 1px)); pointer-events: none; }
+.iso-node.is-selected .iso-ring { border-color: var(--ink); }
+.iso-node:focus-visible .iso-ring { border-color: var(--accent); }
+
+.iso-face { position: absolute; backface-visibility: hidden; }
+.iso-front { left: 0; right: 0; top: 100%; height: var(--t); transform-origin: top; transform: translateZ(var(--t)) rotateX(-90deg); background: var(--front); }
+.iso-right { top: 0; bottom: 0; left: 100%; width: var(--t); transform-origin: left; transform: translateZ(var(--t)) rotateY(90deg); background: var(--side); }
+.iso-left { top: 0; bottom: 0; right: 100%; width: var(--t); transform-origin: right; transform: translateZ(var(--t)) rotateY(-90deg); background: var(--side); }
+
+.iso-shadow {
+  position: absolute;
+  inset: 12px -10px -16px 16px;
+  background: var(--shade);
+  filter: blur(calc(9px + var(--z) * 0.7));
+  transform: translateZ(calc(var(--z) * -1 + 0.5px)) translate(calc(var(--z) * 0.5), calc(var(--z) * 0.5));
+  pointer-events: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .iso-node { --top: color-mix(in srgb, var(--state) 14%, var(--surface)); --front: color-mix(in srgb, var(--state) 42%, #05070a); --side: color-mix(in srgb, var(--state) 28%, #05070a); }
+  :root:not([data-theme="light"]) .iso-node[data-state="never-run"] { --top: color-mix(in srgb, var(--never) 22%, var(--surface)); --top-ink: var(--ink); --front: color-mix(in srgb, var(--never) 42%, #05070a); --side: color-mix(in srgb, var(--never) 28%, #05070a); }
+}
+
+:root[data-theme="dark"] .iso-node { --top: color-mix(in srgb, var(--state) 14%, var(--surface)); --front: color-mix(in srgb, var(--state) 42%, #05070a); --side: color-mix(in srgb, var(--state) 28%, #05070a); }
+:root[data-theme="dark"] .iso-node[data-state="never-run"] { --top: color-mix(in srgb, var(--never) 22%, var(--surface)); --top-ink: var(--ink); --front: color-mix(in srgb, var(--never) 42%, #05070a); --side: color-mix(in srgb, var(--never) 28%, #05070a); }
+
 @media (min-width: 960px) {
   body.panel-open .board { padding-right: 660px; }
 }
@@ -1256,6 +1540,7 @@ body {
   .top-switches { width: 100%; justify-content: flex-start; }
   .view-switch { flex: 1 1 auto; }
   .view-switch button { flex: 1 1 auto; }
+  .board { padding: 20px 16px 32px; scroll-padding-inline: 16px; }
   .board.is-graph { padding: 16px 16px 32px; }
   .banner, .inputs-panel, .log { padding-left: 16px; padding-right: 16px; }
   .notice { margin-left: 16px; margin-right: 16px; }

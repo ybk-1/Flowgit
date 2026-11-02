@@ -67,7 +67,7 @@ const I18N = (() => {
       header: "预演 · 不会运行",
       calls_other: "最多调用 {{count}} 次模型",
     },
-    graph: { label: "流程图", loading: "加载流程图…", empty: "还没有阶段", error: "无法加载流程图" },
+    graph: { label: "流程图", loading: "加载流程图…", empty: "还没有阶段", error: "无法加载流程图", mode: "流程图样式", depth: "立体", flat: "平面" },
     stage: {
       back: "返回阶段",
       noRuns: "还没有版本",
@@ -245,7 +245,7 @@ const I18N = (() => {
       calls_one: "At most 1 model call",
       calls_other: "At most {{count}} model calls",
     },
-    graph: { label: "Graph", loading: "Loading graph…", empty: "No stages yet", error: "Could not load the graph" },
+    graph: { label: "Graph", loading: "Loading graph…", empty: "No stages yet", error: "Could not load the graph", mode: "Graph style", depth: "3D", flat: "Flat" },
     stage: {
       back: "Back to stage",
       noRuns: "No runs yet",
