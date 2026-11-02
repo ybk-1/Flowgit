@@ -16,16 +16,45 @@ if (!slides.length) {
 
 const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
+function evidenceHtml(ev) {
+  if (!ev || typeof ev !== "object") return "";
+  const caption = ev.caption ? `<p class="caption">${esc(ev.caption)}</p>` : "";
+  if (ev.kind === "chart" && Array.isArray(ev.data) && ev.data.length) {
+    // Horizontal bars, labelled with their values, scaled to the largest value.
+    const rows = ev.data.filter((d) => Number.isFinite(Number(d.value)));
+    const max = Math.max(...rows.map((d) => Math.abs(Number(d.value))), 1);
+    const bar = 46;
+    const gap = 18;
+    const height = rows.length * (bar + gap);
+    const bars = rows
+      .map((d, k) => {
+        const w = Math.max(2, (Math.abs(Number(d.value)) / max) * 560);
+        const y = k * (bar + gap);
+        return `<text x="190" y="${y + bar / 2}" class="lab" text-anchor="end" dominant-baseline="middle">${esc(d.label)}</text><rect x="210" y="${y}" width="${w}" height="${bar}" rx="6" class="bar"/><text x="${220 + w}" y="${y + bar / 2}" class="val" dominant-baseline="middle">${esc(d.value)}${esc(ev.unit ?? "")}</text>`;
+      })
+      .join("");
+    return `<svg class="chart" viewBox="0 0 900 ${height}" role="img" aria-label="${esc(ev.caption ?? "")}">${bars}</svg>${caption}`;
+  }
+  if (ev.kind === "image") return `<div class="visual"><span>${t("画面", "Visual")}</span>${esc(ev.description)}</div>${caption}`;
+  if (ev.kind === "quote") return `<blockquote>“${esc(ev.text)}”${ev.source ? `<cite>— ${esc(ev.source)}</cite>` : ""}</blockquote>${caption}`;
+  if (ev.kind === "steps" && Array.isArray(ev.items)) return `<ol class="steps">${ev.items.map((x) => `<li>${esc(x)}</li>`).join("")}</ol>${caption}`;
+  return caption;
+}
+
 function slideHtml(slide, i) {
-  const layout = ["cover", "bullets", "statement", "section"].includes(slide.layout) ? slide.layout : "bullets";
+  const layouts = ["cover", "statement", "evidence", "bullets", "section", "close"];
+  const layout = layouts.includes(slide.layout) ? slide.layout : "bullets";
   const bullets = Array.isArray(slide.bullets) ? slide.bullets : [];
+  const list = bullets.length ? `<ul>${bullets.map((b) => `<li>${esc(b)}</li>`).join("")}</ul>` : "";
   let body = "";
   if (layout === "cover") {
     body = `<h1>${esc(slide.title)}</h1>${deck.subtitle ? `<p class="sub">${esc(deck.subtitle)}</p>` : ""}`;
-  } else if (layout === "bullets") {
-    body = `<h2>${esc(slide.title)}</h2><ul>${bullets.map((b) => `<li>${esc(b)}</li>`).join("")}</ul>`;
-  } else {
+  } else if (layout === "statement" || layout === "section") {
     body = `<h1>${esc(slide.title)}</h1>`;
+  } else if (layout === "evidence") {
+    body = `<h2>${esc(slide.title)}</h2>${evidenceHtml(slide.evidence)}${list}`;
+  } else {
+    body = `<h2>${esc(slide.title)}</h2>${list}`;
   }
   return `<section class="slide ${layout}" data-n="${i + 1}"><div class="inner">${body}</div><span class="num">${i + 1} / ${slides.length}</span></section>`;
 }
@@ -53,6 +82,16 @@ const html = `<!doctype html>
   ul { margin: 0; padding-left: 1.2em; font-size: clamp(18px, 2.6vw, 32px); line-height: 1.7; }
   .sub { color: var(--muted); font-size: clamp(18px, 2.4vw, 28px); margin-top: 3vh; }
   .cover .inner, .statement .inner, .section .inner { text-align: center; }
+  .chart { width: 100%; max-height: 52vh; }
+  .chart .bar { fill: var(--accent); }
+  .chart .lab, .chart .val { fill: var(--fg); font-size: 26px; }
+  .caption { color: var(--muted); font-size: clamp(14px, 1.6vw, 20px); margin-top: 2vh; }
+  .visual { border: 2px dashed var(--muted); border-radius: 12px; padding: 6vh 4vw; color: var(--muted); font-size: clamp(16px, 2vw, 26px); text-align: center; }
+  .visual span { display: block; font-size: 14px; letter-spacing: .1em; margin-bottom: 1vh; }
+  blockquote { margin: 0; font-size: clamp(22px, 3.2vw, 40px); line-height: 1.5; border-left: 6px solid var(--accent); padding-left: 3vw; }
+  cite { display: block; margin-top: 2vh; color: var(--muted); font-size: clamp(14px, 1.8vw, 22px); font-style: normal; }
+  .steps { font-size: clamp(18px, 2.6vw, 32px); line-height: 1.8; padding-left: 1.4em; }
+  .close { background: var(--section); }
   .section { background: var(--section); }
   .num { position: absolute; right: 3vw; bottom: 3vh; color: var(--muted); font-size: 14px; }
   .hint { position: fixed; left: 3vw; bottom: 3vh; color: var(--muted); font-size: 12px; }

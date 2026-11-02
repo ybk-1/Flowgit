@@ -6,6 +6,7 @@
   "properties": {
     "title": { "type": "string", "minLength": 1 },
     "subtitle": { "type": "string" },
+    "governingThought": { "type": "string" },
     "slides": {
       "type": "array",
       "minItems": 1,
@@ -13,9 +14,30 @@
         "type": "object",
         "required": ["layout", "title"],
         "properties": {
-          "layout": { "enum": ["cover", "bullets", "statement", "section"] },
+          "layout": { "enum": ["cover", "statement", "evidence", "bullets", "section", "close"] },
           "title": { "type": "string", "minLength": 1 },
           "bullets": { "type": "array", "items": { "type": "string" } },
+          "evidence": {
+            "type": "object",
+            "required": ["kind"],
+            "properties": {
+              "kind": { "enum": ["chart", "image", "quote", "steps"] },
+              "caption": { "type": "string" },
+              "data": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["label", "value"],
+                  "properties": { "label": { "type": "string" }, "value": { "type": "number" } }
+                }
+              },
+              "unit": { "type": "string" },
+              "description": { "type": "string" },
+              "text": { "type": "string" },
+              "source": { "type": "string" },
+              "items": { "type": "array", "items": { "type": "string" } }
+            }
+          },
           "notes": { "type": "string" }
         }
       }

@@ -3,11 +3,17 @@
   "version": "0.1",
   "id": "slides",
   "name": "PPT 演示稿",
-  "description": "从一个主题做出一份演示稿：大纲 → 每页内容 → 排版成网页幻灯片（可打印成 PDF）→ 检查。先改大纲再出页，改哪页重跑哪步。 / Make a slide deck from a topic: outline → slide content → an HTML deck you can print to PDF → check. Fix the outline before any slide is written; change a step and re-run only that step.",
+  "description": "从一个主题做出一份演示稿：先定一句话的核心结论和 SCQA 开场（金字塔原理），再让每页标题都是一句结论、正文是证据（assertion-evidence），排成网页幻灯片，最后检查。 / Make a slide deck from a topic: settle the one-sentence governing thought and an SCQA opening (Pyramid Principle), make every slide title a claim backed by evidence (assertion-evidence), lay it out as an HTML deck, then check it.",
   "language": "zh",
-  "author": { "name": "Flowgit" },
+  "author": {
+    "name": "Flowgit"
+  },
   "license": "Apache-2.0",
-  "tags": ["slides", "presentation", "starter"],
+  "tags": [
+    "slides",
+    "presentation",
+    "starter"
+  ],
   "inputs": {
     "topic": {
       "type": "string",
@@ -21,18 +27,24 @@
     },
     "slides": {
       "type": "number",
-      "default": 8,
+      "default": 6,
       "description": "大约几页（含封面）/ About how many slides, cover included"
     },
     "theme": {
       "type": "string",
-      "enum": ["light", "dark"],
+      "enum": [
+        "light",
+        "dark"
+      ],
       "default": "light",
       "description": "配色：light 浅色，dark 深色 / Colors: light or dark"
     },
     "language": {
       "type": "string",
-      "enum": ["zh", "en"],
+      "enum": [
+        "zh",
+        "en"
+      ],
       "default": "zh",
       "description": "输出语言：zh 中文，en English / Output language: zh or en"
     }
@@ -41,36 +53,78 @@
     {
       "id": "outline",
       "name": "大纲",
-      "description": "每页一句核心观点，按讲述顺序排好。 / One key message per slide, in speaking order.",
-      "executor": { "type": "llm", "prompt": "prompts/outline.md", "effort": "medium" },
-      "outputs": [{ "type": "text/markdown", "path": "outline.md" }]
+      "description": "一句话核心结论、SCQA 开场，再按金字塔结构排出每页：页标题就是这页的结论。 / The governing thought, an SCQA opening, then every slide in pyramid order, each titled with its claim.",
+      "executor": {
+        "type": "llm",
+        "prompt": "prompts/outline.md",
+        "effort": "medium"
+      },
+      "outputs": [
+        {
+          "type": "text/markdown",
+          "path": "outline.md"
+        }
+      ]
     },
     {
       "id": "content",
       "name": "每页内容",
-      "description": "按大纲写每页的标题、要点和讲稿。 / Write each slide's title, bullets and speaker notes from the outline.",
-      "inputs": ["outline"],
-      "executor": { "type": "llm", "prompt": "prompts/content.md", "effort": "medium" },
-      "outputs": [{ "type": "application/json", "path": "slides.json", "schema": "schemas/slides.schema.json" }]
+      "description": "每页写成「结论标题 + 证据」：图表数据、画面描述、引用或步骤；要点页尽量少；讲稿写屏幕上没有的话。 / Each slide is a claim title plus evidence (chart data, a visual, a quote or steps); few bullet slides; notes carry what the slide does not say.",
+      "inputs": [
+        "outline"
+      ],
+      "executor": {
+        "type": "llm",
+        "prompt": "prompts/content.md",
+        "effort": "medium"
+      },
+      "outputs": [
+        {
+          "type": "application/json",
+          "path": "slides.json",
+          "schema": "schemas/slides.schema.json"
+        }
+      ]
     },
     {
       "id": "build",
       "name": "排版",
-      "description": "把 slides.json 排成一个网页幻灯片和一份讲稿。浏览器里按方向键翻页，打印成 PDF 时一页一张。 / Lay out slides.json as an HTML deck plus speaker notes. Arrow keys turn pages; printing to PDF gives one slide per page.",
-      "inputs": ["content"],
-      "executor": { "type": "script", "run": "node scripts/build.mjs" },
+      "description": "排成网页幻灯片：图表画成条形图，画面描述留成占位框，讲稿单独成文件。方向键翻页，打印成 PDF 时一页一张。 / Lay out an HTML deck: charts become bar charts, visuals become placeholder boxes, notes go in their own file. Arrow keys turn pages; printing gives one slide per PDF page.",
+      "inputs": [
+        "content"
+      ],
+      "executor": {
+        "type": "script",
+        "run": "node scripts/build.mjs"
+      },
       "outputs": [
-        { "type": "text/html", "path": "slides.html" },
-        { "type": "text/markdown", "path": "notes.md" }
+        {
+          "type": "text/html",
+          "path": "slides.html"
+        },
+        {
+          "type": "text/markdown",
+          "path": "notes.md"
+        }
       ]
     },
     {
       "id": "check",
       "name": "检查",
-      "description": "页数是否接近目标、每页要点是否太多太长、有没有漏写讲稿。 / Is the slide count near the target, are any slides too dense, is any speaker note missing.",
-      "inputs": ["content"],
-      "executor": { "type": "script", "run": "node scripts/check.mjs" },
-      "outputs": [{ "type": "text/markdown", "path": "check-report.md" }]
+      "description": "页数、标题是不是一句结论且不超过两行、每页字数、要点页占比、证据和讲稿是否齐全、最后一页有没有明确的下一步。 / Slide count, claim titles within two lines, words per slide, share of bullet slides, missing evidence or notes, and a clear call to action at the end.",
+      "inputs": [
+        "content"
+      ],
+      "executor": {
+        "type": "script",
+        "run": "node scripts/check.mjs"
+      },
+      "outputs": [
+        {
+          "type": "text/markdown",
+          "path": "check-report.md"
+        }
+      ]
     }
   ]
 }

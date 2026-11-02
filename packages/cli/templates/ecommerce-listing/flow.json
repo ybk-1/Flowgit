@@ -5,9 +5,15 @@
   "name": "电商商品上架",
   "description": "从商品资料写出一套上架文案：卖点 → 标题 → 主图和详情页、客服问答（并行）→ 检查。适合淘宝、拼多多、抖店、亚马逊。 / Write a full product listing from your product notes: selling points → titles → main images and detail page, plus customer Q&A (in parallel) → check. For Taobao, Pinduoduo, Douyin shops and Amazon.",
   "language": "zh",
-  "author": { "name": "Flowgit" },
+  "author": {
+    "name": "Flowgit"
+  },
   "license": "Apache-2.0",
-  "tags": ["ecommerce", "copywriting", "starter"],
+  "tags": [
+    "ecommerce",
+    "copywriting",
+    "starter"
+  ],
   "inputs": {
     "product": {
       "type": "string",
@@ -16,7 +22,12 @@
     },
     "platform": {
       "type": "string",
-      "enum": ["taobao", "pinduoduo", "douyin", "amazon"],
+      "enum": [
+        "taobao",
+        "pinduoduo",
+        "douyin",
+        "amazon"
+      ],
       "default": "taobao",
       "description": "上架平台：taobao 淘宝/天猫，pinduoduo 拼多多，douyin 抖店，amazon 亚马逊。决定语气和重点 / Where it is sold. Sets tone and emphasis"
     },
@@ -27,12 +38,15 @@
     },
     "titleMax": {
       "type": "number",
-      "default": 30,
-      "description": "标题最多几个字（按平台规则填写，淘宝常用 30 个汉字）/ Maximum title length in characters (follow your platform's rule)"
+      "default": 0,
+      "description": "标题长度上限。0 = 按平台常用上限：淘宝、拼多多、抖店 60 个字符（一个汉字算 2 个），亚马逊 75 个字符。平台规则变了就改这里 / Title length limit. 0 uses the platform's usual limit: 60 characters on Taobao, Pinduoduo and Douyin (a Chinese character counts as 2), 75 on Amazon. Change it when the platform's rule changes"
     },
     "language": {
       "type": "string",
-      "enum": ["zh", "en"],
+      "enum": [
+        "zh",
+        "en"
+      ],
       "default": "zh",
       "description": "输出语言：zh 中文，en English / Output language: zh or en"
     }
@@ -46,47 +60,113 @@
         "type": "human",
         "instructions": "把 materials/product.md 换成你的商品资料：参数、材质、包装清单、售后、和同类商品比的优点。示例是虚构的榨汁杯。 / Replace materials/product.md with your product's facts: specs, materials, what is in the box, after-sales terms, and how it beats similar products. The sample is a fictional blender cup."
       },
-      "outputs": [{ "type": "text/markdown", "path": "materials/product.md" }]
+      "outputs": [
+        {
+          "type": "text/markdown",
+          "path": "materials/product.md"
+        }
+      ]
     },
     {
       "id": "points",
       "name": "卖点",
-      "description": "从资料里提炼 3 到 6 个卖点，每个都写明依据，并列出买家会搜的关键词。 / Pull 3 to 6 selling points from the facts, each with its evidence, plus the keywords buyers search for.",
-      "inputs": ["materials"],
-      "executor": { "type": "llm", "prompt": "prompts/points.md", "effort": "low" },
-      "outputs": [{ "type": "application/json", "path": "points.json" }]
+      "description": "用 FABE 法提炼 3 到 6 个卖点：特征 → 优势 → 买家得到的好处 → 证据，再列出买家的顾虑和会搜的词。 / Build 3 to 6 selling points with FABE (feature → advantage → benefit → evidence), plus buyers' worries and search terms.",
+      "inputs": [
+        "materials"
+      ],
+      "executor": {
+        "type": "llm",
+        "prompt": "prompts/points.md",
+        "effort": "low"
+      },
+      "outputs": [
+        {
+          "type": "application/json",
+          "path": "points.json"
+        }
+      ]
     },
     {
       "id": "titles",
       "name": "标题",
-      "description": "写 3 个候选标题，带上关键词，不超过字数上限。 / Write 3 candidate titles that carry the keywords and stay within the length limit.",
-      "inputs": ["points"],
-      "executor": { "type": "llm", "prompt": "prompts/titles.md", "effort": "low" },
-      "outputs": [{ "type": "application/json", "path": "titles.json" }]
+      "description": "按「核心词 + 属性词 + 卖点词」写 3 个候选标题，不堆砌、不蹭别的品牌，不超过平台上限。 / Write 3 candidate titles as core term + attributes + selling point, with no stuffing, no borrowed brand names, within the platform limit.",
+      "inputs": [
+        "points"
+      ],
+      "executor": {
+        "type": "llm",
+        "prompt": "prompts/titles.md",
+        "effort": "low"
+      },
+      "outputs": [
+        {
+          "type": "application/json",
+          "path": "titles.json"
+        }
+      ]
     },
     {
       "id": "detail",
       "name": "主图和详情页",
-      "description": "5 张主图的文案和画面，再加详情页的每一屏。 / Copy and visuals for 5 main images, then each screen of the detail page.",
-      "inputs": ["materials", "points", "titles"],
-      "executor": { "type": "llm", "prompt": "prompts/detail.md", "effort": "medium" },
-      "outputs": [{ "type": "text/markdown", "path": "detail.md" }]
+      "description": "5 张主图和详情页。按「好处先行」排：首屏好处和场景 → 痛点 → 每屏一个卖点 → 证据和对比 → 参数 → 使用须知 → 包装售后。 / 5 main images and the detail page, benefit first: hero benefit and scene → pain point → one point per screen → evidence and comparison → specs → usage notes → box and after-sales.",
+      "inputs": [
+        "materials",
+        "points",
+        "titles"
+      ],
+      "executor": {
+        "type": "llm",
+        "prompt": "prompts/detail.md",
+        "effort": "medium"
+      },
+      "outputs": [
+        {
+          "type": "text/markdown",
+          "path": "detail.md"
+        }
+      ]
     },
     {
       "id": "faq",
       "name": "客服问答",
-      "description": "买家最常问的问题和回答，和详情页并行。不知道的不编。 / The questions buyers ask most, with answers, in parallel with the detail page. Nothing invented.",
-      "inputs": ["materials", "points"],
-      "executor": { "type": "llm", "prompt": "prompts/faq.md", "effort": "low" },
-      "outputs": [{ "type": "text/markdown", "path": "faq.md" }]
+      "description": "按 points.json 里买家的顾虑写问答，和详情页并行。不知道的不编。 / Q&A built from the buyer worries in points.json, in parallel with the detail page. Nothing invented.",
+      "inputs": [
+        "materials",
+        "points"
+      ],
+      "executor": {
+        "type": "llm",
+        "prompt": "prompts/faq.md",
+        "effort": "low"
+      },
+      "outputs": [
+        {
+          "type": "text/markdown",
+          "path": "faq.md"
+        }
+      ]
     },
     {
       "id": "check",
       "name": "检查",
-      "description": "检查标题长度、关键词、广告法常见违禁词和占位符。 / Check title length, keywords, absolute claims that ad rules commonly ban, and placeholders.",
-      "inputs": ["points", "titles", "detail", "faq"],
-      "executor": { "type": "script", "run": "node scripts/check.mjs" },
-      "outputs": [{ "type": "text/markdown", "path": "check-report.md" }]
+      "description": "检查标题长度（按平台口径）、重复词、关键词，广告法里的绝对化用语和医疗用语，价格比较用语，以及资料里找不到的数字。 / Check title length (counted the platform's way), repeated words, keywords, absolute and medical terms barred by advertising law, price-comparison wording, and numbers the product facts do not contain.",
+      "inputs": [
+        "materials",
+        "points",
+        "titles",
+        "detail",
+        "faq"
+      ],
+      "executor": {
+        "type": "script",
+        "run": "node scripts/check.mjs"
+      },
+      "outputs": [
+        {
+          "type": "text/markdown",
+          "path": "check-report.md"
+        }
+      ]
     }
   ]
 }

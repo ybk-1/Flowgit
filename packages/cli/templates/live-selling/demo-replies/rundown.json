@@ -1,10 +1,11 @@
 {
   "segments": [
-    { "id": "s1", "name": "开场留人", "minutes": 1, "goal": "让刚进来的人停下来看" },
-    { "id": "s2", "name": "痛点", "minutes": 2, "goal": "说出早上没时间、外面果汁贵的烦恼" },
-    { "id": "s3", "name": "现场演示", "minutes": 3, "goal": "现场榨一杯，展示刀头拆洗" },
-    { "id": "s4", "name": "价格和优惠", "minutes": 2, "goal": "讲清直播价和赠品" },
-    { "id": "s5", "name": "逼单", "minutes": 1, "goal": "提醒库存和赠品数量" },
-    { "id": "s6", "name": "返场", "minutes": 1, "goal": "给晚进来的人快速讲一遍" }
+    { "id": "s1", "type": "hook", "name": "开场留人", "minutes": 1, "goal": "用现场榨一杯的画面让刚进来的人停下" },
+    { "id": "s2", "type": "pain", "name": "痛点", "minutes": 1, "goal": "说出早上没时间、榨汁机难洗的麻烦" },
+    { "id": "s3", "type": "demo", "name": "塑品演示", "minutes": 3, "goal": "现场榨一杯，展示安全设计和拆洗" },
+    { "id": "s4", "type": "trust", "name": "信任", "minutes": 1, "goal": "讲材质、售后和不适合的情况" },
+    { "id": "s5", "type": "price", "name": "价格和优惠", "minutes": 2, "goal": "讲清直播价、赠品和下单方式" },
+    { "id": "s6", "type": "close", "name": "逼单", "minutes": 1, "goal": "分别回应新来的、犹豫的和已下单的人" },
+    { "id": "s7", "type": "recap", "name": "返场", "minutes": 1, "goal": "给晚进来的人快速讲一遍" }
   ]
 }

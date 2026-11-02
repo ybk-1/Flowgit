@@ -32,8 +32,8 @@ flowgit log                       # 整个流程的历史和 token 合计 / the 
 | `ecommerce-listing` | 电商商品上架：商品资料 → 卖点 → 标题 → 主图和详情页、客服问答并行 → 检查 | E-commerce listing: product facts → selling points → titles → detail page and Q&A in parallel → check |
 | `slides` | PPT 演示稿：大纲 → 每页内容 → 网页幻灯片（可打印成 PDF）→ 检查 | Slide deck: outline → slide content → HTML deck (prints to PDF) → check |
 | `live-selling` | 直播带货脚本：商品资料 → 流程表 → 话术和弹幕问答并行 → 检查 | Live-selling script: product facts → rundown → script and chat Q&A in parallel → check |
-| `short-drama` | 竖屏短剧剧本：人物 → 分集大纲 → 逐集剧本 → 检查 | Vertical short drama: characters → episode outline → scripts → check |
-| `lesson-plan` | 老师备课：教学目标 → 教案和练习题并行 → 练习单和答案 | Lesson prep: objectives → plan and exercises in parallel → worksheet and answer key |
+| `short-drama` | 竖屏微短剧：设定和人物 → 分集节拍 → 逐集剧本 → 审读 → 检查 | Vertical micro-drama: bible → episode beats → scripts → review → check |
+| `lesson-plan` | 老师备课（逆向设计）：教学目标 → 评价任务 → 教案和分层练习并行 → 练习单和答案 | Lesson prep (backward design): objectives → assessment → plan and tiered exercises in parallel → worksheet and answer key |
 
 ```bash
 flowgit templates                 # 列出模板和它们的阶段 / list templates and their stages

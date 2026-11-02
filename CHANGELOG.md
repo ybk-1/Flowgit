@@ -87,11 +87,11 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 - `support-sop`：客服 SOP，资料（人）→ 汇总（脚本）→ 规程 → 用例 → 检查（模型）→ 打包成 `skill/SKILL.md` 和评测用例。
 - `job-application`：对照职位描述改简历并写求职信。简历和求职信并行，最后脚本检查关键词、篇幅和占位符。
 - `research-report`：把题目拆成子问题、收集资料、写成带引用的报告。脚本检查没被引用的来源、不存在的引用、没被回答的子问题和没有出处的段落。
-- `ecommerce-listing`：电商商品上架（淘宝、拼多多、抖店、亚马逊）。商品资料（人）→ 卖点 → 标题 → 主图和详情页、客服问答（并行）→ 脚本检查标题长度、关键词、常见绝对化用语和占位符。
-- `slides`：PPT 演示稿。大纲 → 每页内容（带 schema）→ 排成网页幻灯片 `slides.html` 和讲稿，浏览器里打印就是一页一张的 PDF → 检查页数和太满的页。
-- `live-selling`：直播带货脚本。商品资料（人）→ 流程表 → 逐段话术和弹幕问答（并行）→ 检查分钟数、价格、绝对化用语。
-- `short-drama`：竖屏短剧剧本。人物 → 分集大纲 → 逐集剧本 → 检查集数、估算时长、结尾悬念和没出场的人物。
-- `lesson-plan`：老师备课。教学目标 → 教案和练习题（并行）→ 生成学生练习单和答案，并检查时间和目标覆盖。
+- `ecommerce-listing`：电商商品上架（淘宝、拼多多、抖店、亚马逊）。商品资料（人）→ FABE 卖点 → 标题 → 主图和“好处先行”的详情页、客服问答（并行）→ 检查：按平台口径算标题长度（亚马逊 75 个字符）、《广告法》的绝对化和医疗用语、价格比较，以及资料里找不到的数字。README 列出参考资料。
+- `slides`：PPT 演示稿。按金字塔原理定核心结论和 SCQA 开场 → 每页“结论标题 + 证据”（图表、画面、引用、步骤，带 schema）→ 排成网页幻灯片 `slides.html` 和讲稿，打印就是一页一张的 PDF → 检查标题、字数、要点页占比和结尾的下一步。
+- `live-selling`：直播带货脚本。商品资料（人）→ 七段流程表（留人、痛点、塑品、信任、价格、逼单、返场）→ 逐段话术和弹幕问答（并行）→ 按《网络直播营销管理办法》检查虚构的销量、库存和数字，以及绝对化、医疗用语和价格比较。
+- `short-drama`：竖屏微短剧。设定和人物 → 分集节拍（钩子、压抑、爆发、悬念，付费卡点）→ 逐集剧本 → 按广电总局管理提示和创作标准审读 → 检查集数、估算时长、旁白开头、悬念和付费卡点。
+- `lesson-plan`：老师备课，按逆向设计。教学目标（布鲁姆层级）→ 评价任务 → 教案和分层练习（并行）→ 学生练习单和答案，并检查教学评一致性、时间和“双减”作业时长。
 - `examples/agent-page`：用 agent 做一页介绍网页（只在仓库里）。
 - `short-video` (default): script → storyboard → assets → edit → export. FFmpeg renders a vertical video with zoom, blurred fill, gradient text cards, a title, transitions, background music and voiceover (clips follow the voice); the output language is Chinese or English.
 - `weekly-report`: a starter that turns rough notes (person) into a draft (model) and checks it (script); the [guide](docs/guide.md) builds it step by step.
@@ -99,11 +99,11 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 - `support-sop`: a customer-support SOP, knowledge (person) → collect (script) → SOP → test cases → review (model) → packaged as `skill/SKILL.md` with an eval set.
 - `job-application`: tailor a resume and write a cover letter for a job description. The resume and letter run in parallel, then a script checks keywords, length and placeholders.
 - `research-report`: split a topic into sub-questions, gather sources and write a cited report. A script checks uncited sources, citations of missing files, unanswered sub-questions and paragraphs with no citation.
-- `ecommerce-listing`: a product listing for Taobao, Pinduoduo, Douyin shops or Amazon. Product facts (person) → selling points → titles → main images and detail page, plus customer Q&A (in parallel) → a script checks title length, keywords, common absolute claims and placeholders.
-- `slides`: a slide deck. Outline → slide content (with a schema) → an HTML deck `slides.html` plus speaker notes, which prints to a one-slide-per-page PDF → a check on slide count and dense slides.
-- `live-selling`: a live-selling stream script. Product facts (person) → rundown → segment script and chat Q&A (in parallel) → a check on minutes, price and absolute claims.
-- `short-drama`: a vertical short drama. Characters → episode outline → full scripts → a check on episode count, estimated length, cliffhangers and unused characters.
-- `lesson-plan`: lesson prep for teachers. Objectives → lesson plan and exercises (in parallel) → a student worksheet and answer key, with a check on timing and objective coverage.
+- `ecommerce-listing`: a product listing for Taobao, Pinduoduo, Douyin shops or Amazon. Product facts (person) → FABE selling points → titles → main images and a benefit-first detail page, plus customer Q&A (in parallel) → checks on title length counted the platform's way (75 characters on Amazon), absolute and medical claims under China's Advertising Law, price comparisons, and numbers the facts do not contain. The README lists its sources.
+- `slides`: a slide deck. A governing thought and SCQA opening (Pyramid Principle) → claim-plus-evidence slides (charts, visuals, quotes, steps; with a schema) → an HTML deck `slides.html` plus speaker notes that prints to a one-slide-per-page PDF → checks on titles, text, bullet share and the closing next step.
+- `live-selling`: a live-selling stream script. Product facts (person) → a seven-part rundown (hook, pain, demo, trust, price, close, recap) → segment script and chat Q&A (in parallel) → checks for invented sales, stock and numbers under China's live-stream marketing rules, plus absolute and medical claims and price comparisons.
+- `short-drama`: a vertical micro-drama. Story bible and characters → episode beats (hook, suppression, payoff, cliffhanger, paywall) → scripts → a read against NRTA guidance and craft standards → checks on count, length, voice-over openings, cliffhangers and the paywall.
+- `lesson-plan`: lesson prep with backward design. Objectives (Bloom levels) → assessment tasks → lesson plan and tiered exercises (in parallel) → a student worksheet and answer key, with checks on alignment, timing and homework load under the double-reduction rules.
 - `examples/agent-page`: a one-page explainer made by an agent (repo only).
 
 ### 项目 / Project

@@ -1,10 +1,10 @@
 {
   "exercises": [
-    { "id": "e1", "objective": "o2", "level": "basic", "question": "读一读，写一写：二分之一写作 ____，四分之一写作 ____。", "answer": "1/2，1/4。分母写在横线下面，分子写在横线上面。" },
-    { "id": "e2", "objective": "o2", "level": "basic", "question": "3/5 的分母是 ____，分子是 ____。", "answer": "分母 5，分子 3。分母表示平均分成 5 份，分子表示取其中 3 份。" },
-    { "id": "e3", "objective": "o1", "level": "basic", "question": "把一张饼平均分给 3 个人，每人分到这张饼的几分之一？", "answer": "1/3。平均分成 3 份，每份是 1/3。" },
-    { "id": "e4", "objective": "o1", "level": "medium", "question": "一个苹果切成大小不一样的 2 块，每块是这个苹果的 1/2 吗？为什么？", "answer": "不是。没有平均分，所以不能用 1/2 表示。" },
-    { "id": "e5", "objective": "o3", "level": "medium", "question": "画一个长方形，平均分成 4 份，涂出其中 3 份，涂色部分是几分之几？", "answer": "3/4。平均分成 4 份，涂了 3 份。" },
-    { "id": "e6", "objective": "o3", "level": "challenge", "question": "一张正方形纸，你能用几种不同的折法折出它的 1/4？画出两种。", "answer": "例如：对折再对折成小正方形；或者沿两条对角线折成 4 个三角形。只要 4 份大小相同都对。" }
+    { "id": "e1", "objective": "o2", "level": "basic", "use": "class", "minutes": 1, "question": "读一读，写一写：二分之一写作 ____，四分之一写作 ____。", "answer": "1/2，1/4。分母写在横线下面，分子写在横线上面。" },
+    { "id": "e2", "objective": "o2", "level": "basic", "use": "class", "minutes": 1, "question": "3/5 的分母是 ____，分子是 ____。", "answer": "分母 5，分子 3。分母表示平均分成 5 份，分子表示取其中 3 份。" },
+    { "id": "e3", "objective": "o1", "level": "basic", "use": "class", "minutes": 1, "question": "把一张饼平均分给 3 个人，每人分到这张饼的几分之一？", "answer": "1/3。平均分成 3 份，每份是 1/3。" },
+    { "id": "e4", "objective": "o1", "level": "medium", "use": "homework", "minutes": 3, "question": "一个苹果切成大小不一样的 2 块，每块是这个苹果的 1/2 吗？为什么？", "answer": "不是。没有平均分，所以不能用 1/2 表示。" },
+    { "id": "e5", "objective": "o3", "level": "medium", "use": "homework", "minutes": 5, "question": "画一个长方形，平均分成 4 份，涂出其中 3 份，涂色部分是几分之几？", "answer": "3/4。平均分成 4 份，涂了 3 份。" },
+    { "id": "e6", "objective": "o3", "level": "challenge", "use": "class", "minutes": 3, "question": "一张正方形纸，你能用几种不同的折法折出它的 1/4？画出两种。", "answer": "例如：对折再对折成小正方形；或者沿两条对角线折成 4 个三角形。只要 4 份大小相同都对。" }
   ]
 }

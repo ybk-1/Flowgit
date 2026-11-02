@@ -3,11 +3,17 @@
   "version": "0.1",
   "id": "short-drama",
   "name": "竖屏短剧剧本",
-  "description": "从一句故事梗概写出竖屏短剧：人物 → 分集大纲 → 逐集剧本 → 检查集数、时长和每集的钩子。 / Write a vertical short drama from a one-line premise: characters → episode outline → full scripts → check episode count, length and each episode's hook.",
+  "description": "从一句梗概写出竖屏微短剧的开篇集：故事设定和人物 → 分集节拍（黄金三秒、期待-压抑-爆发、付费卡点）→ 逐集剧本 → 按广电总局管理提示和创作标准审读 → 脚本检查集数、时长和钩子。 / Write the opening episodes of a vertical micro-drama from a one-line premise: story bible and characters → episode beats (3-second hook, build-up/suppression/payoff, paywall cliffhanger) → scripts → a read against NRTA guidance and craft standards → script checks on count, length and hooks.",
   "language": "zh",
-  "author": { "name": "Flowgit" },
+  "author": {
+    "name": "Flowgit"
+  },
   "license": "Apache-2.0",
-  "tags": ["video", "drama", "script"],
+  "tags": [
+    "video",
+    "drama",
+    "script"
+  ],
   "inputs": {
     "premise": {
       "type": "string",
@@ -21,17 +27,25 @@
     },
     "episodes": {
       "type": "number",
-      "default": 5,
-      "description": "写几集 / How many episodes"
+      "default": 10,
+      "description": "写前几集。行业常见是一部 80 到 100 集、前 10 到 20 集免费，这里先写开篇 / How many opening episodes to write. A typical series runs 80 to 100 episodes with the first 10 to 20 free"
     },
     "episodeSeconds": {
       "type": "number",
       "default": 60,
       "description": "每集大约几秒 / About how many seconds per episode"
     },
+    "paywallAt": {
+      "type": "number",
+      "default": 10,
+      "description": "付费卡点放在第几集结尾，0 表示不设 / Which episode ends on the paywall cliffhanger; 0 for none"
+    },
     "language": {
       "type": "string",
-      "enum": ["zh", "en"],
+      "enum": [
+        "zh",
+        "en"
+      ],
       "default": "zh",
       "description": "输出语言：zh 中文，en English / Output language: zh or en"
     }
@@ -39,34 +53,99 @@
   "stages": [
     {
       "id": "characters",
-      "name": "人物",
-      "description": "3 到 5 个主要人物：身份、想要什么、藏着什么。 / 3 to 5 main characters: who they are, what they want, what they hide.",
-      "executor": { "type": "llm", "prompt": "prompts/characters.md", "effort": "medium" },
-      "outputs": [{ "type": "application/json", "path": "characters.json" }]
+      "name": "设定和人物",
+      "description": "一句话故事、观众要的核心情绪（逆袭、甜宠、复仇、悬疑……）、主角的目标和阻碍，以及 3 到 5 个人物。 / The logline, the core emotion the audience comes for (comeback, romance, revenge, mystery…), the lead's goal and obstacle, and 3 to 5 characters.",
+      "executor": {
+        "type": "llm",
+        "prompt": "prompts/characters.md",
+        "effort": "medium"
+      },
+      "outputs": [
+        {
+          "type": "application/json",
+          "path": "characters.json"
+        }
+      ]
     },
     {
       "id": "outline",
       "name": "分集大纲",
-      "description": "每集的开头钩子、主要冲突、反转和结尾悬念。 / Each episode's opening hook, conflict, twist and cliffhanger.",
-      "inputs": ["characters"],
-      "executor": { "type": "llm", "prompt": "prompts/outline.md", "effort": "medium" },
-      "outputs": [{ "type": "application/json", "path": "episodes.json" }]
+      "description": "每集的前三秒钩子、压抑点、爆发点（爽点或反转）和结尾悬念；付费卡点那一集的悬念最强。 / Each episode's 3-second hook, suppression beat, payoff (twist or win) and cliffhanger; the paywall episode gets the strongest one.",
+      "inputs": [
+        "characters"
+      ],
+      "executor": {
+        "type": "llm",
+        "prompt": "prompts/outline.md",
+        "effort": "medium"
+      },
+      "outputs": [
+        {
+          "type": "application/json",
+          "path": "episodes.json"
+        }
+      ]
     },
     {
       "id": "script",
       "name": "剧本",
-      "description": "逐集写场景、动作和台词，竖屏拍摄，节奏要快。 / Write each episode's scenes, action and dialogue, shot vertically, at a fast pace.",
-      "inputs": ["characters", "outline"],
-      "executor": { "type": "llm", "prompt": "prompts/script.md", "effort": "high" },
-      "outputs": [{ "type": "text/markdown", "path": "script.md" }]
+      "description": "逐集写镜头、动作和台词，竖屏近景为主，镜头短、台词短。 / Write each episode's shots, action and dialogue: vertical, mostly close-ups, short shots, short lines.",
+      "inputs": [
+        "characters",
+        "outline"
+      ],
+      "executor": {
+        "type": "llm",
+        "prompt": "prompts/script.md",
+        "effort": "high"
+      },
+      "outputs": [
+        {
+          "type": "text/markdown",
+          "path": "script.md"
+        }
+      ]
+    },
+    {
+      "id": "review",
+      "name": "审读",
+      "description": "像平台审核和责编一样读一遍：内容导向（广电总局管理提示）和创作质量（钩子、节奏、人物动机），列出要改的地方。 / Read it like a platform reviewer and script editor: content guidance (NRTA notices) and craft (hooks, pacing, motivation), listing what to fix.",
+      "inputs": [
+        "characters",
+        "outline",
+        "script"
+      ],
+      "executor": {
+        "type": "llm",
+        "prompt": "prompts/review.md",
+        "effort": "medium"
+      },
+      "outputs": [
+        {
+          "type": "text/markdown",
+          "path": "review.md"
+        }
+      ]
     },
     {
       "id": "check",
       "name": "检查",
       "description": "集数对不对、按台词估算的时长、哪个人物没出场、哪集没写结尾悬念。 / Is the episode count right, estimated length from dialogue, characters who never appear, episodes without a cliffhanger.",
-      "inputs": ["characters", "outline", "script"],
-      "executor": { "type": "script", "run": "node scripts/check.mjs" },
-      "outputs": [{ "type": "text/markdown", "path": "check-report.md" }]
+      "inputs": [
+        "characters",
+        "outline",
+        "script"
+      ],
+      "executor": {
+        "type": "script",
+        "run": "node scripts/check.mjs"
+      },
+      "outputs": [
+        {
+          "type": "text/markdown",
+          "path": "check-report.md"
+        }
+      ]
     }
   ]
 }

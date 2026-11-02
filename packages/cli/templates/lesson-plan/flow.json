@@ -3,16 +3,27 @@
   "version": "0.1",
   "id": "lesson-plan",
   "name": "老师备课",
-  "description": "从一个课题备好一节课：教学目标 → 教案和练习题（并行）→ 生成学生练习单和答案，并检查时间和目标覆盖。 / Prepare a lesson from a topic: objectives → lesson plan and exercises (in parallel) → a student worksheet and answer key, with a check on timing and objective coverage.",
+  "description": "按“逆向设计”备好一节课：先定可检验的目标，再定怎么检验，最后才设计教学活动 → 教案和分层练习（并行）→ 生成学生练习单和答案，并检查教学评一致性、时间和双减作业时长。 / Prepare a lesson with backward design: checkable objectives first, then how they will be assessed, then the activities → lesson plan and tiered exercises (in parallel) → a student worksheet and answer key, with checks on alignment, timing and homework load.",
   "language": "zh",
-  "author": { "name": "Flowgit" },
+  "author": {
+    "name": "Flowgit"
+  },
   "license": "Apache-2.0",
-  "tags": ["education", "teaching", "starter"],
+  "tags": [
+    "education",
+    "teaching",
+    "starter"
+  ],
   "inputs": {
     "topic": {
       "type": "string",
       "description": "课题，例如：分数的初步认识 / The lesson topic, e.g. introduction to fractions",
       "required": true
+    },
+    "subject": {
+      "type": "string",
+      "default": "数学",
+      "description": "学科 / Subject"
     },
     "grade": {
       "type": "string",
@@ -26,7 +37,10 @@
     },
     "language": {
       "type": "string",
-      "enum": ["zh", "en"],
+      "enum": [
+        "zh",
+        "en"
+      ],
       "default": "zh",
       "description": "输出语言：zh 中文，en English / Output language: zh or en"
     }
@@ -35,36 +49,105 @@
     {
       "id": "objectives",
       "name": "教学目标",
-      "description": "3 到 5 个可以检验的教学目标，以及重点和难点。 / 3 to 5 objectives you can check, plus the key point and the hard part.",
-      "executor": { "type": "llm", "prompt": "prompts/objectives.md", "effort": "low" },
-      "outputs": [{ "type": "application/json", "path": "objectives.json" }]
+      "description": "学情分析、3 到 5 个可检验的目标（每个标出布鲁姆认知层级和行为动词）、重点和难点。 / Learner analysis, 3 to 5 checkable objectives (each with its Bloom level and action verb), the key point and the hard part.",
+      "executor": {
+        "type": "llm",
+        "prompt": "prompts/objectives.md",
+        "effort": "low"
+      },
+      "outputs": [
+        {
+          "type": "application/json",
+          "path": "objectives.json"
+        }
+      ]
+    },
+    {
+      "id": "assessment",
+      "name": "评价任务",
+      "description": "在设计活动之前，先为每个目标定一个课堂上能看到的评价任务和达成标准。 / Before any activity, give each objective an in-class assessment task and a success criterion.",
+      "inputs": [
+        "objectives"
+      ],
+      "executor": {
+        "type": "llm",
+        "prompt": "prompts/assessment.md",
+        "effort": "low"
+      },
+      "outputs": [
+        {
+          "type": "application/json",
+          "path": "assessment.json"
+        }
+      ]
     },
     {
       "id": "plan",
       "name": "教案",
-      "description": "按环节写教案，每个环节标分钟数和对应的目标。 / Write the plan step by step, each step with its minutes and the objectives it serves.",
-      "inputs": ["objectives"],
-      "executor": { "type": "llm", "prompt": "prompts/plan.md", "effort": "medium" },
-      "outputs": [{ "type": "text/markdown", "path": "lesson-plan.md" }]
+      "description": "按环节写教案：每个环节标分钟数、对应的目标和评价任务，老师做什么、学生做什么；再写板书和作业设计。 / The plan step by step, each with minutes, the objectives and assessment tasks it serves, and what teacher and students do; then the board plan and homework design.",
+      "inputs": [
+        "objectives",
+        "assessment"
+      ],
+      "executor": {
+        "type": "llm",
+        "prompt": "prompts/plan.md",
+        "effort": "medium"
+      },
+      "outputs": [
+        {
+          "type": "text/markdown",
+          "path": "lesson-plan.md"
+        }
+      ]
     },
     {
       "id": "exercises",
       "name": "练习题",
-      "description": "从易到难的练习题和答案，每题对应一个目标，和教案并行。 / Exercises from easy to hard with answers, each tied to an objective, in parallel with the plan.",
-      "inputs": ["objectives"],
-      "executor": { "type": "llm", "prompt": "prompts/exercises.md", "effort": "medium" },
-      "outputs": [{ "type": "application/json", "path": "exercises.json" }]
+      "description": "基础、提高、挑战三层练习，每题对应一个目标，标出课堂用还是作业、预计几分钟，带答案和解析。 / Three tiers of exercises (basic, medium, challenge), each tied to an objective, marked for class or homework with an estimated time, with answers and explanations.",
+      "inputs": [
+        "objectives",
+        "assessment"
+      ],
+      "executor": {
+        "type": "llm",
+        "prompt": "prompts/exercises.md",
+        "effort": "medium"
+      },
+      "outputs": [
+        {
+          "type": "application/json",
+          "path": "exercises.json"
+        }
+      ]
     },
     {
       "id": "worksheet",
       "name": "练习单",
-      "description": "生成发给学生的练习单（不带答案）和老师用的答案，并检查时间加起来对不对、每个目标有没有讲到、有没有练到。 / Build the student worksheet (no answers) and the teacher's answer key, and check that the minutes add up and every objective is taught and practiced.",
-      "inputs": ["objectives", "plan", "exercises"],
-      "executor": { "type": "script", "run": "node scripts/worksheet.mjs" },
+      "description": "生成学生练习单（不带答案）和教师答案，并检查：时间加起来对不对，每个目标有没有讲到、评到、练到，目标动词能不能检验，作业时长和双减要求。 / Build the student worksheet (no answers) and the answer key, and check that the minutes add up, every objective is taught, assessed and practiced, objective verbs are checkable, and homework time against the double-reduction rules.",
+      "inputs": [
+        "objectives",
+        "assessment",
+        "plan",
+        "exercises"
+      ],
+      "executor": {
+        "type": "script",
+        "run": "node scripts/worksheet.mjs"
+      },
       "outputs": [
-        { "type": "text/markdown", "path": "worksheet.md" },
-        { "type": "text/markdown", "path": "answer-key.md" },
-        { "type": "text/markdown", "path": "check-report.md" }
+        {
+          "type": "text/markdown",
+          "path": "worksheet.md"
+        },
+        {
+          "type": "text/markdown",
+          "path": "answer-key.md"
+        },
+        {
+          "type": "text/markdown",
+          "path": "check-report.md"
+        }
       ]
     }
   ]

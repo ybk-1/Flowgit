@@ -1,11 +1,11 @@
-按人物和分集大纲写完整剧本。只输出剧本，不要解释。
+按设定和分集节拍写剧本。只输出剧本，不要解释。
 
 - 梗概：{{inputs.premise}}
 - 类型：{{inputs.genre}}
 - 每集约 {{inputs.episodeSeconds}} 秒
 - 输出语言：{{inputs.language}}（zh = 中文，en = English）。全文用这个语言。
 
-Write the full script from the characters and the episode outline. Reply with the script only.
+Write the scripts from the bible and the beats. Reply with the script only.
 
 - Premise: {{inputs.premise}}
 - Genre: {{inputs.genre}}
@@ -29,11 +29,11 @@ Write the full script from the characters and the episode outline. Reply with th
 
 规则 / Rules:
 
-- 每集一个 `## E<集号>`，集号和大纲一致。
-- 场景和动作用 `△` 开头，台词写成 `人物名：台词`（英文用 `Name: line`），人物名和人物表一致。
-- 台词要短，像真人说话。按大约每秒 4 个汉字（英文每秒 2.5 个词）控制台词总量。
-- 每集最后一行用 `【悬念】`（英文写 `[Cliffhanger]`）开头。
-- One `## E<number>` per episode, numbered as in the outline.
-- Scene and action lines start with `△`; dialogue is `Name: line`, with names from the character list.
-- Short, natural lines. Budget about 4 Chinese characters (2.5 English words) of dialogue per second.
-- Each episode's last line starts with `【悬念】` (or `[Cliffhanger]` in English).
+- 每集一个 `## E<集号>`，集号和节拍一致；付费卡点那一集最后一行写 `【付费卡点】`（英文写 `[Paywall]`），其他集写 `【悬念】`（英文写 `[Cliffhanger]`）。
+- 第一行就进冲突，不要用旁白交代背景；背景放进动作和台词里。
+- `△` 写场景和动作，一行就是一个镜头，大约 3 到 6 秒。台词写成 `人物名：台词`，人物名和人物表一致。台词要短，像真人说话；按每秒约 4 个汉字（英文 2.5 个词）控制总量。
+- 内容遵守广电总局对微短剧的管理提示：不渲染奢华拜金，不用低俗、色情、血腥暴力的画面吸引人，人设和剧情不要极端反智、离谱。
+- One `## E<number>` per episode, numbered as in the beats. The paywall episode's last line starts with `[Paywall]` (`【付费卡点】` in Chinese); the others end with `[Cliffhanger]` (`【悬念】`).
+- Start inside the conflict; no voice-over exposition. Background comes through action and dialogue.
+- Each `△` line is one shot of about 3 to 6 seconds. Dialogue is `Name: line`, names from the character list, short and natural; budget about 2.5 English words (4 Chinese characters) per second.
+- Follow NRTA guidance on micro-dramas: no glamorized wealth worship, no vulgar, sexual or gory images as the draw, no absurd or anti-intellectual characters or plots.

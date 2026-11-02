@@ -3,11 +3,17 @@
   "version": "0.1",
   "id": "live-selling",
   "name": "直播带货脚本",
-  "description": "从商品资料写出一场直播的脚本：流程表 → 逐段话术和弹幕问答（并行）→ 检查时长和违禁词。 / Write a live-selling stream script from your product notes: rundown → segment-by-segment script and chat Q&A (in parallel) → check timing and banned words.",
+  "description": "从商品资料写出一个商品的直播讲解：流程表（留人 → 痛点 → 塑品演示 → 信任 → 价格 → 逼单 → 返场）→ 逐段话术和弹幕问答（并行）→ 按《网络直播营销管理办法》和《广告法》检查。 / Write the live-stream pitch for one product: rundown (hook → pain → value demo → trust → price → close → recap) → segment script and chat Q&A (in parallel) → checks based on China's live-stream marketing rules and Advertising Law.",
   "language": "zh",
-  "author": { "name": "Flowgit" },
+  "author": {
+    "name": "Flowgit"
+  },
   "license": "Apache-2.0",
-  "tags": ["ecommerce", "livestream", "script"],
+  "tags": [
+    "ecommerce",
+    "livestream",
+    "script"
+  ],
   "inputs": {
     "product": {
       "type": "string",
@@ -31,7 +37,10 @@
     },
     "language": {
       "type": "string",
-      "enum": ["zh", "en"],
+      "enum": [
+        "zh",
+        "en"
+      ],
       "default": "zh",
       "description": "输出语言：zh 中文，en English / Output language: zh or en"
     }
@@ -45,39 +54,91 @@
         "type": "human",
         "instructions": "把 materials/product.md 换成你的商品资料。示例是虚构的榨汁杯。 / Replace materials/product.md with your product's facts. The sample is a fictional blender cup."
       },
-      "outputs": [{ "type": "text/markdown", "path": "materials/product.md" }]
+      "outputs": [
+        {
+          "type": "text/markdown",
+          "path": "materials/product.md"
+        }
+      ]
     },
     {
       "id": "rundown",
       "name": "流程表",
-      "description": "把时间分成几段：开场留人、痛点、演示、价格、逼单、返场，每段有分钟数和目标。 / Split the time into segments (hook, pain point, demo, price, close, recap), each with minutes and a goal.",
-      "inputs": ["materials"],
-      "executor": { "type": "llm", "prompt": "prompts/rundown.md", "effort": "low" },
-      "outputs": [{ "type": "application/json", "path": "rundown.json" }]
+      "description": "把时间分成留人、痛点、塑品演示、信任、价格、逼单、返场几段，每段有类型、分钟数和目标。 / Split the time into hook, pain point, value demo, trust, price, close and recap, each with a type, minutes and a goal.",
+      "inputs": [
+        "materials"
+      ],
+      "executor": {
+        "type": "llm",
+        "prompt": "prompts/rundown.md",
+        "effort": "low"
+      },
+      "outputs": [
+        {
+          "type": "application/json",
+          "path": "rundown.json"
+        }
+      ]
     },
     {
       "id": "script",
       "name": "话术",
-      "description": "按流程表逐段写主播要说的话、要做的动作和要引导的互动。 / Write what the host says, does and asks the chat to do, segment by segment.",
-      "inputs": ["materials", "rundown"],
-      "executor": { "type": "llm", "prompt": "prompts/script.md", "effort": "medium" },
-      "outputs": [{ "type": "text/markdown", "path": "script.md" }]
+      "description": "逐段写主播的话术、动作和互动；逼单段分别对新进来的、看了没下单的、已经下单的人说。 / Write the host's lines, actions and chat prompts per segment; the close speaks separately to newcomers, viewers who have not bought, and buyers.",
+      "inputs": [
+        "materials",
+        "rundown"
+      ],
+      "executor": {
+        "type": "llm",
+        "prompt": "prompts/script.md",
+        "effort": "medium"
+      },
+      "outputs": [
+        {
+          "type": "text/markdown",
+          "path": "script.md"
+        }
+      ]
     },
     {
       "id": "qa",
       "name": "弹幕问答",
       "description": "观众最常在弹幕里问的问题和一句话回答，和话术并行。 / The questions viewers ask most in chat, with one-line answers, in parallel with the script.",
-      "inputs": ["materials"],
-      "executor": { "type": "llm", "prompt": "prompts/qa.md", "effort": "low" },
-      "outputs": [{ "type": "text/markdown", "path": "qa.md" }]
+      "inputs": [
+        "materials"
+      ],
+      "executor": {
+        "type": "llm",
+        "prompt": "prompts/qa.md",
+        "effort": "low"
+      },
+      "outputs": [
+        {
+          "type": "text/markdown",
+          "path": "qa.md"
+        }
+      ]
     },
     {
       "id": "check",
       "name": "检查",
-      "description": "分钟数加起来对不对、每段话术有没有写、价格有没有说、绝对化用语和占位符。 / Do the minutes add up, is every segment written, is the price mentioned, any absolute claims or placeholders.",
-      "inputs": ["rundown", "script", "qa"],
-      "executor": { "type": "script", "run": "node scripts/check.mjs" },
-      "outputs": [{ "type": "text/markdown", "path": "check-report.md" }]
+      "description": "分钟数、段落类型、价格是否说出；《网络直播营销管理办法》第十八条的虚构数据和误导信息、《广告法》的绝对化和医疗用语、价格比较，以及资料里找不到的数字。 / Minutes, segment types, whether the price is stated; invented data and misleading claims (live-stream marketing rules art. 18), absolute and medical terms (Advertising Law), price comparisons, and numbers the facts do not contain.",
+      "inputs": [
+        "materials",
+        "rundown",
+        "script",
+        "qa"
+      ],
+      "executor": {
+        "type": "script",
+        "run": "node scripts/check.mjs"
+      },
+      "outputs": [
+        {
+          "type": "text/markdown",
+          "path": "check-report.md"
+        }
+      ]
     }
   ]
 }

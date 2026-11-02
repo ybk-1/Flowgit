@@ -797,11 +797,11 @@ describe("popular templates on demo replies", () => {
 
   // template, required inputs, files the run must produce, text the check report must contain
   const cases: [string, string[], string[], string][] = [
-    ["ecommerce-listing", ["product=便携榨汁杯"], ["points.json", "titles.json", "detail.md", "faq.md", "check-report.md"], "绝对化用语"],
-    ["slides", ["topic=把工作变成流程"], ["slides.json", "slides.html", "notes.md", "check-report.md"], "共 7 页"],
-    ["live-selling", ["product=便携榨汁杯", "price=直播间 99 元"], ["rundown.json", "script.md", "qa.md", "check-report.md"], "提到了价格 99"],
-    ["short-drama", ["premise=面馆逆袭"], ["characters.json", "episodes.json", "script.md", "check-report.md"], "写了 3 集，要求 5 集"],
-    ["lesson-plan", ["topic=分数的初步认识"], ["objectives.json", "lesson-plan.md", "exercises.json", "worksheet.md", "answer-key.md", "check-report.md"], "共 40 分钟"],
+    ["ecommerce-listing", ["product=便携榨汁杯"], ["points.json", "titles.json", "detail.md", "faq.md", "check-report.md"], "资料里找不到的数字"],
+    ["slides", ["topic=把周报做成流程"], ["slides.json", "slides.html", "notes.md", "check-report.md"], "最后一页是下一步"],
+    ["live-selling", ["product=便携榨汁杯", "price=直播间 99 元"], ["rundown.json", "script.md", "qa.md", "check-report.md"], "网络直播营销管理办法"],
+    ["short-drama", ["premise=面馆逆袭", "episodes=3", "paywallAt=3"], ["characters.json", "episodes.json", "script.md", "review.md", "check-report.md"], "付费卡点在第 3 集结尾"],
+    ["lesson-plan", ["topic=分数的初步认识"], ["objectives.json", "assessment.json", "lesson-plan.md", "exercises.json", "worksheet.md", "answer-key.md", "check-report.md"], "没有评价任务的目标"],
   ];
 
   it.each(cases)("%s runs end to end", (template, inputs, files, expected) => {
@@ -815,14 +815,16 @@ describe("popular templates on demo replies", () => {
     expect(fs.readFileSync(path.join(dir, "check-report.md"), "utf8")).toContain(expected);
   });
 
-  it("slides: the deck is self-contained and the worksheet hides the answers", () => {
+  it("the deck draws charts offline and the worksheet hides the answers", () => {
     const html = fs.readFileSync(path.join(root, "slides", "slides.html"), "utf8");
-    expect(html).toContain("把工作变成流程");
+    expect(html).toContain("把周报做成流程");
+    expect(html).toContain('class="chart"');
     expect(html).not.toMatch(/<script[^>]+src=|<link[^>]+href="http/);
     const worksheet = fs.readFileSync(path.join(root, "lesson-plan", "worksheet.md"), "utf8");
     const key = fs.readFileSync(path.join(root, "lesson-plan", "answer-key.md"), "utf8");
     expect(key).toContain("分母 5，分子 3");
     expect(worksheet).not.toContain("分母 5，分子 3");
+    expect(worksheet).toContain("课后作业");
   });
 });
 

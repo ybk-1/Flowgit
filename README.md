@@ -171,8 +171,8 @@ Every command accepts `-C <dir>` for the flow directory. `run` also takes `--inp
 | `ecommerce-listing` | `flowgit init -t ecommerce-listing` | 商品资料（人）→ 卖点 → 标题 → 主图和详情页、客服问答（模型，并行）→ 检查（脚本）/ product facts (person) → selling points → titles → detail page and Q&A (model, in parallel) → check (script) |
 | `slides` | `flowgit init -t slides` | 大纲 → 每页内容（模型）→ 网页幻灯片、可打印成 PDF（脚本）→ 检查（脚本）/ outline → slide content (model) → HTML deck that prints to PDF (script) → check (script) |
 | `live-selling` | `flowgit init -t live-selling` | 商品资料（人）→ 流程表 → 话术和弹幕问答（模型，并行）→ 检查（脚本）/ product facts (person) → rundown → script and chat Q&A (model, in parallel) → check (script) |
-| `short-drama` | `flowgit init -t short-drama` | 人物 → 分集大纲 → 逐集剧本（模型）→ 检查（脚本）/ characters → episode outline → scripts (model) → check (script) |
-| `lesson-plan` | `flowgit init -t lesson-plan` | 教学目标 → 教案和练习题（模型，并行）→ 练习单、答案和检查（脚本）/ objectives → plan and exercises (model, in parallel) → worksheet, answer key and check (script) |
+| `short-drama` | `flowgit init -t short-drama` | 设定和人物 → 分集节拍 → 逐集剧本 → 审读（模型）→ 检查（脚本）/ bible and characters → episode beats → scripts → review (model) → check (script) |
+| `lesson-plan` | `flowgit init -t lesson-plan` | 教学目标 → 评价任务 → 教案和分层练习（模型，并行）→ 练习单、答案和检查（脚本）/ objectives → assessment → plan and tiered exercises (model, in parallel) → worksheet, answer key and check (script) |
 
 图文模板按平台（小红书、公众号、博客）决定篇幅和语气，导出 `post.md` 和 `post.html`。说明见 [`packages/cli/templates/article/README.md`](packages/cli/templates/article/README.md)。客服 SOP 模板把你的资料整理成规程和测试用例，最后打包成 `skill/SKILL.md`，说明见 [`packages/cli/templates/support-sop/README.md`](packages/cli/templates/support-sop/README.md)。短视频见 [`packages/cli/templates/short-video/README.md`](packages/cli/templates/short-video/README.md)，周报入门见 [教程](docs/guide.md)。
 
