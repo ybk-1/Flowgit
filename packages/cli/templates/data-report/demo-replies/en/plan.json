@@ -1,0 +1,58 @@
+{
+  "charts": [
+    {
+      "id": "category-amount",
+      "type": "bar",
+      "x": "category",
+      "y": "amount",
+      "agg": "sum",
+      "filter": "",
+      "title": "Compare total revenue by category."
+    },
+    {
+      "id": "category-quantity",
+      "type": "bar",
+      "x": "category",
+      "y": "quantity",
+      "agg": "sum",
+      "filter": "",
+      "title": "Compare total units sold by category."
+    },
+    {
+      "id": "region-amount",
+      "type": "bar",
+      "x": "region",
+      "y": "amount",
+      "agg": "sum",
+      "filter": "",
+      "title": "Compare total revenue by region."
+    },
+    {
+      "id": "weekly-amount",
+      "type": "line",
+      "x": "date",
+      "y": "amount",
+      "agg": "sum",
+      "filter": "",
+      "title": "Show how weekly total revenue changed through the quarter."
+    },
+    {
+      "id": "category-median",
+      "type": "table",
+      "x": "category",
+      "y": "amount",
+      "agg": "median",
+      "filter": "",
+      "title": "List the median amount for each category so a reader can look up the exact value."
+    },
+    {
+      "id": "east-category",
+      "type": "bar",
+      "x": "category",
+      "y": "amount",
+      "agg": "sum",
+      "filter": "region=华东",
+      "title": "Compare category revenue for 华东 only."
+    }
+  ]
+}

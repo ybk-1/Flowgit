@@ -47,7 +47,7 @@ try {
       check(files.includes("dist/index.js") && files.includes("public/index.html") && files.includes("public/app.js"), `${name}: ships dist and the board page`);
     } else {
       check(files.includes("dist/index.js"), `${name}: ships the CLI entry`);
-      for (const t of ["short-video", "weekly-report", "article", "support-sop", "job-application", "research-report", "ecommerce-listing", "slides", "live-selling", "short-drama", "lesson-plan"]) check(files.includes(`templates/${t}/flow.json`), `${name}: ships the ${t} template`);
+      for (const t of ["short-video", "weekly-report", "article", "support-sop", "job-application", "research-report", "ecommerce-listing", "slides", "live-selling", "short-drama", "lesson-plan", "data-report"]) check(files.includes(`templates/${t}/flow.json`), `${name}: ships the ${t} template`);
     }
   }
   // pnpm may report the tarball path as absolute or relative to the destination.

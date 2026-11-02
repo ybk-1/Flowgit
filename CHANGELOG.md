@@ -92,6 +92,7 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 - `live-selling`：直播带货脚本。商品资料（人）→ 七段流程表（留人、痛点、塑品、信任、价格、逼单、返场）→ 逐段话术和弹幕问答（并行）→ 按《网络直播营销管理办法》检查虚构的销量、库存和数字，以及绝对化、医疗用语和价格比较。
 - `short-drama`：竖屏微短剧。设定和人物 → 分集节拍（钩子、压抑、爆发、悬念，付费卡点）→ 逐集剧本 → 按广电总局管理提示和创作标准审读 → 检查集数、估算时长、旁白开头、悬念和付费卡点。
 - `lesson-plan`：老师备课，按逆向设计。教学目标（布鲁姆层级）→ 评价任务 → 教案和分层练习（并行）→ 学生练习单和答案，并检查教学评一致性、时间和“双减”作业时长。
+- `data-report`：数据报告。表格（人，示例是虚构的销售 CSV）→ 列画像（类型、缺失、唯一值、最小/最大/平均/中位数、日期范围）→ 模型只写柱状、折线或表格的规格，不写代码 → 脚本汇总并手写浅色深色都能看的 SVG → 结论在前、每条发现都引用图 → 合成报告，正文里对不上画像或汇总的数字只警告、不拦截。
 - `examples/agent-page`：用 agent 做一页介绍网页（只在仓库里）。
 - `short-video` (default): script → storyboard → assets → edit → export. FFmpeg renders a vertical video with zoom, blurred fill, gradient text cards, a title, transitions, background music and voiceover (clips follow the voice); the output language is Chinese or English.
 - `weekly-report`: a starter that turns rough notes (person) into a draft (model) and checks it (script); the [guide](docs/guide.md) builds it step by step.
@@ -104,6 +105,7 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 - `live-selling`: a live-selling stream script. Product facts (person) → a seven-part rundown (hook, pain, demo, trust, price, close, recap) → segment script and chat Q&A (in parallel) → checks for invented sales, stock and numbers under China's live-stream marketing rules, plus absolute and medical claims and price comparisons.
 - `short-drama`: a vertical micro-drama. Story bible and characters → episode beats (hook, suppression, payoff, cliffhanger, paywall) → scripts → a read against NRTA guidance and craft standards → checks on count, length, voice-over openings, cliffhangers and the paywall.
 - `lesson-plan`: lesson prep with backward design. Objectives (Bloom levels) → assessment tasks → lesson plan and tiered exercises (in parallel) → a student worksheet and answer key, with checks on alignment, timing and homework load under the double-reduction rules.
+- `data-report`: a data report. A table (person; the sample is a fictional sales CSV) → a column profile (type, missing, distinct, min/max/mean/median, date range) → the model writes a bar, line or table spec and no code → a script aggregates and draws SVG that stays readable in light and dark → the answer comes first and each finding cites a chart → the report is assembled, and a number that is in neither the profile nor the aggregates only warns, it does not block.
 - `examples/agent-page`: a one-page explainer made by an agent (repo only).
 
 ### 项目 / Project

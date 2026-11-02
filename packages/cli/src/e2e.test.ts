@@ -71,12 +71,12 @@ describe("flowgit CLI with the short-video template", () => {
     expect(list.status).toBe(0);
     const templates = JSON.parse(list.stdout) as { id: string; default: boolean; stages: { executor: string }[] }[];
     expect(templates[0]).toMatchObject({ id: "short-video", default: true });
-    expect(templates.map((t) => t.id)).toEqual(expect.arrayContaining(["weekly-report", "article", "support-sop", "job-application", "research-report", "ecommerce-listing", "slides", "live-selling", "short-drama", "lesson-plan"]));
+    expect(templates.map((t) => t.id)).toEqual(expect.arrayContaining(["weekly-report", "article", "support-sop", "job-application", "research-report", "ecommerce-listing", "slides", "live-selling", "short-drama", "lesson-plan", "data-report"]));
     expect(spawnSync(process.execPath, [cli, "templates"], { encoding: "utf8", env: { ...process.env, NO_COLOR: "1" } }).stdout).toMatch(/weekly-report\s+周报（入门示例）\s+随手记 human → 周报草稿 llm → 检查 script/);
 
     const wrong = spawnSync(process.execPath, [cli, "init", path.join(work, "nope"), "-t", "no-such-template"], { encoding: "utf8" });
     expect(wrong.status).toBe(1);
-    expect(wrong.stderr).toContain("bundled templates: short-video, article, ecommerce-listing, job-application, lesson-plan, live-selling, research-report, short-drama, slides, support-sop, weekly-report");
+    expect(wrong.stderr).toContain("bundled templates: short-video, article, data-report, ecommerce-listing, job-application, lesson-plan, live-selling, research-report, short-drama, slides, support-sop, weekly-report");
   });
 
   it("shows a short, quoted path when the new flow is below the current folder", () => {
@@ -825,6 +825,96 @@ describe("popular templates on demo replies", () => {
     expect(key).toContain("分母 5，分子 3");
     expect(worksheet).not.toContain("分母 5，分子 3");
     expect(worksheet).toContain("课后作业");
+  });
+});
+
+describe("data-report template", () => {
+  let root: string;
+
+  function runIn(dir: string, args: string[], env: Record<string, string> = {}) {
+    const r = spawnSync(process.execPath, [cli, "-C", dir, ...args], {
+      encoding: "utf8",
+      env: { ...process.env, NO_COLOR: "1", ...env },
+    });
+    return { code: r.status, out: `${r.stdout}${r.stderr}` };
+  }
+
+  beforeAll(() => {
+    if (!fs.existsSync(cli)) throw new Error("Build the CLI first: pnpm -r run build");
+    root = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-data-report-"));
+  });
+
+  afterAll(() => {
+    if (root) fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  function init(dir: string, inputs: string[]) {
+    const created = spawnSync(process.execPath, [cli, "init", dir, "-t", "data-report"], { encoding: "utf8" });
+    expect(created.status, `${created.stdout}${created.stderr}`).toBe(0);
+    expect(runIn(dir, ["inputs", "set", ...inputs]).code).toBe(0);
+  }
+
+  it("runs in Chinese on the canned replies and the check matches", () => {
+    const dir = path.join(root, "zh");
+    init(dir, ["question=哪个类目和地区的销售额最高，下一步该补货还是促销？"]);
+    const ran = runIn(dir, ["run", "all"], { FLOWGIT_LLM_MOCK_DIR: path.join(dir, "demo-replies", "zh") });
+    expect(ran.code, ran.out).toBe(0);
+    for (const file of ["profile.json", "charts.json", "aggregates.json", "analysis.md", "report.md", "report.html", "check-report.md", "charts/category-amount.svg"]) {
+      expect(fs.existsSync(path.join(dir, file)), file).toBe(true);
+    }
+    const profile = JSON.parse(fs.readFileSync(path.join(dir, "profile.json"), "utf8")) as { rowCount: number; columns: { name: string; missing: number; mean: number; median: number }[] };
+    expect(profile.rowCount).toBe(208);
+    const amount = profile.columns.find((col) => col.name === "amount");
+    expect(amount).toMatchObject({ missing: 3, mean: 623.53, median: 543 });
+    const aggregates = JSON.parse(fs.readFileSync(path.join(dir, "aggregates.json"), "utf8")) as { charts: { id: string; points: { x: string; y: number }[] }[] };
+    expect(aggregates.charts.map((chart) => chart.id)).toEqual(["category-amount", "category-quantity", "region-amount", "weekly-amount", "category-median", "east-category"]);
+    expect(aggregates.charts[0]?.points[0]).toEqual({ x: "茶饮", y: 52860 });
+    const check = fs.readFileSync(path.join(dir, "check-report.md"), "utf8");
+    expect(check).toContain("## 对不上的数字\n\n没有。");
+    expect(check).toContain("## 没被引用的图\n\n没有。");
+    expect(check).toContain("## 开头不是结论\n\n没有。");
+    const html = fs.readFileSync(path.join(dir, "report.html"), "utf8");
+    expect(html).toContain("<svg");
+    expect(html).toContain("prefers-color-scheme: dark");
+    expect(html).toContain("哪个类目和地区的销售额最高");
+    expect(html).not.toMatch(/<script[^>]+src=|<link[^>]+href="http/);
+    const svg = fs.readFileSync(path.join(dir, "charts", "category-amount.svg"), "utf8");
+    expect(svg).toContain("52860");
+    expect(svg).toContain("prefers-color-scheme: dark");
+
+    fs.appendFileSync(path.join(dir, "analysis.md"), "\n多出来的数 999999。\n");
+    const warned = runIn(dir, ["run", "report"]);
+    expect(warned.code, warned.out).toBe(0);
+    const again = fs.readFileSync(path.join(dir, "check-report.md"), "utf8");
+    expect(again).toContain("- 999999");
+    expect(again).not.toContain("## 对不上的数字\n\n没有。");
+
+    fs.writeFileSync(path.join(dir, "analysis.md"), "\n");
+    const broken = runIn(dir, ["run", "report"]);
+    expect(broken.code).toBe(1);
+    expect(broken.out).toContain("analysis.md 是空的");
+  });
+
+  it("runs in English on the canned replies and the check matches", () => {
+    const dir = path.join(root, "en");
+    init(dir, [
+      "question=Which category and region brought in the most revenue, and should we restock or run a discount?",
+      "audience=regional sales managers",
+      "language=en",
+    ]);
+    const ran = runIn(dir, ["run", "all"], { FLOWGIT_LLM_MOCK_DIR: path.join(dir, "demo-replies", "en") });
+    expect(ran.code, ran.out).toBe(0);
+    const check = fs.readFileSync(path.join(dir, "check-report.md"), "utf8");
+    expect(check).toContain("## Numbers that do not match\n\nNone.");
+    expect(check).toContain("## Charts the analysis never cites\n\nNone.");
+    expect(check).toContain("## Answer is not first\n\nNone.");
+    const report = fs.readFileSync(path.join(dir, "report.md"), "utf8");
+    expect(report).toContain("52860");
+    expect(report).toContain("For: regional sales managers");
+    const html = fs.readFileSync(path.join(dir, "report.html"), "utf8");
+    expect(html).toContain('lang="en"');
+    expect(html).toContain("<svg");
+    expect(html).not.toMatch(/<script[^>]+src=|<link[^>]+href="http/);
   });
 });
 
