@@ -199,7 +199,12 @@ describe("read-only board", () => {
     const flowFile = await httpGet(server.port, "/api/file?path=flow.json", authed());
     expect(flowFile.status).toBe(404);
     const prompt = await httpGet(server.port, "/api/file?path=prompts/script.md", authed());
-    expect(prompt.status).toBe(404);
+    expect(prompt.status).toBe(200);
+    expect(prompt.body.length).toBeGreaterThan(0);
+    const missingPrompt = await httpGet(server.port, "/api/file?path=prompts/missing.md", authed());
+    expect(missingPrompt.status).toBe(404);
+    const stray = await httpGet(server.port, "/api/file?path=not-a-prompt.md", authed());
+    expect(stray.status).toBe(404);
     const runJson = await httpGet(server.port, "/api/file?path=runs/script/1/run.json", authed());
     expect(runJson.status).toBe(404);
   });
@@ -288,8 +293,14 @@ describe("read-only board", () => {
     expect(dir.status).toBe(403);
     const inside = await httpCall(server.port, "PUT", "/api/file?path=assets/cat.txt", "nope", authed());
     expect(inside.status).toBe(403);
-    const prompt = await httpCall(server.port, "PUT", "/api/file?path=prompts/script.md", "nope", authed());
-    expect(prompt.status).toBe(403);
+    const promptFile = path.join(flowDir, "prompts", "script.md");
+    const promptBefore = fs.readFileSync(promptFile);
+    const prompt = await httpCall(server.port, "PUT", "/api/file?path=prompts/script.md", "new prompt\n", authed());
+    expect(prompt.status).toBe(200);
+    expect(fs.readFileSync(promptFile, "utf8")).toBe("new prompt\n");
+    fs.writeFileSync(promptFile, promptBefore);
+    const stray = await httpCall(server.port, "PUT", "/api/file?path=not-a-prompt.md", "nope", authed());
+    expect(stray.status).toBe(403);
   });
 
   it("returns 400 for invalid JSON and does not save it", async () => {
@@ -755,6 +766,12 @@ describe("run and inputs on the board", () => {
       });
       expect(deleteDuring.status).toBe(409);
       expect(deleteDuring.body).toMatch(/正在运行/);
+      const editStage = await httpCall(board.port, "PUT", "/api/stage", JSON.stringify({ id: "slow", name: "改" }), headers);
+      expect(editStage.status).toBe(409);
+      expect(editStage.body).toMatch(/结束后再改阶段/);
+      const editFlow = await httpCall(board.port, "PUT", "/api/flow", JSON.stringify({ name: "改" }), headers);
+      expect(editFlow.status).toBe(409);
+      expect(editFlow.body).toMatch(/结束后再改阶段/);
       expect(fs.readFileSync(flowFile)).toEqual(beforeFlow);
       fs.writeFileSync(path.join(work, "go"), "1");
       const done = await first;
@@ -1212,6 +1229,93 @@ describe("add and remove stages on the board", () => {
       expect(saved.stages.find((stage) => stage.id === "draft")).toBeUndefined();
       expect(fs.readFileSync(path.join(work, "draft.md"), "utf8")).toBe("keep draft\n");
       expect(fs.readFileSync(runFile, "utf8")).toBe("{}\n");
+    } finally {
+      await board.close();
+      fs.rmSync(work, { recursive: true, force: true });
+    }
+  });
+
+  it("PUT /api/stage and PUT /api/flow succeed, reject a cycle with 400, and keep flow.md as flow.md", async () => {
+    const work = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-web-edit-"));
+    const mdFile = path.join(work, "flow.md");
+    fs.mkdirSync(path.join(work, "prompts"));
+    fs.writeFileSync(path.join(work, "prompts", "draft.md"), "hello {{inputs.topic}}\n");
+    const flow: Flow = {
+      format: "flowgit",
+      version: "0.1",
+      name: "markdown",
+      description: "keep",
+      inputs: { topic: { type: "string", required: true } },
+      stages: [
+        human("notes", "笔记") as Flow["stages"][number],
+        {
+          id: "draft",
+          name: "草稿",
+          inputs: ["notes"],
+          executor: { type: "llm", prompt: "prompts/draft.md", effort: "low" },
+          outputs: [{ type: "text/markdown", path: "draft.md" }],
+        },
+      ],
+    };
+    fs.writeFileSync(mdFile, renderFlowMd(flow));
+    const board = await startBoard({ dir: work, port: 0, open: false });
+    const headers = { "X-Flowgit-Token": board.token, "Content-Type": "application/json" };
+    try {
+      const before = fs.readFileSync(mdFile);
+      const bad = await httpCall(board.port, "PUT", "/api/stage", JSON.stringify({ id: "notes", inputs: ["draft"] }), headers);
+      expect(bad.status).toBe(400);
+      expect(bad.body).toContain("会形成环");
+      expect(bad.body).toContain("would cycle");
+      const listed = JSON.parse(bad.body) as { issues: Array<{ message: string }> };
+      expect(listed.issues.length).toBeGreaterThan(0);
+      expect(fs.readFileSync(mdFile)).toEqual(before);
+      expect(fs.existsSync(path.join(work, "flow.json"))).toBe(false);
+
+      const renamed = await httpCall(
+        board.port,
+        "PUT",
+        "/api/stage",
+        JSON.stringify({ id: "draft", name: "润色", model: "glm/glm-5.3", retries: 1 }),
+        headers,
+      );
+      expect(renamed.status, renamed.body).toBe(200);
+      const linked = await httpCall(board.port, "PUT", "/api/stage", JSON.stringify({ id: "draft", inputs: ["notes"] }), headers);
+      expect(linked.status, linked.body).toBe(200);
+      const meta = await httpCall(
+        board.port,
+        "PUT",
+        "/api/flow",
+        JSON.stringify({
+          name: "改过的流程",
+          concurrency: 3,
+          inputs: {
+            topic: { type: "string", required: true },
+            tone: { type: "string", enum: ["calm", "bold"], default: "calm", description: "语气" },
+          },
+        }),
+        headers,
+      );
+      expect(meta.status, meta.body).toBe(200);
+      const invalid = await httpCall(board.port, "PUT", "/api/flow", JSON.stringify({ name: "" }), headers);
+      expect(invalid.status).toBe(400);
+      expect(invalid.body).toContain("不能是空的");
+      expect(fs.existsSync(path.join(work, "flow.json"))).toBe(false);
+      const text = fs.readFileSync(mdFile, "utf8");
+      const saved = parseFlowMd(text) as unknown as Flow;
+      expect(text.startsWith("---")).toBe(true);
+      expect(saved.name).toBe("改过的流程");
+      expect(saved.description).toBe("keep");
+      expect(saved.concurrency).toBe(3);
+      expect(saved.inputs?.tone).toMatchObject({ type: "string", enum: ["calm", "bold"], default: "calm" });
+      expect(saved.stages[1]).toMatchObject({
+        name: "润色",
+        inputs: ["notes"],
+        executor: { type: "llm", prompt: "prompts/draft.md", effort: "low", model: "glm/glm-5.3", retries: 1 },
+      });
+      expect(loadFlow(work).file).toBe(mdFile);
+
+      const missing = await httpCall(board.port, "PUT", "/api/stage", JSON.stringify({ id: "nope", name: "x" }), headers);
+      expect(missing.status).toBe(404);
     } finally {
       await board.close();
       fs.rmSync(work, { recursive: true, force: true });

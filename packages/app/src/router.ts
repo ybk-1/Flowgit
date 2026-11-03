@@ -1,5 +1,8 @@
 import {
   addStage,
+  editStage as applyStageEdit,
+  EditError,
+  stagePatchFromBody,
   diffRuns,
   findFlowFile,
   flowLog,
@@ -8,6 +11,7 @@ import {
   host,
   HumanInputNeededError,
   isDirOutput,
+  isEditablePrompt,
   listFiles,
   listRuns,
   loadFlow,
@@ -41,7 +45,7 @@ import {
   type Stage,
 } from "@flowgit/core";
 // The same view models the local board serves; these two modules only use core.
-import { flowBoard } from "../../web/src/routes/flow.js";
+import { flowBoard, putFlow } from "../../web/src/routes/flow.js";
 import { flowGraph } from "../../web/src/routes/graph.js";
 import { EventHub } from "./events.js";
 import { COMPUTER_EXECUTORS } from "./handoff.js";
@@ -123,8 +127,9 @@ function matchesOutput(output: Output, rel: string): boolean {
   return rel === base || (isDirOutput(output) && rel.startsWith(`${base}/`));
 }
 
-/** Stage outputs (with files inside directory outputs) and runs/<stage>/<n>/outputs/. */
+/** Stage outputs (with files inside directory outputs), prompt files, and runs/<stage>/<n>/outputs/. */
 function isAllowed(flow: Flow, rel: string): boolean {
+  if (isEditablePrompt(flow, rel)) return true;
   if (flow.stages.some((stage) => stage.outputs.some((output) => matchesOutput(output, rel)))) return true;
   const snap = /^runs\/([^/]+)\/(\d+)\/outputs(?:\/.*)?$/.exec(rel);
   return Boolean(snap && flow.stages.some((stage) => stage.id === snap[1]));
@@ -251,6 +256,11 @@ export class BrowserBoard {
     return this.running ? json(409, { error: "正在运行，结束后再保存 / a run is in progress; save again when it finishes" }) : null;
   }
 
+  /** Same wording as the local board's stage routes. */
+  private editBusy(): Response | null {
+    return this.running ? json(409, { error: "正在运行，结束后再改阶段 / a run is in progress; change stages when it finishes" }) : null;
+  }
+
   private async route(method: string, url: URL, init: RequestInit): Promise<Response> {
     const dir = this.dir;
     const q = url.searchParams;
@@ -305,8 +315,12 @@ export class BrowserBoard {
         return this.trust(await jsonBody(init));
       case "POST /api/stage":
         return this.busy() ?? this.addStage(await jsonBody(init));
+      case "PUT /api/stage":
+        return this.editBusy() ?? this.editStage(await jsonBody(init));
       case "DELETE /api/stage":
         return this.busy() ?? this.removeStage(q.get("id")?.trim() ?? "", q.get("force") === "1");
+      case "PUT /api/flow":
+        return this.editBusy() ?? this.editFlow(await jsonBody(init));
       default:
         return json(404, { error: "没有这个接口 / not found" });
     }
@@ -358,6 +372,14 @@ export class BrowserBoard {
     const rel = cleanRel(raw);
     if (!rel) return json(400, { error: "路径不合法 / invalid path" });
     const flow = loadFlow(this.dir).flow;
+    if (isEditablePrompt(flow, rel)) {
+      const abs = host().path.join(this.dir, rel);
+      if (host().exists(abs) && host().stat(abs).isDirectory()) return json(400, { error: "路径是文件夹 / path is a directory" });
+      host().mkdir(host().path.dirname(abs), { recursive: true });
+      host().writeFile(abs, bytes);
+      this.changed();
+      return json(200, { ok: true, path: rel });
+    }
     const output = flow.stages.flatMap((stage) => stage.outputs).find((item) => !isDirOutput(item) && outputRel(item) === rel);
     const abs = host().path.join(this.dir, rel);
     if (!output || (host().exists(abs) && host().stat(abs).isDirectory())) {
@@ -591,5 +613,35 @@ export class BrowserBoard {
     writeFlowFile(file, next);
     this.changed();
     return json(200, { ok: true, id });
+  }
+
+  private editStage(body: Record<string, unknown>): Response {
+    let id: string;
+    let patch;
+    try {
+      ({ id, patch } = stagePatchFromBody(body));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return json(err instanceof EditError ? err.status : 400, { error: message, issues: [{ path: "/", message }] });
+    }
+    const { file, flow } = readFlowSource(this.dir);
+    let next: Flow;
+    try {
+      next = applyStageEdit(flow, id, patch);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return json(err instanceof EditError ? err.status : 400, { error: message, issues: [{ path: "/", message }] });
+    }
+    const errors = validateFlow(next, { dir: this.dir }).filter((issue) => issue.level === "error");
+    if (errors.length) return rejectIssues(errors);
+    writeFlowFile(file, next);
+    this.changed();
+    return json(200, { ok: true, id });
+  }
+
+  private editFlow(body: Record<string, unknown>): Response {
+    const result = putFlow(this.dir, body);
+    if (result.status === 200) this.changed();
+    return json(result.status, result.body);
   }
 }

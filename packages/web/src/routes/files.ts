@@ -1,6 +1,6 @@
 import { publishFlowChanged } from "./events.js";
 import { type HandlerCtx, HttpError, normalizePosix, outside, pathProblem, placeInside, realRoot, sendJson, sendStream } from "./shared.js";
-import { type Flow, isDirOutput, listFiles, loadFlow, type Output, outputRel } from "@flowgit/core";
+import { type Flow, isDirOutput, isEditablePrompt, listFiles, loadFlow, type Output, outputRel } from "@flowgit/core";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import http from "node:http";
@@ -139,7 +139,54 @@ export async function replaceFile(tmp: string, dest: string): Promise<void> {
   await fs.promises.rm(backup, { force: true });
 }
 
+/** A prompt file the editor may save: one a stage names, or `prompts/<file>.md`. */
+export function locatePrompt(
+  dir: string,
+  rawPath: string | null,
+): { ok: true; abs: string; rel: string } | { ok: false; status: 400 | 403 } {
+  if (rawPath === null || pathProblem(rawPath)) return { ok: false, status: 400 };
+  const requested = normalizePosix(rawPath);
+  if (!requested || pathProblem(requested)) return { ok: false, status: 400 };
+  let flow: Flow;
+  try {
+    flow = loadFlow(dir).flow;
+  } catch {
+    return { ok: false, status: 403 };
+  }
+  if (!isEditablePrompt(flow, requested)) return { ok: false, status: 403 };
+  const root = realRoot(dir);
+  if (!root) return { ok: false, status: 400 };
+  const abs = placeInside(root, path.resolve(root, requested));
+  if (!abs) return { ok: false, status: 400 };
+  return { ok: true, abs, rel: requested };
+}
+
 export async function putFlowFile(req: http.IncomingMessage, res: http.ServerResponse, ctx: HandlerCtx, rawPath: string | null): Promise<void> {
+  const prompt = locatePrompt(ctx.dir, rawPath);
+  if (prompt.ok) {
+    if (fs.existsSync(prompt.abs) && fs.statSync(prompt.abs).isDirectory()) {
+      req.resume();
+      sendJson(res, 400, { error: "路径是文件夹 / path is a directory" });
+      return;
+    }
+    await fs.promises.mkdir(path.dirname(prompt.abs), { recursive: true });
+    const tmp = tempPath(path.dirname(prompt.abs));
+    try {
+      await streamToFile(req, tmp);
+      await replaceFile(tmp, prompt.abs);
+      publishFlowChanged(ctx);
+      sendJson(res, 200, { ok: true, path: prompt.rel });
+    } catch (err) {
+      await fs.promises.rm(tmp, { force: true });
+      throw err;
+    }
+    return;
+  }
+  if (prompt.status === 400) {
+    req.resume();
+    sendJson(res, 400, { error: "路径不合法 / invalid path" });
+    return;
+  }
   const target = resolveDeclaredFile(ctx.dir, rawPath);
   if (!target.ok) {
     req.resume();
@@ -291,10 +338,11 @@ export function locateFile(dir: string, rawPath: string | null): LocatedFile | {
   return { ok: true, flow, abs: real, rel, stat: fs.statSync(real) };
 }
 
-/** Stage outputs (including files inside a directory output) and runs/<stage>/<n>/outputs/. */
+/** Stage outputs (including files inside a directory output), prompt files, and runs/<stage>/<n>/outputs/. */
 export function isAllowed(flow: Flow, rel: string): boolean {
   const norm = normalizePosix(rel);
   if (!norm || norm.split("/").some((part) => part === "" || part === "." || part === "..")) return false;
+  if (isEditablePrompt(flow, norm)) return true;
   for (const stage of flow.stages) {
     for (const output of stage.outputs) {
       if (matchesOutput(output, norm)) return true;

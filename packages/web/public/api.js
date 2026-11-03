@@ -114,6 +114,24 @@ export function deleteStage(query) {
   return request(`/api/stage?${query}`, { method: "DELETE", headers: headers(), cache: "no-store" });
 }
 
+export function putStage(payload) {
+  return request("/api/stage", {
+    method: "PUT",
+    headers: { ...headers(), "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+    cache: "no-store",
+  });
+}
+
+export function putFlow(payload) {
+  return request("/api/flow", {
+    method: "PUT",
+    headers: { ...headers(), "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+    cache: "no-store",
+  });
+}
+
 export function uploadFile(stageId, name, file) {
   return request(`/api/upload?stage=${encodeURIComponent(stageId)}&name=${encodeURIComponent(name)}`, {
     method: "POST",

@@ -340,3 +340,76 @@ test("连接本机看板：允许的网页能连上，其他网页连不上 / co
     }
   }
 });
+
+test("网页里改流程图：加依赖、改提示词、加 enum，环被拒绝 / in the web app: add an edge, edit a prompt, add an enum, and a cycle is refused", async ({ page }) => {
+  await page.goto("./");
+  await page.locator('li[data-template="weekly-report"] button').click();
+  await expect(page.locator("#flow-name")).toHaveText("周报（入门示例）");
+  await page.locator("#view-graph").click();
+  await page.locator('button[data-style="flat"]').click();
+  await page.locator("#graph-edit").click();
+
+  const drag = async (fromId: string, toId: string) => {
+    const from = page.locator(`.flow-node[data-id="${fromId}"]`);
+    const to = page.locator(`.flow-node[data-id="${toId}"]`);
+    await from.scrollIntoViewIfNeeded();
+    const a = await from.boundingBox();
+    const b = await to.boundingBox();
+    if (!a || !b) throw new Error(`missing box ${fromId} -> ${toId}`);
+    await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2, { steps: 18 });
+    await page.mouse.up();
+  };
+  await drag("notes", "check");
+  await expect(page.locator("#graph-edit-status")).toContainText("已加上依赖");
+
+  await page.locator('.flow-node[data-id="draft"]').click();
+  const prompt = page.locator("#edit-prompt");
+  await prompt.fill("网页改过 {{");
+  await page.locator(".prompt-option", { hasText: "{{inputs.name}}" }).click();
+  await expect(prompt).toHaveValue("网页改过 {{inputs.name}}");
+  await page.locator("#edit-save").click();
+  await expect(page.locator("#edit-status")).toContainText("已保存");
+
+  await page.locator("#edit-flow").click();
+  await page.locator("#edit-add-input").click();
+  const row = page.locator("[data-input-row]").last();
+  await row.locator("[data-field=name]").fill("tone");
+  await row.locator("[data-field=enum]").fill("calm, bold");
+  await row.locator("[data-field=default]").fill("calm");
+  await page.locator("#edit-flow-save").click();
+  await expect(page.locator("#edit-status")).toContainText("已保存");
+
+  await page.locator("#panel-close").click();
+  await drag("check", "notes");
+  await expect(page.locator("#graph-edit-status")).toContainText("会形成环");
+
+  const stored = await page.evaluate(async () => {
+    const root = await (await (await navigator.storage.getDirectory()).getDirectoryHandle("flows")).getDirectoryHandle("weekly-report");
+    const flow = JSON.parse(await (await (await root.getFileHandle("flow.json")).getFile()).text()) as {
+      inputs?: Record<string, { enum?: string[] }>;
+      stages: Array<{ id: string; inputs?: string[] }>;
+    };
+    const prompts = await root.getDirectoryHandle("prompts");
+    const draft = await (await (await prompts.getFileHandle("draft.md")).getFile()).text();
+    return { flow, draft };
+  });
+  expect(stored.draft).toBe("网页改过 {{inputs.name}}");
+  expect(stored.flow.inputs?.tone?.enum).toEqual(["calm", "bold"]);
+  expect(stored.flow.stages.find((stage) => stage.id === "check")?.inputs).toEqual(["draft", "notes"]);
+  expect(stored.flow.stages.find((stage) => stage.id === "notes")?.inputs).toBeUndefined();
+
+  const rejected = await page.evaluate(async () => {
+    const transport = (globalThis as { flowgitTransport?: { fetch(url: string, init?: RequestInit): Promise<Response> } }).flowgitTransport;
+    if (!transport) throw new Error("no transport");
+    const res = await transport.fetch("/api/flow", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "" }),
+    });
+    return { status: res.status, body: await res.json() };
+  });
+  expect(rejected.status).toBe(400);
+  expect(JSON.stringify(rejected.body)).toContain("不能是空的");
+});

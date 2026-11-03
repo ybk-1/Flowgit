@@ -455,6 +455,12 @@ export const S = {
   graphError: "",
   graphTicket: 0,
   selectedId: "",
+  /** Graph edit mode: drag dependencies, and click a node for the stage form. */
+  editing: false,
+  /** The edge selected for Delete, `{ from, to }`, or null. */
+  selectedEdge: null,
+  /** Bilingual status from the last edit, shown with I18N.raw. */
+  editMessage: "",
   panelMode: "",
   returnToStage: null,
   usageByStage: new Map(),
