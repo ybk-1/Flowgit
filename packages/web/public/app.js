@@ -887,8 +887,7 @@ function openStage(stage) {
   if (!sameStage) shownBadge.delete(`panel:${stage.id || ""}`);
   paintBadge(badge, stage.id || "", "panel", stageLabel(stage));
   const version = el("p", "version");
-  if (stage.latest) version.textContent = `v${stage.latest.n} · ${formatTime(stage.latest.time)}`;
-  else I18N.text(version, "stage.noRuns");
+  paintVersion(version, stage);
 
   const actions = el("div", "stage-actions");
   const history = document.createElement("button");
@@ -943,6 +942,20 @@ function openStage(stage) {
   syncRunButtons();
 }
 
+/**
+ * The version line: the latest run, or, after a restore, the older run the files on disk are
+ * (`current`, from the server), with the latest named so the restore is plain to see.
+ */
+function paintVersion(version, stage) {
+  if (!stage.latest) {
+    I18N.text(version, "stage.noRuns");
+  } else if (typeof stage.current === "number" && stage.current !== stage.latest.n) {
+    I18N.text(version, "stage.restored", { n: stage.current, latest: stage.latest.n });
+  } else {
+    version.textContent = `v${stage.latest.n} · ${formatTime(stage.latest.time)}`;
+  }
+}
+
 function humanDir(stage) {
   const dirs = (stage.outputs ?? []).filter((output) => output.directory);
   return dirs.length === 1 ? dirs[0] : null;
@@ -968,11 +981,7 @@ function renderCard(stage) {
   if (stage.state === "edited") card.append(elt("p", "edit-note", "editNote"));
 
   const version = el("p", "version");
-  if (stage.latest) {
-    version.textContent = `v${stage.latest.n} · ${formatTime(stage.latest.time)}`;
-  } else {
-    I18N.text(version, "stage.noRuns");
-  }
+  paintVersion(version, stage);
   card.append(version, elt("p", "runs", "stage.runs", { count: stage.runs ?? 0 }), el("p", "usage", stageUsageLine(stage.id)));
   const history = document.createElement("button");
   history.type = "button";
@@ -1396,7 +1405,7 @@ function renderHistory(stage, runs, note) {
     showPanel(nodes, back);
     return;
   }
-  const deck = renderDeck(stage, runs);
+  const deck = renderDeck(stage, runs, currentRunOf(stage));
   nodes.push(
     elt("p", "history-hint", "history.hint"),
     deck.root,
@@ -1408,6 +1417,12 @@ function renderHistory(stage, runs, note) {
   deck.start();
 }
 
+/** The run the files on disk are, from the newest board data: a restore has just refreshed it. */
+function currentRunOf(stage) {
+  const fresh = boardStages.find((item) => item.id === stage.id) || stage;
+  return typeof fresh.current === "number" ? fresh.current : null;
+}
+
 /** The version each stage's history showed in front last, so reopening it keeps that one there. */
 const deckFront = new Map();
 
@@ -1417,15 +1432,16 @@ function clockTime(iso) {
 }
 
 /** [key, vars] for a version's one-line summary, so it can follow the language switch. */
-function versionHead(run) {
-  return ["history.head", { n: run.n, result: resultLabel(run), time: formatTime(run.finishedAt), who: executorLabel(run) }];
+function versionHead(run, current) {
+  const key = run.n === current ? "history.headCurrent" : "history.head";
+  return [key, { n: run.n, result: resultLabel(run), time: formatTime(run.finishedAt), who: executorLabel(run) }];
 }
 
 /**
  * Versions as discs, oldest on the left. Drag or flick to spin through them, or use the arrow
  * keys, Home and End; the one in front shows its details and actions below the deck.
  */
-function renderDeck(stage, runs) {
+function renderDeck(stage, runs, current) {
   const root = el("div", "deck");
   root.tabIndex = 0;
   root.setAttribute("role", "listbox");
@@ -1435,12 +1451,18 @@ function renderDeck(stage, runs) {
     disc.id = `disc-${stage.id}-${run.n}`;
     disc.setAttribute("role", "option");
     disc.setAttribute("aria-selected", "false");
-    I18N.attr(disc, "aria-label", ...versionHead(run));
+    I18N.attr(disc, "aria-label", ...versionHead(run, current));
     disc.dataset.i = String(i);
     disc.dataset.status = run.status || "";
     if (run.executor === "manual") disc.dataset.kind = "manual";
     const who = run.executor === "manual" ? elt("span", "who", "history.byHand") : el("span", "who", runDetail(run) || run.executor || "");
     disc.append(el("span", "when", clockTime(run.finishedAt)), el("span", "v", `v${run.n}`), who);
+    if (run.n === current) {
+      disc.dataset.current = "";
+      const now = elt("span", "now", "history.now");
+      now.setAttribute("aria-hidden", "true");
+      disc.append(now);
+    }
     root.append(disc);
     return disc;
   });
@@ -1472,7 +1494,7 @@ function renderDeck(stage, runs) {
       onSettle: (i) => {
         deckFront.set(stage.id, runs[i].n);
         root.setAttribute("aria-activedescendant", discs[i].id);
-        renderFront(stage, runs[i], front);
+        renderFront(stage, runs[i], front, current);
       },
     });
     root.addEventListener("click", (event) => {
@@ -1490,8 +1512,8 @@ function renderDeck(stage, runs) {
   return { root, front, start };
 }
 
-function renderFront(stage, run, front) {
-  const nodes = [elt("p", "version-head", ...versionHead(run))];
+function renderFront(stage, run, front, current) {
+  const nodes = [elt("p", "version-head", ...versionHead(run, current))];
   const detail = runDetail(run);
   if (detail) nodes.push(el("p", "version-detail", detail));
   const failure = errorLine(run);
@@ -1508,7 +1530,9 @@ function renderFront(stage, run, front) {
     void openDiff(stage, run.n, "");
   });
   actions.append(open, compare);
-  if (run.status === "ok") {
+  if (run.n === current) {
+    nodes.push(elt("p", "version-current", "history.isCurrent"));
+  } else if (run.status === "ok") {
     const restore = elt("button", "restore", "history.restore");
     restore.type = "button";
     restore.addEventListener("click", () => {

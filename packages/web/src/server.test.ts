@@ -879,11 +879,25 @@ describe("history, diff, and restore on the board", () => {
       expect(appJs.body).toContain('"compare.go"');
       expect(appJs.body).toContain('"history.restore"');
       expect(appJs.body).toContain('"history.manual"');
+      // and shows it: on the card, and as "current" in the history, which offers no restore for it
+      expect(appJs.body).toContain('"stage.restored"');
+      expect(appJs.body).toContain('"history.headCurrent"');
+      expect(appJs.body).toContain('"history.isCurrent"');
+      const i18nJs = await httpGet(board.port, "/i18n.js");
+      for (const text of [
+        'restored: "v{{n}} · 已回退（最新是 v{{latest}}）"',
+        'restored: "v{{n}} · restored (latest is v{{latest}})"',
+        'now: "当前"',
+        'now: "current"',
+      ]) {
+        expect(i18nJs.body).toContain(text);
+      }
       expect(appJs.body).toContain("/api/diff");
       expect(appJs.body).toContain("/api/restore");
       const css = await httpGet(board.port, "/style.css");
       expect(css.body).toContain(".diff-add");
       expect(css.body).toContain(".diff-del");
+      expect(css.body).toContain(".disc .now");
     } finally {
       await board.close();
       fs.rmSync(work, { recursive: true, force: true });

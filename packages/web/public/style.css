@@ -1045,6 +1045,23 @@ body {
 .disc .when { top: 16px; }
 .disc .who { bottom: 18px; padding: 0 20px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* The version the files on disk are; after a restore it is not the newest. */
+.disc .now {
+  position: absolute;
+  left: 50%;
+  top: calc(50% + 14px);
+  transform: translateX(-50%);
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--d);
+  color: var(--code-bg);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
 .deck-front {
   display: flex;
   flex-direction: column;
@@ -1072,7 +1089,7 @@ body {
 .deck-actions button:hover:not(:disabled) { border-color: var(--code-muted); }
 .deck-actions button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-.version-detail, .history-hint, .diff-same, .diff-summary {
+.version-detail, .version-current, .history-hint, .diff-same, .diff-summary {
   color: var(--code-muted);
   font-size: 12px;
 }
@@ -1550,6 +1567,7 @@ body {
   .disc .v { margin-top: -30px; font-size: 26px; }
   .disc .when { top: 12px; }
   .disc .who { bottom: 14px; padding: 0 16px; }
+  .disc .now { top: calc(50% + 10px); }
 }
 
 @media (prefers-reduced-motion: reduce) {
