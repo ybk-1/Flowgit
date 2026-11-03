@@ -6,7 +6,7 @@ import { pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
 import { buildGallery, fetchGithubStars } from "./gallery.js";
 import { communityEntryLocation, executePublish, githubNewFileUrl, publishInstructions } from "./commands/publish.js";
-import { checkEntryFile, checkEntryRepository, renderRegistryComment } from "./registry-check.js";
+import { changedCommunityFiles, checkEntryFile, checkEntryRepository, gitRefProblem, renderRegistryComment } from "./registry-check.js";
 import type { CommunityEntry } from "./registry.js";
 
 const hasGit = spawnSync("git", ["--version"]).status === 0;
@@ -67,7 +67,7 @@ describe("publish instructions", () => {
     expect(githubNewFileUrl()).toBeNull();
     const where = communityEntryLocation("good-flow");
     expect(where.path).toBe("registry/community/good-flow.json");
-    expect(where.treeUrl).toBe("https://github.com/cgold9820-dotcom/Flowgit/tree/main/registry/community");
+    expect(where.treeUrl).toBe("https://github.com/cgold9820-dotcom/Flowgit/tree/main");
     const entry: CommunityEntry = {
       id: "good-flow",
       name: { zh: "示例", en: "Example" },
@@ -81,6 +81,8 @@ describe("publish instructions", () => {
     const text = publishInstructions(entry);
     expect(text).toContain(where.path);
     expect(text).toContain(where.treeUrl);
+    expect(text).toContain(`file name, this path once: ${where.path}`);
+    expect(text).not.toContain("registry/community/registry/community");
     expect(text).toContain('"id": "good-flow"');
     expect(text).not.toContain("filename=");
     expect(text).not.toContain("value=");
@@ -189,6 +191,49 @@ describe("flowgit publish", () => {
     expect(comment).toContain("Community registry check");
     expect(comment).toContain("没通过");
     expect(comment).toContain("Failed");
+
+    const covered = path.join(root, "covered");
+    const sub = path.join(covered, "examples", "mini");
+    goodFlow(sub, "mini");
+    fs.rmSync(path.join(sub, "LICENSE"));
+    fs.writeFileSync(path.join(covered, "LICENSE"), "Apache-2.0\n");
+    git(["init", "-b", "main"], covered);
+    git(["add", "-A"], covered);
+    git(["commit", "-m", "subdir flow"], covered);
+    const coveredBare = path.join(root, "covered.git");
+    git(["clone", "--bare", covered, coveredBare], root);
+    const coveredCheck = checkEntryRepository({
+      ...entry,
+      id: "mini",
+      git: `${pathToFileURL(coveredBare).href}#path=examples/mini`,
+      license: "MIT",
+    });
+    expect(coveredCheck.ok, coveredCheck.reasons.join("\n")).toBe(true);
+
+    expect(gitRefProblem("--upload-pack=evil")).toBeTruthy();
+    expect(gitRefProblem("main")).toBeUndefined();
+    const sneaky = checkEntryRepository({ ...entry, ref: "--upload-pack=evil" });
+    expect(sneaky.ok).toBe(false);
+    expect(sneaky.reasons.join("\n")).toContain("引用不合法");
+
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  it.skipIf(!hasGit)("lists renamed registry files and does not treat a failed diff as no changes", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-diff-"));
+    git(["init", "-b", "main"], root);
+    fs.mkdirSync(path.join(root, "registry", "community"), { recursive: true });
+    fs.writeFileSync(path.join(root, "registry", "community", "old.json"), "{}\n");
+    git(["add", "-A"], root);
+    git(["commit", "-m", "add"], root);
+    git(["mv", "registry/community/old.json", "registry/community/new.json"], root);
+    git(["commit", "-m", "rename"], root);
+    const renamed = changedCommunityFiles(root, "HEAD~1");
+    expect(renamed.ok).toBe(true);
+    if (renamed.ok) expect(renamed.files).toContain("registry/community/new.json");
+    const failed = changedCommunityFiles(root, "does-not-exist");
+    expect(failed.ok).toBe(false);
+    if (!failed.ok) expect(failed.error.length).toBeGreaterThan(0);
     fs.rmSync(root, { recursive: true, force: true });
   });
 });

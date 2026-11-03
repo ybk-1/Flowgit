@@ -35,7 +35,7 @@ function templateFiles(): Record<string, string> {
 
 // Keep tests offline: GitHub answers from fixtures. A test can add its own routes on top.
 test.beforeEach(async ({ page }) => {
-  await page.route("https://flowgit.dev/registry.json", (route) =>
+  await page.route("**/registry.json", (route) =>
     route.fulfill({
       json: [
         {

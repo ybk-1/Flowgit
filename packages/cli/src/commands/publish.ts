@@ -23,11 +23,18 @@ export function githubNewFileUrl(): null {
 
 export const REGISTRY_REPO = "https://github.com/cgold9820-dotcom/Flowgit";
 
-/** Where the entry file goes, and the folder to open in the browser. */
+/**
+ * Path of the new file from the repository root.
+ * The new-file page creates directories from slashes typed in the file name
+ * field, starting from the folder you have open:
+ * https://docs.github.com/en/repositories/working-with-files/managing-files/creating-new-files
+ * Open the repository root and type this path once. Typing it again while
+ * already inside registry/community would create registry/community/registry/community/.
+ */
 export function communityEntryLocation(id: string): { path: string; treeUrl: string } {
   return {
     path: `registry/community/${id}.json`,
-    treeUrl: `${REGISTRY_REPO}/tree/main/registry/community`,
+    treeUrl: `${REGISTRY_REPO}/tree/main`,
   };
 }
 
@@ -37,16 +44,16 @@ export function publishInstructions(entry: CommunityEntry): string {
     "条目 / entry:",
     JSON.stringify(entry, null, 2),
     "",
-    `文件 / file: ${where.path}`,
-    `目录 / folder: ${where.treeUrl}`,
+    `仓库里的路径 / path in the repository: ${where.path}`,
+    `从仓库根目录新建 / create it from the repository root: ${where.treeUrl}`,
     "",
     "GitHub 的新建文件页面没有写明可以预填内容的网址参数，所以这里不打开带内容的链接，也不调用 GitHub API。",
     "GitHub's new-file page does not document URL parameters that prefill the editor, so this does not open a prefilled link and does not call the GitHub API.",
     "说明 / docs: https://docs.github.com/en/repositories/working-with-files/managing-files/creating-new-files",
     "",
     "手动步骤 / Do this by hand:",
-    `1. 打开 / Open ${where.treeUrl}`,
-    `2. Add file → Create new file，文件名填 / file name: ${where.path}`,
+    `1. 打开仓库根目录，不要先进入 registry/community / Open the repository root, not the registry/community folder: ${where.treeUrl}`,
+    `2. Add file → Create new file，文件名填这一条路径 / file name, this path once: ${where.path}`,
     "3. 把上面的 JSON 贴进去，提交并打开 Pull Request。 / Paste the JSON above, commit, and open a pull request.",
   ].join("\n");
 }

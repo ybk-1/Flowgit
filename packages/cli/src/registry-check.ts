@@ -24,15 +24,60 @@ function git(args: string[], cwd: string): void {
   }
 }
 
+/** A clone URL that cannot be read as a git option. */
+export function gitRemoteProblem(url: string): string | undefined {
+  if (!url || url.startsWith("-") || /[\s\u0000]/.test(url) || !/^(https?:\/\/|ssh:\/\/|git@|file:\/\/)\S+$/.test(url)) {
+    return "Git 地址不合法 / the Git URL is not allowed";
+  }
+  return undefined;
+}
+
+/**
+ * A branch, tag, or commit. Not an option and not a refspec (`src:dst`).
+ * https://git-scm.com/docs/git-check-ref-format
+ */
+export function gitRefProblem(ref: string): string | undefined {
+  if (ref === "HEAD") return undefined;
+  if (
+    !ref ||
+    ref.startsWith("-") ||
+    ref.startsWith("/") ||
+    ref.endsWith("/") ||
+    ref.endsWith(".") ||
+    ref.endsWith(".lock") ||
+    ref.includes("..") ||
+    ref.includes("//") ||
+    ref.includes("@{") ||
+    ref.includes(":") ||
+    /[\s\u0000~^?*\[\\]/.test(ref) ||
+    !/^[A-Za-z0-9._/-]+$/.test(ref)
+  ) {
+    return "引用不合法 / the ref is not allowed";
+  }
+  return undefined;
+}
+
 /**
  * Shallow, read-only fetch of one ref. No hook runs, no install, no stage.
  * A missing ref uses the remote HEAD.
+ * `--` ends options so the URL and the ref cannot be parsed as flags:
+ * https://git-scm.com/docs/gitcli
+ * https://git-scm.com/docs/git-fetch
  */
 export function cloneReadOnly(url: string, ref: string | undefined, dest: string): void {
+  const urlProblem = gitRemoteProblem(url);
+  if (urlProblem) throw new Error(urlProblem);
+  const rev = ref && ref.length ? ref : "HEAD";
+  const refProblem = gitRefProblem(rev);
+  if (refProblem) throw new Error(refProblem);
   fs.mkdirSync(dest, { recursive: true });
   git(["init"], dest);
-  git(["remote", "add", "origin", url], dest);
-  git(["fetch", "--depth", "1", "origin", ref || "HEAD"], dest);
+  // `--` before the URL and the ref: both come from the registry entry.
+  // FETCH_HEAD is not the user's ref, so it stays an argument of checkout.
+  // https://git-scm.com/docs/gitcli
+  // https://git-scm.com/docs/git-fetch
+  git(["remote", "add", "origin", "--", url], dest);
+  git(["fetch", "--depth", "1", "origin", "--", rev], dest);
   git(["checkout", "--detach", "FETCH_HEAD"], dest);
 }
 
@@ -50,6 +95,21 @@ function listFiles(dir: string, base = ""): string[] {
 
 function licensePath(dir: string): string | undefined {
   return LICENSE_NAMES.map((name) => path.join(dir, name)).find((file) => fs.existsSync(file) && fs.statSync(file).isFile());
+}
+
+/** The flow directory's LICENSE, or the cloned repository's LICENSE above it. */
+function findLicense(flowDir: string, cloneRoot: string): string | undefined {
+  let dir = path.resolve(flowDir);
+  const root = path.resolve(cloneRoot);
+  for (;;) {
+    const found = licensePath(dir);
+    if (found) return found;
+    if (dir === root) return undefined;
+    const parent = path.dirname(dir);
+    const rel = path.relative(root, parent);
+    if (parent === dir || rel.startsWith("..") || path.isAbsolute(rel)) return undefined;
+    dir = parent;
+  }
 }
 
 /**
@@ -87,7 +147,7 @@ export function checkEntryRepository(entry: CommunityEntry): EntryCheck {
     for (const finding of findPrivateData(flowDir, listFiles(flowDir))) {
       reasons.push(`${finding.file}:${finding.line} ${finding.kind} ${finding.preview}`);
     }
-    const license = licensePath(flowDir);
+    const license = findLicense(flowDir, dest);
     if (!license) reasons.push("没有 LICENSE / no LICENSE file");
     else if (fs.statSync(license).size === 0) reasons.push("LICENSE 是空的 / LICENSE is empty");
     const flowLicense = data && typeof data === "object" && "license" in data ? (data as { license?: unknown }).license : undefined;
@@ -134,14 +194,33 @@ export function checkEntryFile(file: string): EntryCheck[] {
   return schema.entries.map((entry) => checkEntryRepository(entry));
 }
 
-export function changedCommunityFiles(cwd: string, base: string): string[] {
-  const result = spawnSync("git", ["diff", "--name-only", "--diff-filter=AM", base, "HEAD", "--", "registry/community"], {
-    cwd,
-    encoding: "utf8",
-  });
-  if (result.status !== 0) return [];
-  return (result.stdout ?? "")
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line.endsWith(".json"));
+export type ChangedCommunityFiles = { ok: true; files: string[] } | { ok: false; error: string };
+
+/**
+ * Added, copied, modified, or renamed JSON entries.
+ * A failed diff is an error, not an empty list, so a broken base cannot skip the check.
+ * Renames are included: `--diff-filter=AM` would hide a renamed entry.
+ * https://git-scm.com/docs/git-diff#Documentation/git-diff.txt---diff-filterACDMRTUXB82308203
+ * https://git-scm.com/docs/git-diff#Documentation/git-diff.txt---find-renamesltngt
+ */
+export function changedCommunityFiles(cwd: string, base: string): ChangedCommunityFiles {
+  const result = spawnSync(
+    "git",
+    ["diff", "--name-status", "--find-renames", "--diff-filter=ACMR", base, "HEAD", "--", "registry/community"],
+    { cwd, encoding: "utf8" },
+  );
+  if (result.status !== 0) {
+    const error = (result.stderr || result.stdout || result.error?.message || "git diff failed").trim();
+    return { ok: false, error: error || "git diff failed" };
+  }
+  const files: string[] = [];
+  for (const line of (result.stdout ?? "").split(/\r?\n/)) {
+    if (!line.trim()) continue;
+    const parts = line.split("\t");
+    // A/M: status, path. C/R: status, old, new. Check the destination.
+    const name = (parts.length >= 3 ? parts[parts.length - 1] : parts[1]) ?? "";
+    const normalized = name.replace(/\\/g, "/");
+    if (normalized.endsWith(".json") && !normalized.split("/").includes("..")) files.push(normalized);
+  }
+  return { ok: true, files };
 }

@@ -606,9 +606,9 @@ From the flow directory:
 flowgit publish --git https://github.com/you/your-flow.git --author "你的名字 / Your Name" --tag writing --language zh
 ```
 
-不过关时，它会把原因逐条列出来（中英双语）并停住，什么都不提交。过关时，它打印一条符合 `registry/community.schema.json` 的 JSON。GitHub 的新建文件页面没有写明可以预填内容的网址参数，所以命令不打开带内容的链接，也不调用 GitHub API。按它打印的步骤，在 [registry/community](https://github.com/cgold9820-dotcom/Flowgit/tree/main/registry/community) 里新建 `registry/community/<id>.json`，把 JSON 贴进去，开一个 Pull Request。一个人一个文件，同时登记不会撞车。
+不过关时，它会把原因逐条列出来（中英双语）并停住，什么都不提交。过关时，它打印一条符合 `registry/community.schema.json` 的 JSON。GitHub 的新建文件页面没有写明可以预填内容的网址参数，所以命令不打开带内容的链接，也不调用 GitHub API。按它打印的步骤，从仓库根目录新建文件，文件名填 `registry/community/<id>.json`（只填这一次；已经站在 `registry/community` 里再填这整段路径，会多套一层目录）。把 JSON 贴进去，开一个 Pull Request。一个人一个文件，同时登记不会撞车。
 
-When something fails, it lists every reason in both languages and stops, without publishing anything. When it passes, it prints JSON that matches `registry/community.schema.json`. GitHub's new-file page does not document URL parameters that prefill the editor, so the command does not open a prefilled link and does not call the GitHub API. Follow the steps it prints: add `registry/community/<id>.json` under [registry/community](https://github.com/cgold9820-dotcom/Flowgit/tree/main/registry/community), paste the JSON, and open a pull request. One file per entry, so two people can register at the same time.
+When something fails, it lists every reason in both languages and stops, without publishing anything. When it passes, it prints JSON that matches `registry/community.schema.json`. GitHub's new-file page does not document URL parameters that prefill the editor, so the command does not open a prefilled link and does not call the GitHub API. Follow the steps it prints: from the repository root, create a file named `registry/community/<id>.json` (type that path once; typing it again while you are already inside `registry/community` nests another directory). Paste the JSON and open a pull request. One file per entry, so two people can register at the same time.
 
 Pull Request 会浅克隆你写的地址（按 `ref`，没有就用默认分支），只读：跑校验、密钥扫描和许可证检查，不运行任何阶段，也不安装依赖，然后留一条双语评论。
 
