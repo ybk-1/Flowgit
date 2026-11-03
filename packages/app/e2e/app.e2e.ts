@@ -133,3 +133,27 @@ test("key 默认不保存；勾选记住才存进浏览器，永远不写进流�
   await page.locator("#keys-cancel").click();
   expect(await page.evaluate(() => localStorage.getItem("flowgit.app.keys"))).toBeNull();
 });
+
+// The board side of folder mode (writes reach the folder, `flowgit status` sees page edits, CLI changes
+// reach the page) is tested against a real folder and the real CLI in src/folder.test.ts. Here: the home
+// page. (A stand-in folder from OPFS can't go further: reading an OPFS handle back from IndexedDB closes
+// the page in headless Chromium, while handles from the real picker are meant to be kept there.)
+test("首页打开文件夹：不是流程就说明；浏览器不支持就提示 / home: a folder that isn't a flow is explained, and browsers without folders are told so", async ({ page }) => {
+  await page.addInitScript(() => {
+    (window as unknown as { showDirectoryPicker: () => Promise<FileSystemDirectoryHandle> }).showDirectoryPicker = async () =>
+      (await navigator.storage.getDirectory()).getDirectoryHandle("empty-folder", { create: true });
+  });
+  await page.goto("./");
+  await expect(page.locator("#folders-unsupported")).toBeHidden();
+  await page.locator("#open-folder").click();
+  await expect(page.locator("#home-note")).toContainText("没有 flow.json 或 flow.md");
+  await expect(page).toHaveURL(/index\.html$|\/$/);
+
+  const other = await page.context().newPage();
+  await other.addInitScript(() => {
+    delete (window as unknown as { showDirectoryPicker?: unknown }).showDirectoryPicker;
+  });
+  await other.goto("./");
+  await expect(other.locator("#folders-unsupported")).toBeVisible();
+  await expect(other.locator("#open-folder")).toBeHidden();
+});

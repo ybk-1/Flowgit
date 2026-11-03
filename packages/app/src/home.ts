@@ -2,6 +2,8 @@ import { I18N } from "./i18n.js";
 import { el, type I18nApi } from "./dom.js";
 import { defaultStore } from "./storage.js";
 import { templateFiles, templateIndex } from "./templates.js";
+import { canOpenFolders } from "./folder.js";
+import { addFolder, forgetFolder, listFolders, type FolderEntry } from "./folders.js";
 
 const i18n = I18N as I18nApi;
 const decoder = new TextDecoder();
@@ -60,6 +62,8 @@ async function main(): Promise<void> {
     mine.append(item);
   }
 
+  await showFolders();
+
   const list = document.getElementById("templates")!;
   for (const template of await templateIndex()) {
     const item = el(i18n, "li", undefined, { "data-template": template.id });
@@ -81,6 +85,55 @@ async function main(): Promise<void> {
     item.append(el(i18n, "h3", template.name), el(i18n, "p", template.description), button);
     list.append(item);
   }
+}
+
+function folderItem(entry: FolderEntry): HTMLElement {
+  const item = el(i18n, "li", undefined, { "data-folder": entry.id });
+  const row = el(i18n, "div", undefined, { class: "row" });
+  const openLink = el(i18n, "a", "打开 / Open", { href: boardUrl(entry.id), class: "button" });
+  const forget = el(i18n, "button", "从列表移除 / Remove from list", { type: "button" });
+  forget.addEventListener("click", async () => {
+    await forgetFolder(entry.id);
+    item.remove();
+  });
+  row.append(openLink, forget);
+  item.append(el(i18n, "h3", entry.name), el(i18n, "p", "文件夹里的文件不会被删除 / The folder's files are not deleted"), row);
+  return item;
+}
+
+async function showFolders(): Promise<void> {
+  const button = document.getElementById("open-folder")!;
+  const list = document.getElementById("folders")!;
+  if (!canOpenFolders()) {
+    document.getElementById("folders-unsupported")!.hidden = false;
+    return;
+  }
+  button.hidden = false;
+  for (const entry of await listFolders()) list.append(folderItem(entry));
+  button.addEventListener("click", async () => {
+    let handle: FileSystemDirectoryHandle;
+    try {
+      const pick = (globalThis as unknown as { showDirectoryPicker(o: { mode: string }): Promise<FileSystemDirectoryHandle> }).showDirectoryPicker;
+      handle = await pick.call(globalThis, { mode: "readwrite" });
+    } catch {
+      return; // cancelled
+    }
+    let hasFlow = false;
+    for (const name of ["flow.json", "flow.md"]) {
+      try {
+        await handle.getFileHandle(name);
+        hasFlow = true;
+      } catch {
+        // not this one
+      }
+    }
+    if (!hasFlow) {
+      note("这个文件夹里没有 flow.json 或 flow.md。先用 flowgit init 建一个流程。 / This folder has no flow.json or flow.md. Create a flow with flowgit init first.");
+      return;
+    }
+    const entry = await addFolder(handle);
+    location.href = boardUrl(entry.id);
+  });
 }
 
 void main().catch((err) => note(err instanceof Error ? err.message : String(err)));

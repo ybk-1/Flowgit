@@ -6,6 +6,8 @@ import type { I18nApi } from "./dom.js";
 import { applyKeys, rememberedKeys, storeKeys, VENDORS, type KeySettings } from "./keys.js";
 import { BrowserBoard } from "./router.js";
 import { flowDir, openWorkspace, validFlowId, type Workspace } from "./workspace.js";
+import { folderAccess, folderStore, watchFolder } from "./folder.js";
+import { getFolder, isFolderId } from "./folders.js";
 
 const i18n = I18N as I18nApi;
 const params = new URLSearchParams(location.search);
@@ -41,7 +43,44 @@ function applyEnv(ws: Workspace): void {
   else delete ws.env.FLOWGIT_LLM_MOCK_DIR;
 }
 
-const ready: Promise<Workspace> = openWorkspace(validFlowId(flowId) ? flowId : undefined).then((ws) => {
+/** The folder's name, when this flow is a folder on the computer. */
+let folderName: string | undefined;
+
+function whenLoaded(): Promise<void> {
+  return document.readyState === "loading" ? new Promise((resolve) => document.addEventListener("DOMContentLoaded", () => resolve(), { once: true })) : Promise.resolve();
+}
+
+/** A folder flow: get read and write access (a click is needed after a reload), then load and watch it. */
+async function openFolderWorkspace(id: string): Promise<Workspace> {
+  const entry = await getFolder(id);
+  if (!entry) {
+    location.replace("./index.html#missing");
+    return new Promise(() => {});
+  }
+  folderName = entry.name;
+  if (!(await folderAccess(entry.handle, false))) {
+    await whenLoaded();
+    const button = document.getElementById("app-access")!;
+    button.hidden = false;
+    await new Promise<void>((resolve) => {
+      button.addEventListener("click", async function ask() {
+        if (await folderAccess(entry.handle, true)) {
+          button.removeEventListener("click", ask);
+          button.hidden = true;
+          resolve();
+        }
+      });
+    });
+  }
+  const store = folderStore(entry.handle);
+  const ws = await openWorkspace(id, { store, persistent: true });
+  watchFolder(ws, store, dir, () => board.changed());
+  return ws;
+}
+
+const opened: Promise<Workspace> =
+  validFlowId(flowId) && isFolderId(flowId) ? openFolderWorkspace(flowId) : openWorkspace(validFlowId(flowId) ? flowId : undefined);
+const ready: Promise<Workspace> = opened.then((ws) => {
   if (!ws.host.exists(`${dir}/flow.json`) && !ws.host.exists(`${dir}/flow.md`)) {
     location.replace("./index.html#missing");
   }
@@ -63,6 +102,9 @@ function paintNote(ws: Workspace): void {
   const note = document.getElementById("app-note");
   if (!note) return;
   const parts: string[] = [];
+  if (folderName) {
+    parts.push(`文件在电脑上的文件夹「${folderName}」里，命令行的改动会自动显示 / Files are in the folder "${folderName}" on this computer; changes from the CLI show up here`);
+  }
   if (!ws.persistent) parts.push("这个浏览器不能保存文件，关掉页面就没了 / This browser can't keep files; they are gone when the page closes");
   try {
     const computer = loadFlow(dir).flow.stages.filter((stage) => ["script", "agent", "mcp", "plugin"].includes(stage.executor.type));

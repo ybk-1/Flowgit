@@ -55,14 +55,23 @@ export interface Workspace {
   env: Record<string, string | undefined>;
   /** Resolves when every change so far is saved. */
   saved(): Promise<void>;
+  /** Run after every save queued so far, before later ones (one thing touches the store at a time). */
+  enqueue(task: () => Promise<void>): Promise<void>;
+  /** Change host files without writing them back (they came from the store). */
+  quietly(task: () => void): void;
+}
+
+export interface WorkspaceSource {
+  store: FlowStore;
+  persistent: boolean;
 }
 
 /**
  * The page's host: files in memory, loaded from the browser's storage, with every change saved
  * back in order. Commands never run here; they fail with the command to run on a computer.
  */
-export async function openWorkspace(flowId?: string): Promise<Workspace> {
-  const { store, persistent } = await defaultStore();
+export async function openWorkspace(flowId?: string, source?: WorkspaceSource): Promise<Workspace> {
+  const { store, persistent } = source ?? (await defaultStore());
   const env: Record<string, string | undefined> = { FLOWGIT_HOME: HOME };
   const files: Record<string, Uint8Array> = {};
   if (flowId) {
@@ -81,7 +90,11 @@ export async function openWorkspace(flowId?: string): Promise<Workspace> {
     const [id, ...rest] = change.path.slice(prefix.length).split("/");
     if (!id || !rest.length) return;
     const rel = rest.join("/");
-    queue = queue.then(() => store.apply(id, { ...change, path: rel })).catch((err) => console.error("save failed", err));
+    void enqueue(() => store.apply(id, { ...change, path: rel }));
+  };
+  const enqueue = (task: () => Promise<void>): Promise<void> => {
+    queue = queue.then(task).catch((err) => console.error("save failed", err));
+    return queue;
   };
   // The host reports the files it starts with too; those are already stored.
   let loading = true;
@@ -98,5 +111,13 @@ export async function openWorkspace(flowId?: string): Promise<Workspace> {
   loading = false;
   setHost(host);
   useInterpretingSchemas();
-  return { host, store, persistent, env, saved: () => queue };
+  const quietly = (task: () => void) => {
+    loading = true;
+    try {
+      task();
+    } finally {
+      loading = false;
+    }
+  };
+  return { host, store, persistent, env, saved: () => queue, enqueue, quietly };
 }
