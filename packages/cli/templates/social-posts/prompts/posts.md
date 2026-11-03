@@ -37,15 +37,15 @@ The `id:` line in `pick.md` is the angle to use. You may retune the hook. Do not
 
 长度和话题 / Length and hashtags（`rules.md`）:
 
-- 小红书：标题 ≤ 20 个字符（一个汉字、一个标点、一个表情各算 1），正文 ≤ 1000 个字符。话题放在 `hashtags`，不要塞进正文去占那 1000。官方 `postNote` 没有写条数上限，写少量和内容相关的话题即可。
-- 微博：正文 ≤ 5000 字。`hashtags` 最多 2 个，每个 4 到 32 字，词内不要有空格、`#`、`@`、`<`、`>`、`&`。在正文前 140 个字内写成 `#话题#`。
-- X：标题、正文和话题合在一起，按加权长度 ≤ 280。汉字和全角标点算 2，英文和半角符号算 1，每条 http(s) 链接算 23。
+- 小红书：标题 ≤ 20 个字符（一个汉字、一个字母、一个空格、一个标点、一个表情各算 1；英文标题最多 3 个词），正文 ≤ 1000 个字符。话题放在 `hashtags`，不要塞进正文去占那 1000。官方 `postNote` 没有写条数上限，写少量和内容相关的话题即可。
+- 微博：正文 ≤ 5000 字。`hashtags` 最多 2 个，每个 4 到 32 字，写成一个短语而不是单独一个词（英文把几个词连着写，中间不留空格），词内不要有空格、`#`、`@`、`<`、`>`、`&`。写成 `#话题#`，放在正文第一句里，这样一定在前 140 个字内。
+- X：标题、正文和话题合在一起，按加权长度 ≤ 280。汉字和全角标点算 2，英文和半角符号算 1，每条 http(s) 链接算 23。中文帖子写 110 个字以内，英文帖子写 40 个词以内，给话题留出位置。
 - 抖音：标题、正文和话题合成一条视频文案，≤ 1000 字。话题不要做成站外导流。
 - LinkedIn：标题、正文和话题合计 ≤ 3000 个字符。需要话题时给 3 到 5 个，不要多于 5 个。
 - 微信朋友圈：正文按「汉字约 1500、两个英文字母或数字算 1 个汉字」。写成生活记录。不要放网址。
-- Xiaohongshu: title ≤ 20 characters (one Han character, one punctuation mark, one emoji each count as 1), body ≤ 1,000. Put topics in `hashtags`; do not spend the 1,000 on them. `postNote` publishes no count cap; use a few topics that match the post.
-- Weibo: body ≤ 5,000 characters. At most 2 `hashtags`, each 4 to 32 characters, with no space, `#`, `@`, `<`, `>` or `&` inside the word. Write them as `#topic#` inside the first 140 characters of the body.
-- X: title, body and hashtags together, weighted length ≤ 280. Han and fullwidth punctuation count as 2, ASCII counts as 1, each http(s) URL counts as 23.
+- Xiaohongshu: title ≤ 20 characters (one Han character, letter, space, punctuation mark or emoji each counts as 1; an English title is 3 words at most), body ≤ 1,000. Put topics in `hashtags`; do not spend the 1,000 on them. `postNote` publishes no count cap; use a few topics that match the post.
+- Weibo: body ≤ 5,000 characters. At most 2 `hashtags`, each 4 to 32 characters, written as a short phrase rather than a lone word (in English, run the words together, as in WeekendLetterWriting), with no space, `#`, `@`, `<`, `>` or `&` inside the word. Write them as `#topic#` in the body's first sentence, which keeps them inside the first 140 characters.
+- X: title, body and hashtags together, weighted length ≤ 280. Han and fullwidth punctuation count as 2, ASCII counts as 1, each http(s) URL counts as 23. Keep a Chinese post within 110 characters and an English post within 40 words, leaving room for the hashtags.
 - Douyin: title, body and hashtags form one video caption, ≤ 1,000 characters. Do not turn a topic into an off-site funnel.
 - LinkedIn: title, body and hashtags together ≤ 3,000 characters. When you use hashtags, use 3 to 5, and do not go past 5.
 - WeChat Moments: about 1,500 Chinese characters, with two Latin letters or digits counting as one. Write it as a life note. Do not include a URL.
@@ -66,3 +66,9 @@ The `id:` line in `pick.md` is the angle to use. You may retune the hook. Do not
 - `suggestedTime` is a concrete local window, labeled as the author's guess. LinkedIn lets you schedule a date and time; none of these platforms publishes a universal golden hour. Do not put 最佳 or "best" in this field.
 - Leave no `{{`, `TODO`, `TBD`, `待补充`, `待填` or `[...]`.
 - The sample material is fictional. Do not invent a brand, a price or a statistic the user did not give you.
+
+交之前再核对一遍长度和话题：每条正文和标题都不超过上面的上限，小红书标题逐个字符数到 20 以内，X 整条按加权数到 280 以内；微博的每个话题逐个字数一遍，只有一个词、不到 4 个字的，扩成一个短语；话题里没有空格；并且原样写进正文第一句。
+Before replying, check lengths and hashtags once more: every body and title is within the limits above, you count the Xiaohongshu title character by character to 20 or fewer, and the whole X post weighs 280 or less; count each Weibo hashtag, turn any lone word under 4 characters into a short phrase, keep spaces out of it, and make sure it appears as written in the body's first sentence.
+
+输出语言是 {{inputs.language}}。是 en 时，每个平台的帖子（包括小红书和微博）的标题和正文都写英文；是 zh 时写中文。
+The output language is {{inputs.language}}. If it is en, the title and body of every post are English on every platform, Xiaohongshu and Weibo included; if it is zh, Chinese.

@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "播客策划 / Podcast episode plan",
+  "type": "object",
+  "required": ["angle", "titles", "segments", "questions", "facts"],
+  "additionalProperties": false,
+  "properties": {
+    "angle": {
+      "type": "string",
+      "minLength": 1,
+      "description": "一句话：这一期讲哪一件事、给谁听、听完带走什么 / One sentence: the one thing this episode is about, for whom, and what they take away"
+    },
+    "titles": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": { "type": "string", "minLength": 1 },
+      "description": "三个候选标题，不写节目名、期数或日期 / Three candidate titles with no show name, episode number or date"
+    },
+    "segments": {
+      "type": "array",
+      "minItems": 3,
+      "items": {
+        "type": "object",
+        "required": ["kind", "name", "minutes", "goal"],
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "enum": ["cold-open", "intro", "talk", "ad", "outro"],
+            "description": "cold-open 冷开场，intro 介绍，talk 正文，ad 广告，outro 结尾 / the segment's job"
+          },
+          "name": { "type": "string", "minLength": 1 },
+          "minutes": { "type": "number", "exclusiveMinimum": 0 },
+          "goal": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "questions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["segment", "question", "followUp"],
+        "additionalProperties": false,
+        "properties": {
+          "segment": { "type": "string", "minLength": 1, "description": "对应 segments 里的 name / a segment name from segments" },
+          "question": { "type": "string", "minLength": 1 },
+          "followUp": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "facts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["claim", "source"],
+        "additionalProperties": false,
+        "properties": {
+          "claim": { "type": "string", "minLength": 1 },
+          "source": { "type": "string", "minLength": 1, "description": "资料里写的出处 / the source as the notes give it" }
+        }
+      }
+    }
+  }
+}

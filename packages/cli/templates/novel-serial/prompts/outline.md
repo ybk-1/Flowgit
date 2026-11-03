@@ -38,3 +38,6 @@ Outline the first {{inputs.chapters}} chapters from the setting. Reply with JSON
 - The first three chapters: chapter 1 starts in conflict; the hero's edge (`edge` in the setting) shows by chapter 3 at the latest, and that chapter sets `edge` to true; chapter 3 ends with the main line of the book clear.
 - Don't let payoffs lapse: at most two chapters in a row with an empty `payoff`. A low stretch must be followed by a payoff.
 - `promises` lists ids from the setting. Each expectation moves forward at least once in these chapters.
+
+输出语言是 {{inputs.language}}。是 en 时，JSON 里每一个字符串都写英文，人名和设定里的一致，即使设定、类型或上面的示例是中文；是 zh 时写中文。
+The output language is {{inputs.language}}. If it is en, every string in the JSON is English, with the names as the setting has them, even when the setting, the genre or the examples above are in Chinese; if it is zh, Chinese.

@@ -1,0 +1,254 @@
+{
+  "format": "flowgit",
+  "version": "0.1",
+  "id": "podcast",
+  "name": "播客单集",
+  "description": "从选题到上线做一期播客：资料（人）→ 策划（角度、分段时长、开放式问题、带出处的事实）→ 台本（写给耳朵听，广告第一句先说明）→ 录前准备（给嘉宾的说明或独播清单）→ 录前检查 → 录音和转录（人）→ 整理文字稿（带说话人的 VTT）→ 节目简介（标题、描述、章节、赞助标明）→ 发布检查。 / Make one podcast episode from idea to release: notes (person) → plan (angle, timed segments, open questions, sourced facts) → script written for the ear, with the ad disclosed in its first sentence → prep (a guest brief or a solo checklist) → pre-record check → recording and transcript (person) → transcript cleanup (a VTT with speakers) → show notes (title, description, chapters, sponsor label) → publish check.",
+  "language": "zh",
+  "author": {
+    "name": "Flowgit"
+  },
+  "license": "Apache-2.0",
+  "tags": [
+    "podcast",
+    "audio",
+    "writing"
+  ],
+  "inputs": {
+    "show": {
+      "type": "string",
+      "description": "节目名，例如：开店手记 / Show name",
+      "required": true
+    },
+    "host": {
+      "type": "string",
+      "description": "主持人 / Host",
+      "required": true
+    },
+    "topic": {
+      "type": "string",
+      "description": "这一期的主题 / This episode's topic",
+      "required": true
+    },
+    "format": {
+      "type": "string",
+      "enum": [
+        "interview",
+        "solo"
+      ],
+      "default": "interview",
+      "description": "形式：interview 访谈，solo 独播 / Format: interview or solo"
+    },
+    "guest": {
+      "type": "string",
+      "default": "",
+      "description": "嘉宾和一句介绍，访谈才填，例如：沈禾，半亩书店创始人 / Guest and a one-line bio, for an interview"
+    },
+    "minutes": {
+      "type": "number",
+      "default": 30,
+      "description": "目标时长（分钟）/ Target length in minutes"
+    },
+    "audience": {
+      "type": "string",
+      "default": "",
+      "description": "给谁听，可选。不填就按资料里写的 / Who it is for, optional; the notes decide when empty"
+    },
+    "sponsor": {
+      "type": "string",
+      "default": "",
+      "description": "这一期的赞助，没有就留空。填了就要在资料里写清能说的卖点、优惠和不能说的话 / This episode's sponsor, empty if none; list its approved claims, offer and banned claims in the notes"
+    },
+    "language": {
+      "type": "string",
+      "enum": [
+        "zh",
+        "en"
+      ],
+      "default": "zh",
+      "description": "输出语言：zh 中文，en English / Output language: zh or en"
+    }
+  },
+  "stages": [
+    {
+      "id": "materials",
+      "name": "资料",
+      "description": "这一期的资料：嘉宾、事实和出处、没核实的说法、赞助能说什么。示例是虚构的开店手记和半亩书店。 / The episode's notes: the guest, facts with sources, claims still unverified, and what the sponsor allows. The sample is a fictional show about a fictional bookstore.",
+      "executor": {
+        "type": "human",
+        "instructions": "把 materials/notes.md 换成这一期的资料：嘉宾是谁，每个事实和数字从哪来，哪些说法还没核实，赞助能说的卖点、优惠和不能说的话。没有出处的说法写在“待核实”下面，节目里不会当成事实说。 / Replace materials/notes.md with this episode's notes: who the guest is, where each fact and number comes from, which claims are still unverified, and the sponsor's approved claims, offer and banned claims. Put anything without a source under Unverified; it will not be said as fact."
+      },
+      "outputs": [
+        {
+          "type": "text/markdown",
+          "path": "materials/notes.md"
+        }
+      ]
+    },
+    {
+      "id": "plan",
+      "name": "策划",
+      "description": "一句话角度、三个候选标题、分段和每段分钟数（加起来等于目标时长；访谈段 3 到 L 个，30 分钟最多 4 个，一个访谈段就是发布时的一个章节）、开放式问题和追问、带出处的事实。 / A one-line angle, three candidate titles, segments with minutes that add up to the target (3 to L talk segments, at most 4 for 30 minutes, each becoming a chapter on release), open questions with follow-ups, and facts with their sources.",
+      "inputs": [
+        "materials"
+      ],
+      "executor": {
+        "type": "llm",
+        "prompt": "prompts/plan.md",
+        "effort": "medium"
+      },
+      "outputs": [
+        {
+          "type": "application/json",
+          "path": "plan.json",
+          "schema": "schemas/plan.schema.json"
+        }
+      ]
+    },
+    {
+      "id": "script",
+      "name": "台本",
+      "description": "按分段写的台本：开场、介绍、广告和结尾写逐字稿，访谈段写串场、问题、追问和事实卡。写给耳朵听：短句，一句一个意思。广告第一句先说明是广告。 / A run sheet by segment: word for word for the open, intro, ad and close; a transition, questions, follow-ups and fact cards for each talk segment. Written for the ear, one idea per sentence. The ad says it is an ad in its first sentence.",
+      "inputs": [
+        "materials",
+        "plan"
+      ],
+      "executor": {
+        "type": "llm",
+        "prompt": "prompts/script.md",
+        "effort": "medium"
+      },
+      "outputs": [
+        {
+          "type": "text/markdown",
+          "path": "script.md"
+        }
+      ]
+    },
+    {
+      "id": "prep",
+      "name": "录前准备",
+      "description": "访谈写一封给嘉宾的录前说明（聊什么、录音环境、同意录音和发布）；独播写一份主持人自己的录前清单。 / For an interview, a brief the guest can read (what we'll talk about, the recording setup, consent to record and publish); for a solo show, the host's own checklist.",
+      "inputs": [
+        "materials",
+        "plan"
+      ],
+      "executor": {
+        "type": "llm",
+        "prompt": "prompts/prep.md",
+        "effort": "low"
+      },
+      "outputs": [
+        {
+          "type": "text/markdown",
+          "path": "prep.md"
+        }
+      ]
+    },
+    {
+      "id": "precheck",
+      "name": "录前检查",
+      "description": "分段时长加起来是否等于目标、访谈段个数、有没有是非题和一次问两件事、标题有没有节目名或期数、广告第一句有没有说明、有没有绝对化用语、资料里找不到的数字、给嘉宾的说明有没有请对方同意录音。只提醒，不拦。 / Whether the segments add up to the target, the number of talk segments, yes/no or double questions, show names or episode numbers in titles, an ad that doesn't open with a disclosure, absolute claims, numbers not in the notes, and whether the guest brief asks for consent. Warnings only.",
+      "inputs": [
+        "materials",
+        "plan",
+        "script",
+        "prep"
+      ],
+      "executor": {
+        "type": "script",
+        "run": "node scripts/precheck.mjs"
+      },
+      "outputs": [
+        {
+          "type": "text/markdown",
+          "path": "precheck-report.md"
+        }
+      ]
+    },
+    {
+      "id": "recording",
+      "name": "录音和转录",
+      "description": "录完、剪完以后，把文字稿放进 recording/（.srt、.vtt 或 .txt）。成品音频也可以放进来，发布检查会量响度。示例是虚构的一期，中英各一份 .srt。 / After recording and editing, put the transcript in recording/ (.srt, .vtt or .txt). Put the final audio there too and the publish check measures its loudness. The sample is a fictional episode, one .srt in Chinese and one in English.",
+      "inputs": [
+        "script",
+        "prep",
+        "precheck"
+      ],
+      "executor": {
+        "type": "human",
+        "instructions": "照台本录音、剪辑，然后把成品的文字稿放进 recording/：.srt、.vtt，或者带时间的 .txt（[00:07:30] 陆遥：……）。剪辑软件或转写工具一般都能导出。成品音频（.mp3、.m4a、.wav）也可以放进来，装了 FFmpeg 时发布检查会按 Apple 的建议量响度。模板里有 episode-zh.srt 和 episode-en.srt；文件名不带 zh 或 en 时只用你的文件。 / Record and edit from the script, then put the final transcript in recording/: .srt, .vtt, or a .txt with times ([00:07:30] Lu Yao: …). Most editors and transcription tools export one. Put the final audio (.mp3, .m4a, .wav) there too and, with FFmpeg installed, the publish check measures its loudness against Apple's recommendation. The template includes episode-zh.srt and episode-en.srt; a file whose name has no zh or en tag is the one used."
+      },
+      "outputs": [
+        {
+          "type": "dir",
+          "path": "recording/"
+        }
+      ]
+    },
+    {
+      "id": "transcript",
+      "name": "整理文字稿",
+      "description": "去掉时间码，同一人连续的话并成一段（一分钟另起一段），每段保留起始时间，例如 [13:40]；另存一份带说话人的 publish/transcript.vtt，可以和节目一起发布。 / Strip timecodes, merge consecutive lines from one speaker (a new block each minute), keep each block's start such as [13:40], and save publish/transcript.vtt with speaker labels to publish with the episode.",
+      "inputs": [
+        "recording"
+      ],
+      "executor": {
+        "type": "script",
+        "run": "node scripts/transcript.mjs"
+      },
+      "outputs": [
+        {
+          "type": "text/markdown",
+          "path": "transcript.md"
+        },
+        {
+          "type": "dir",
+          "path": "publish/"
+        }
+      ]
+    },
+    {
+      "id": "shownotes",
+      "name": "节目简介",
+      "description": "标题、描述、嘉宾、章节时间线（一个访谈段最多一个章节，按文字稿实际聊的定时间和名字，第一章 00:00，每章从文字稿某一段的开头算起）、提到的内容、赞助（标明是广告）、制作和文字稿说明。 / Title, description, guest, chapters (at most one per talk segment, placed and named by what the transcript covers, the first at 00:00, each at the start of a transcript block), what was mentioned, the sponsor (labeled as an ad), credits and a transcript note.",
+      "inputs": [
+        "materials",
+        "plan",
+        "transcript"
+      ],
+      "executor": {
+        "type": "llm",
+        "prompt": "prompts/shownotes.md",
+        "effort": "medium"
+      },
+      "outputs": [
+        {
+          "type": "text/markdown",
+          "path": "shownotes.md"
+        }
+      ]
+    },
+    {
+      "id": "check",
+      "name": "发布检查",
+      "description": "实际时长和目标、说话人、标题、章节（00:00 开头、至少 3 个、每章至少 2 分钟、时间对得上文字稿）、简介里的赞助标明、资料和文字稿里找不到的数字，放了音频时再量响度和峰值。只提醒，不拦。 / Real length against the target, speakers, the title, chapters (start at 00:00, at least three, two minutes or more each, times that match the transcript), the sponsor label in the show notes, numbers not in the notes or transcript, and loudness and peak when the audio is there. Warnings only.",
+      "inputs": [
+        "materials",
+        "recording",
+        "transcript",
+        "shownotes"
+      ],
+      "executor": {
+        "type": "script",
+        "run": "node scripts/check.mjs"
+      },
+      "outputs": [
+        {
+          "type": "text/markdown",
+          "path": "check-report.md"
+        }
+      ]
+    }
+  ]
+}

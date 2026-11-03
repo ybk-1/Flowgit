@@ -71,13 +71,17 @@ const titleRows = titles.map((title) => {
 const titleText = lower(titles.join("\n"));
 const unused = keywords.filter((word) => !titleText.includes(lower(word)));
 
-// Numbers in the copy that the product facts never mention. List markers and "第 N 屏" are ignored.
+// Numbers in the copy that the product facts never mention. List markers, "第 N 屏", "卖点 N" and
+// clock times in scene directions ("8:05", "9 a.m.") are ignored.
 const numbersIn = (text) =>
   text
     .replace(/(\d),(?=\d{3}(?!\d))/g, "$1") // 1,200 is one number
     .replace(/^\s*\d+\.\s/gm, "")
     .replace(/第\s*\d+\s*[屏张页步个]/g, "")
-    .replace(/\b(screen|image|step|slide|photo)\s*\d+/gi, "")
+    .replace(/(?:卖点|痛点|场景)\s*\d+/g, "")
+    .replace(/\b(screen|image|step|slide|photo|selling point|point)\s*\d+/gi, "")
+    .replace(/\b\d{1,2}:\d{2}\b/g, "")
+    .replace(/\b\d{1,2}\s*(?:a\.m\.|p\.m\.)/gi, "")
     .match(/\d+(?:\.\d+)?/g) ?? [];
 const factNumbers = new Set(numbersIn(`${facts}\n${flowInputs.price ?? ""}`));
 const unknownNumbers = [...new Set(numbersIn(copy))].filter((n) => !factNumbers.has(n));
@@ -125,4 +129,4 @@ fs.writeFileSync(out, `${lines.join("\n")}\n`);
 console.log(lines.join("\n"));
 const issues =
   titleRows.filter((r) => r.problems.length).length + absoluteHits.length + medicalHits.length + priceHits.length + unknownNumbers.length + placeholders.length;
-console.log(issues ? t(`有 ${issues} 处要看一下，见 ${out}。`, `${issues} things to look at; see ${out}.`) : t("检查通过。", "All checks passed."));
+console.log(issues ? t(`有 ${issues} 处要看一下，见 ${out}。`, `${issues} ${issues === 1 ? "thing" : "things"} to look at; see ${out}.`) : t("检查通过。", "All checks passed."));

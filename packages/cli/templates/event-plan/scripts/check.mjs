@@ -130,4 +130,4 @@ const out = outputs[0]?.path ?? "check-report.md";
 fs.writeFileSync(out, `${report.join("\n")}\n`);
 console.log(report.join("\n"));
 const issues = sections.reduce((n, [, xs]) => n + xs.length, 0) + (permitMissing ? 1 : 0);
-console.log(issues ? t(`有 ${issues} 处要看一下，见 ${out}。`, `${issues} things to look at; see ${out}.`) : t("检查通过。", "All checks passed."));
+console.log(issues ? t(`有 ${issues} 处要看一下，见 ${out}。`, `${issues} ${issues === 1 ? "thing" : "things"} to look at; see ${out}.`) : t("检查通过。", "All checks passed."));

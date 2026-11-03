@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { listRuns, loadFlow, runStage, stageStatus, validateFlow, type Flow, type LlmComplete, type RunEvent } from "./index.js";
+import { listRuns, loadFlow, runStage, stageStatus, validateFlow, type Flow, type LlmComplete, type LlmRequest, type RunEvent } from "./index.js";
 
 const dirs: string[] = [];
 
@@ -115,17 +115,28 @@ describe("JSON output schemas", () => {
     write(dir, "schemas/out.schema.json", schema);
     write(dir, "prompts/make.md", "Write JSON.");
     const prompts: string[] = [];
+    const requests: LlmRequest[] = [];
+    // A long first reply: the repair must see all of it, not a truncated copy.
+    const first = JSON.stringify({ n: 1, extra: "x".repeat(6000) });
     const llm: LlmComplete = async (req) => {
       prompts.push(req.prompt);
+      requests.push(req);
       return req.repair
         ? { text: '{"n":3}', model: "fake", usage: { input_tokens: 3, output_tokens: 2 } }
-        : { text: '{"n":1,"extra":true}', model: "fake", usage: { input_tokens: 10, output_tokens: 5 } };
+        : { text: first, model: "fake", usage: { input_tokens: 10, output_tokens: 5 } };
     };
     const run = await runStage(loadFlow(dir), "make", { llm });
     expect(JSON.parse(fs.readFileSync(path.join(dir, "out.json"), "utf8"))).toEqual({ n: 3 });
     expect(prompts).toHaveLength(2);
     expect(prompts[1]).toContain('must NOT have additional properties: "extra"');
     expect(prompts[1]).toContain('"additionalProperties":false');
+    // the repair continues the conversation: the original prompt, then the whole first reply
+    expect(requests[0].history).toBeUndefined();
+    expect(requests[1].history).toEqual([
+      { role: "user", content: prompts[0] },
+      { role: "assistant", content: first },
+    ]);
+    expect(prompts[1]).not.toContain("xxxx");
     expect(run.params?.usage).toEqual({ input_tokens: 13, output_tokens: 7 });
     expect(run.params?.llmCalls).toEqual([
       { input_tokens: 10, output_tokens: 5 },
@@ -164,6 +175,43 @@ describe("JSON output schemas", () => {
     expect(record?.params?.llmCalls).toHaveLength(2);
     expect(record?.log).toContain("修复用量 / repair usage: 3 输入 input + 2 输出 output tokens");
     expect(errors[0]).toMatchObject({ type: "stage:error", record: { params: { usage: { input_tokens: 13, output_tokens: 7 } } } });
+  });
+
+  it("keeps the usage of replies that are not JSON at all", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-schema-not-json-"));
+    dirs.push(dir);
+    const flow: Flow = {
+      format: "flowgit",
+      version: "0.1",
+      name: "not-json",
+      stages: [
+        {
+          id: "make",
+          name: "Make",
+          executor: { type: "llm", prompt: "prompts/make.md" },
+          outputs: [{ type: "application/json", path: "out.json", schema: "schemas/out.schema.json" }],
+        },
+      ],
+    };
+    write(dir, "flow.json", JSON.stringify(flow));
+    write(dir, "schemas/out.schema.json", schema);
+    write(dir, "prompts/make.md", "Write JSON.");
+    // the repair reply is cut off mid-array
+    const repairCut: LlmComplete = async (req) =>
+      req.repair
+        ? { text: '{"n": [1, 2', model: "fake", usage: { input_tokens: 3, output_tokens: 2 } }
+        : { text: '{"n":"no"}', model: "fake", usage: { input_tokens: 10, output_tokens: 5 } };
+    await expect(runStage(loadFlow(dir), "make", { llm: repairCut })).rejects.toThrow(/修复回复 \/ repair reply/);
+    let record = listRuns(dir, "make").at(-1);
+    expect(record?.status).toBe("error");
+    expect(record?.params?.usage).toEqual({ input_tokens: 13, output_tokens: 7 });
+    expect(record?.params?.llmCalls).toHaveLength(2);
+    // the first reply is prose, so there is nothing to repair
+    const prose: LlmComplete = async () => ({ text: "Sorry, here you go: n is one.", model: "fake", usage: { input_tokens: 10, output_tokens: 5 } });
+    await expect(runStage(loadFlow(dir), "make", { llm: prose, force: true })).rejects.toThrow(/模型回复 \/ model reply/);
+    record = listRuns(dir, "make").at(-1);
+    expect(record?.params?.usage).toEqual({ input_tokens: 10, output_tokens: 5 });
+    expect(record?.params?.llmCalls).toHaveLength(1);
   });
 
   it("checks draft-07 schemas too, and rejects drafts it can't check", async () => {

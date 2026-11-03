@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Picture book story / 绘本故事",
+  "type": "object",
+  "required": [
+    "title",
+    "logline",
+    "theme",
+    "characters",
+    "setting",
+    "refrain",
+    "beats",
+    "solvedBy",
+    "ending",
+    "style"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "logline": {
+      "type": "string",
+      "minLength": 1
+    },
+    "theme": {
+      "type": "string",
+      "minLength": 1
+    },
+    "characters": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "role",
+          "look",
+          "want"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "role": {
+            "enum": [
+              "main",
+              "friend",
+              "adult",
+              "other"
+            ]
+          },
+          "look": {
+            "type": "string",
+            "minLength": 1
+          },
+          "want": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "setting": {
+      "type": "string",
+      "minLength": 1
+    },
+    "refrain": {
+      "type": "string"
+    },
+    "beats": {
+      "type": "array",
+      "minItems": 5,
+      "items": {
+        "type": "object",
+        "required": [
+          "beat",
+          "what"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "beat": {
+            "enum": [
+              "opening",
+              "problem",
+              "try",
+              "turn",
+              "resolution",
+              "ending"
+            ]
+          },
+          "what": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "solvedBy": {
+      "type": "string",
+      "minLength": 1
+    },
+    "ending": {
+      "type": "string",
+      "minLength": 1
+    },
+    "style": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

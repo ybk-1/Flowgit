@@ -70,9 +70,16 @@ const longParagraphs = bodies.flatMap((b) => paragraphs(b.body).filter((p) => si
 const longCount = [...new Set(longParagraphs)].map((title) => `${title}（${longParagraphs.filter((x) => x === title).length}）`);
 const placeholder = /\[\.\.\.\]|\[…\]|\bTODO\b|\bTBD\b|待补充|待填|此处省略/i;
 
+// The prompt asks for chapters 1 to 3, the "golden three" that decide whether a reader stays.
+const missingChapters =
+  bodies.length < 3
+    ? [t(`只写了 ${bodies.length} 章正文；第 1 到第 3 章（黄金三章）都要写。`, `Only ${bodies.length} ${bodies.length === 1 ? "chapter" : "chapters"} written; chapters 1 to 3 (the first three that hook a reader) should all be there.`)]
+    : [];
+
 const none = t("没有。", "None.");
 const list = (items) => (items.length ? items.map((x) => `- ${x}`).join("\n") : none);
 const sections = [
+  [t("## 缺的正文", "## Missing chapters"), missingChapters],
   [t("## 细纲缺的东西", "## Outline gaps"), missingParts],
   [t("## 爽点断档（最多连续两章没有）", "## Payoff droughts (at most two chapters in a row)"), droughts],
   [t("## 没有推进的期待", "## Expectations never moved forward"), stalled],
@@ -98,4 +105,4 @@ const out = outputs[0]?.path ?? "check-report.md";
 fs.writeFileSync(out, `${lines.join("\n")}\n`);
 console.log(lines.join("\n"));
 const issues = sections.reduce((n, [, items]) => n + items.length, 0) + (edgeAt === undefined || edgeAt > 3 ? 1 : 0);
-console.log(issues ? t(`有 ${issues} 处要看一下，见 ${out}。`, `${issues} things to look at; see ${out}.`) : t("检查通过。", "All checks passed."));
+console.log(issues ? t(`有 ${issues} 处要看一下，见 ${out}。`, `${issues} ${issues === 1 ? "thing" : "things"} to look at; see ${out}.`) : t("检查通过。", "All checks passed."));

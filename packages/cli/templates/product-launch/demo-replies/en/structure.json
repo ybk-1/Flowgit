@@ -1,0 +1,69 @@
+{
+  "blocks": [
+    {
+      "id": "hero",
+      "purpose": "Pick up the launch headline \"Snap a receipt and it's booked\" and say that leaving an email gets the download link",
+      "points": [
+        "Snap a receipt and it's booked",
+        "A new feature in version 3.2 of the ShopTally app, on iOS and Android",
+        "Leave an email to get the download link"
+      ],
+      "image": "hero.jpg",
+      "alt": "A shop owner at the counter taking a photo of a supplier receipt"
+    },
+    {
+      "id": "features",
+      "purpose": "Spell out the three things an owner gets",
+      "points": [
+        "Book it when the delivery comes: snap the receipt, and month end no longer costs an evening",
+        "The photos stay on your phone: receipts are read on the phone and never uploaded",
+        "Fix anything, any time: the original photo stays with each entry"
+      ],
+      "image": "features.jpg",
+      "alt": "A phone showing a new entry next to the photo of its receipt"
+    },
+    {
+      "id": "testimonial",
+      "purpose": "Quote Shen He, saying she owns Half Acre Books and had free Pro during the beta",
+      "points": [
+        "\"Month end used to cost me an evening of typing up receipts. Now I snap them when the delivery comes.\"",
+        "Shen He, owner of Half Acre Books, free Pro during the beta"
+      ],
+      "image": "testimonial.jpg",
+      "alt": "A bookshop counter with a stack of receipts beside the books"
+    },
+    {
+      "id": "faq",
+      "purpose": "Answer the worries before trying it: the price, where the photos go, English receipts",
+      "points": [
+        "The first 30 receipts each month are free; beyond 30, Pro is 18 yuan a month",
+        "The photos are never uploaded",
+        "Reads receipts in Chinese and English"
+      ],
+      "image": "faq.jpg",
+      "alt": "A Chinese receipt and an English receipt side by side on a table"
+    },
+    {
+      "id": "cta",
+      "purpose": "Ask for an email and say who collects it, what for, for how long and how to withdraw",
+      "points": [
+        "One email with the download link, nothing else",
+        "The address is deleted once that email is sent",
+        "Reply \"unsubscribe\" to have it deleted at any time"
+      ],
+      "image": "cta.jpg",
+      "alt": "The ShopTally books open on a phone"
+    }
+  ],
+  "form": {
+    "fields": [
+      {
+        "id": "email",
+        "label": "Email",
+        "type": "email",
+        "required": true
+      }
+    ],
+    "consent": ""
+  }
+}

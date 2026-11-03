@@ -11,8 +11,8 @@ Rewrite the resume from the match analysis. Reply with the resume only, no comme
 规则 / Rules:
 
 - 不能编造经历、公司、数字或头衔。每句都能在原来的 `materials/resume.md` 里找到依据。
-- 把 `keywords` 里的词自然地写进正文，不要堆成关键词列表。
+- 把 `keywords` 里的每个词原样、自然地写进正文（检查按原词找），不要堆成关键词列表。
 - 第一行是 `# 姓名`。不要留下 `[...]`、`TODO`、`待补充`。
 - Do not invent experience, employers, numbers or titles. Every sentence must trace back to `materials/resume.md`.
-- Work the `keywords` into the prose. Do not dump them as a keyword list.
+- Work every word in `keywords` into the prose exactly as written (the check looks for the exact words). Do not dump them as a keyword list.
 - The first line is `# Name`. Leave no `[...]`, `TODO` or `待补充`.

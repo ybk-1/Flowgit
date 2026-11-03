@@ -60,7 +60,7 @@ for (const d of days) {
   const first = minutesOf(items[0]?.time);
   const last = items.at(-1);
   const end = Number.isNaN(minutesOf(last?.time)) ? NaN : minutesOf(last.time) + num(last.minutes);
-  summary.push(t(`${dayLabel(d)}（${d.area ?? ""}）：${items.length} 站，主要景点 ${sights.length} 个${Number.isNaN(first) || Number.isNaN(end) ? "" : `，${clock(first)}–${clock(end)}`}，空闲 ${num(d.free)} 分钟。`, `${dayLabel(d)} (${d.area ?? ""}): ${items.length} stops, ${sights.length} main sights${Number.isNaN(first) || Number.isNaN(end) ? "" : `, ${clock(first)}–${clock(end)}`}, ${num(d.free)} free minutes.`));
+  summary.push(t(`${dayLabel(d)}（${d.area ?? ""}）：${items.length} 站，主要景点 ${sights.length} 个${Number.isNaN(first) || Number.isNaN(end) ? "" : `，${clock(first)}–${clock(end)}`}，空闲 ${num(d.free)} 分钟。`, `${dayLabel(d)} (${d.area ?? ""}): ${items.length} ${items.length === 1 ? "stop" : "stops"}, ${sights.length} main ${sights.length === 1 ? "sight" : "sights"}${Number.isNaN(first) || Number.isNaN(end) ? "" : `, ${clock(first)}–${clock(end)}`}, ${num(d.free)} free minutes.`));
 }
 
 const budgetLines = Array.isArray(itinerary.budget) ? itinerary.budget : [];
@@ -116,4 +116,4 @@ const out = outputs[0]?.path ?? "check-report.md";
 fs.writeFileSync(out, `${report.join("\n")}\n`);
 console.log(report.join("\n"));
 const issues = sections.reduce((n, [, xs]) => n + xs.length, 0) + (cap && perPerson > cap ? 1 : 0) + (wantDays && days.length !== wantDays ? 1 : 0);
-console.log(issues ? t(`有 ${issues} 处要看一下，见 ${out}。`, `${issues} things to look at; see ${out}.`) : t("检查通过。", "All checks passed."));
+console.log(issues ? t(`有 ${issues} 处要看一下，见 ${out}。`, `${issues} ${issues === 1 ? "thing" : "things"} to look at; see ${out}.`) : t("检查通过。", "All checks passed."));

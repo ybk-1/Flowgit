@@ -1,0 +1,82 @@
+{
+  "alternatives": [
+    "Spreading the receipts on a table at month end and typing them into a spreadsheet",
+    "Paying a part-time bookkeeper to come once a month",
+    "Full accounting software, most of it unused"
+  ],
+  "attributes": [
+    {
+      "attribute": "Receipts are read on the phone, and the photos are never uploaded",
+      "value": "Supplier prices and vendors stay with the shop"
+    },
+    {
+      "attribute": "Results go straight into the ShopTally books",
+      "value": "Booked the moment it's snapped, with no export, import or matching up at month end"
+    },
+    {
+      "attribute": "Reads receipts in Chinese and English",
+      "value": "Chinese and English receipts go in the same way"
+    }
+  ],
+  "bestFit": "Owners of small shops who already use ShopTally, get a lot of supplier receipts and type them up themselves at month end",
+  "category": "Receipt scanning in a small-shop bookkeeping app",
+  "statement": "For small shop owners who keep their own books and today type receipts into a spreadsheet at month end or pay a part-time bookkeeper. ShopTally Snap is receipt scanning inside the ShopTally bookkeeping app: snap a paper receipt and the amount, date and vendor are in the books. Unlike the spreadsheet or the bookkeeper, it books the receipt when the delivery comes, and the photo never leaves the phone.",
+  "headline": "Snap a receipt and it's booked",
+  "subhead": "ShopTally Snap is a new feature for small shop owners who keep their own books: receipts are read on the phone, and the photos are never uploaded.",
+  "pillars": [
+    {
+      "title": "Book it when the delivery comes",
+      "message": "Snap the receipt as it arrives, and month end no longer costs an evening.",
+      "proof": "Month end used to cost me an evening of typing up receipts. Now I snap them when the delivery comes."
+    },
+    {
+      "title": "The photos stay on your phone",
+      "message": "Recognition happens on the phone, and receipt photos are never uploaded.",
+      "proof": "Receipts are read on the phone, and the photos are never uploaded."
+    },
+    {
+      "title": "Fix anything, any time",
+      "message": "Every entry can be edited, and the original photo stays with it.",
+      "proof": "Fix any entry at any time; the original photo stays with it."
+    }
+  ],
+  "boilerplate": "ShopTally was founded in 2023, is based in Shanghai, and makes a bookkeeping app for small shops.",
+  "tier": {
+    "level": 2,
+    "why": "It is a new feature of the ShopTally app that matters to many current users, not a new product or a new market."
+  },
+  "claims": [
+    {
+      "claim": "Snap a paper receipt and the amount, date and vendor go into the books, ready to edit",
+      "source": "A new feature of the ShopTally app: take a photo of a paper receipt, and the amount, date and vendor go into the books, ready to edit."
+    },
+    {
+      "claim": "Recognition happens on the phone, and the photos are never uploaded",
+      "source": "Receipts are read on the phone, and the photos are never uploaded."
+    },
+    {
+      "claim": "It reads receipts in Chinese and English",
+      "source": "It reads receipts in Chinese and English."
+    },
+    {
+      "claim": "The first 30 receipts each month are free; beyond that, ShopTally Pro costs 18 yuan a month",
+      "source": "The first 30 receipts each month are free; beyond 30, ShopTally Pro costs 18 yuan a month."
+    },
+    {
+      "claim": "Available on launch day in version 3.2 of the app, on iOS and Android",
+      "source": "On launch day, update the ShopTally app to version 3.2 to use it, on iOS and Android."
+    },
+    {
+      "claim": "41 small shops used it for three weeks in the beta",
+      "source": "Beta: from October to November 2026, 41 small shops used it for three weeks."
+    },
+    {
+      "claim": "Shen He (owner of Half Acre Books, free Pro during the beta): \"Month end used to cost me an evening of typing up receipts. Now I snap them when the delivery comes.\"",
+      "source": "Month end used to cost me an evening of typing up receipts. Now I snap them when the delivery comes."
+    },
+    {
+      "claim": "ShopTally was founded in 2023 and is based in Shanghai",
+      "source": "ShopTally was founded in 2023, is based in Shanghai, and makes a bookkeeping app for small shops."
+    }
+  ]
+}

@@ -5,6 +5,7 @@
 //   (assertion-evidence slides, Alley; governing thought first, Minto's Pyramid Principle).
 // - Little text on screen and no notes that repeat it (Mayer's coherence and redundancy principles).
 // - Bullet slides are a minority; evidence slides carry their evidence; the deck ends with a next step.
+// - No placeholder such as [owner] or [date] is left for the audience to see.
 import fs from "node:fs";
 
 const flowInputs = JSON.parse(process.env.FLOWGIT_FLOW_INPUTS ?? "{}");
@@ -38,6 +39,8 @@ const echoNotes = slides.filter((s) => {
   const screen = onScreen(s);
   return screen && String(s.notes ?? "").trim() && String(s.notes).includes(screen.slice(0, 20)) && size(s.notes) <= size(screen) * 1.2;
 });
+const placeholder = /\[(?:owner|date|name|team|N|X|TBD|TODO|负责人|日期|时间|姓名|名字|团队|数字|\.\.\.|…)\]|\bTODO\b|\bTBD\b|待补充|待填/i;
+const placeholders = slides.filter((s) => placeholder.test([s.title, onScreen(s), s.notes].filter(Boolean).join(" ")));
 const countOk = Math.abs(slides.length - target) <= Math.max(2, Math.round(target * 0.25));
 const endsWithAction = slides.length > 0 && slides[slides.length - 1].layout === "close";
 const hasThought = Boolean(String(deck.governingThought ?? "").trim());
@@ -51,13 +54,14 @@ const sections = [
   [t("## 证据页没有证据", "## Evidence slides without evidence"), noEvidence],
   [t("## 没有讲稿", "## Slides without notes"), noNotes],
   [t("## 讲稿只是在念屏幕上的字", "## Notes that just read the slide"), echoNotes],
+  [t("## 还有占位符没填（比如 [负责人]、[日期]）", "## Placeholders left to fill (such as [owner] or [date])"), placeholders],
 ];
 const lines = [
   t("# 演示稿检查", "# Slide deck check"),
   "",
   t(`共 ${slides.length} 页，目标约 ${target} 页，${countOk ? "差不多" : "差得有点多"}。`, `${slides.length} slides against a target of about ${target}: ${countOk ? "close enough" : "quite far off"}.`),
   hasThought ? t(`核心结论：${deck.governingThought}`, `Governing thought: ${deck.governingThought}`) : t("⚠️ 没有写核心结论（governingThought）。", "⚠️ No governing thought (governingThought)."),
-  t(`要点页 ${bulletSlides.length} 页${bulletShareOk ? "" : "，超过三分之一，改几页成图表、画面或步骤"}。`, `${bulletSlides.length} bullet slides${bulletShareOk ? "" : ", over a third; turn some into charts, visuals or steps"}.`),
+  t(`要点页 ${bulletSlides.length} 页${bulletShareOk ? "" : "，超过三分之一，改几页成图表、画面或步骤"}。`, `${bulletSlides.length} bullet ${bulletSlides.length === 1 ? "slide" : "slides"}${bulletShareOk ? "" : ", over a third; turn some into charts, visuals or steps"}.`),
   endsWithAction ? t("最后一页是下一步。", "The last slide is a next step.") : t("⚠️ 最后一页不是下一步（close）。", "⚠️ The last slide is not a next step (close)."),
   "",
   ...sections.flatMap(([title, items]) => [title, list(items), ""]),
@@ -67,4 +71,4 @@ const out = outputs[0]?.path ?? "check-report.md";
 fs.writeFileSync(out, `${lines.join("\n")}\n`);
 console.log(lines.join("\n"));
 const issues = (countOk ? 0 : 1) + (hasThought ? 0 : 1) + (bulletShareOk ? 0 : 1) + (endsWithAction ? 0 : 1) + sections.reduce((n, [, items]) => n + items.length, 0);
-console.log(issues ? t(`有 ${issues} 处可以改，见 ${out}。`, `${issues} things to improve; see ${out}.`) : t("检查通过。", "All checks passed."));
+console.log(issues ? t(`有 ${issues} 处可以改，见 ${out}。`, `${issues} ${issues === 1 ? "thing" : "things"} to improve; see ${out}.`) : t("检查通过。", "All checks passed."));

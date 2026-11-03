@@ -1,0 +1,326 @@
+{
+  "format": "flowgit",
+  "version": "0.1",
+  "id": "product-launch",
+  "name": "新品发布物料包",
+  "description": "从一份产品资料做出一次发布要用的全部物料：资料（人）→ 定位和信息（按 April Dunford 的五个部分，加发布分级和每条说法的出处）→ 发布计划和媒体资料（脚本按发布日期排时间表，换算 Product Hunt 的太平洋时间）→ 新闻稿、邮件、Product Hunt 和社交帖子、常见问题（模型）→ 落地页（运行自带的 landing-page 子流程）→ 汇总 → 检查（日期、数字和原话对不对得上资料，邮件的退订和地址，Product Hunt 和 X 的字数，绝对化用语和紧迫感）。 / Every asset a launch needs, from one product fact file: facts (person) → positioning and messaging (April Dunford's five components, a launch tier, and a source for every claim) → launch plan and fact sheet (a script schedules from the launch date and converts Product Hunt's Pacific time) → press release, email, Product Hunt and social posts, FAQ (model) → landing page (runs the bundled landing-page sub-flow) → kit → check (dates, numbers and quotes against the facts, unsubscribe and postal address in the email, Product Hunt and X lengths, absolute claims and urgency).",
+  "language": "zh",
+  "author": {
+    "name": "Flowgit"
+  },
+  "license": "Apache-2.0",
+  "tags": [
+    "launch",
+    "marketing",
+    "press-release",
+    "product-hunt",
+    "landing-page",
+    "email"
+  ],
+  "inputs": {
+    "product": {
+      "type": "string",
+      "required": true,
+      "description": "产品名称，例如：拍小票 / Product name, e.g. ShopTally Snap"
+    },
+    "audience": {
+      "type": "string",
+      "required": true,
+      "description": "给谁用，例如：开小店的人 / Who it is for, e.g. owners of small shops"
+    },
+    "goal": {
+      "type": "string",
+      "required": true,
+      "description": "落地页上希望访问者做什么，例如：留下邮箱，收到下载链接 / What a landing page visitor should do, e.g. leave an email to get the download link"
+    },
+    "launchDate": {
+      "type": "string",
+      "required": true,
+      "description": "公开发布的日期，写成 YYYY-MM-DD，例如 2026-12-01 / Public launch date as YYYY-MM-DD, e.g. 2026-12-01"
+    },
+    "launchTime": {
+      "type": "string",
+      "default": "09:00",
+      "description": "公开发布的时间（24 小时制），新闻稿的禁发时间也是它 / Public launch time (24-hour clock); an embargo lifts at this time too"
+    },
+    "timezone": {
+      "type": "string",
+      "default": "Asia/Shanghai",
+      "description": "发布时间所在的时区，写 IANA 名称，例如 Asia/Shanghai、America/New_York、Europe/London / Time zone of the launch time, as an IANA name such as Asia/Shanghai, America/New_York or Europe/London"
+    },
+    "embargo": {
+      "type": "boolean",
+      "default": false,
+      "description": "打开时新闻稿先发给记者，写明禁发到发布时间；关着就是即时发布 / On: the press release goes to reporters first, embargoed until the launch time. Off: for immediate release"
+    },
+    "privacyUrl": {
+      "type": "string",
+      "default": "",
+      "description": "隐私政策的网址，可以不填，交给落地页 / Privacy policy URL, optional, passed to the landing page"
+    },
+    "language": {
+      "type": "string",
+      "enum": [
+        "zh",
+        "en"
+      ],
+      "default": "zh",
+      "description": "输出语言：zh 中文，en English。Product Hunt 只收英文，所以它的文案总是英文 / Output language: zh or en. Product Hunt takes English only, so its listing is always in English"
+    }
+  },
+  "stages": [
+    {
+      "id": "facts",
+      "name": "产品资料",
+      "description": "一份资料管所有物料：产品是什么、给谁、他们现在怎么做、只有它有的、价格和购买方式、证据（真实原话写明利益关系）、发言人、公司简介、媒体联系人、发件信息、表单和隐私、不要说的话。示例是虚构的「拍小票」。 / One fact file feeds every asset: what it is, who it is for, what they do today, what only it has, price and availability, proof (real quotes with any tie disclosed), the spokesperson, the company, the media contact, sender details, form and privacy, and what not to say. The sample is a fictional product, ShopTally Snap.",
+      "executor": {
+        "type": "human",
+        "instructions": "把 materials/facts.md 换成你的产品资料，标题照原样留着（后面的阶段和落地页按标题找内容）。只写真实的事实：数字写出处，客户原话要对方同意引用，并写明和你的关系（免费试用、员工、亲友）。发言人的引语可以让模型起草，但发之前要本人确认。 / Replace materials/facts.md with your product facts and keep the headings (later stages and the landing page find content by heading). Write only true facts: give a source for every number, quote customers only with their permission and say how they are tied to you (a free sample, an employee, a friend). The spokesperson's quote may be drafted by the model, but that person approves it before it goes out."
+      },
+      "outputs": [
+        {
+          "type": "text/markdown",
+          "path": "materials/facts.md"
+        }
+      ]
+    },
+    {
+      "id": "messaging",
+      "name": "定位和信息",
+      "description": "按 April Dunford 的五个部分推出定位：现在的替代做法 → 只有它有的特点 → 带来的价值 → 最在乎的客户 → 市场类别；再写发布标题、三条信息支柱、关于公司、发布分级，以及每条说法照抄的资料原文。 / Positioning from April Dunford's five components: competitive alternatives → unique attributes → value → best-fit customers → market category; then the launch headline, three message pillars, the boilerplate, a launch tier, and every claim with the fact line it rests on, copied word for word.",
+      "inputs": [
+        "facts"
+      ],
+      "executor": {
+        "type": "llm",
+        "prompt": "prompts/messaging.md",
+        "effort": "medium"
+      },
+      "outputs": [
+        {
+          "type": "application/json",
+          "path": "messaging.json",
+          "schema": "schemas/messaging.schema.json"
+        }
+      ]
+    },
+    {
+      "id": "plan",
+      "name": "发布计划和媒体资料",
+      "description": "脚本按发布日期和分级排出时间表（Product Hunt 最多提前一个月排期；按太平洋时间 0:01 上线，换算成你的时区；退订按 CAN-SPAM 10 个工作日、Gmail 48 小时处理），再写一页媒体资料：新闻稿第一行和电头、价格、关键事实、关于公司、联系人、要准备的图。 / A script schedules from the launch date and tier (Product Hunt can be scheduled up to a month ahead and goes live at 12:01 a.m. Pacific, converted to your time zone; opt-outs are honored within 10 business days under CAN-SPAM and 48 hours for Gmail), then writes a one-page fact sheet: the release line and dateline, price, key facts, boilerplate, contacts and the images to prepare.",
+      "inputs": [
+        "facts",
+        "messaging"
+      ],
+      "executor": {
+        "type": "script",
+        "run": "node scripts/plan.mjs"
+      },
+      "outputs": [
+        {
+          "type": "text/markdown",
+          "path": "launch-plan.md"
+        },
+        {
+          "type": "text/markdown",
+          "path": "fact-sheet.md"
+        }
+      ]
+    },
+    {
+      "id": "press",
+      "name": "新闻稿",
+      "description": "倒金字塔结构：第一行（即时发布或禁发时间）、标题、电头和导语（谁、什么、什么时候、在哪、为什么）、正文、发言人引语、价格和购买方式、关于公司、媒体联系人。英文 300 到 500 个词。 / Inverted pyramid: the release line (immediate or embargoed), headline, dateline and lede (who, what, when, where, why), body, a spokesperson quote, price and availability, boilerplate and media contact. 300 to 500 words in English.",
+      "inputs": [
+        "facts",
+        "messaging",
+        "plan"
+      ],
+      "executor": {
+        "type": "llm",
+        "prompt": "prompts/press.md",
+        "effort": "medium"
+      },
+      "outputs": [
+        {
+          "type": "text/markdown",
+          "path": "press-release.md"
+        }
+      ]
+    },
+    {
+      "id": "email",
+      "name": "发布邮件",
+      "description": "发给同意接收的用户：标题（60 个字符以内）、预览文字、正文、一个按钮，结尾写明发件人、地址和退订方式（CAN-SPAM；《广告法》第四十三条；英国 PECR）。 / For people who agreed to hear from you: a subject line within 60 characters, preview text, body, one call to action, and a footer with the sender, postal address and how to unsubscribe (CAN-SPAM; China's Advertising Law art. 43; UK PECR).",
+      "inputs": [
+        "facts",
+        "messaging"
+      ],
+      "executor": {
+        "type": "llm",
+        "prompt": "prompts/email.md",
+        "effort": "medium"
+      },
+      "outputs": [
+        {
+          "type": "text/markdown",
+          "path": "email.md"
+        }
+      ]
+    },
+    {
+      "id": "posts",
+      "name": "Product Hunt 和社交帖子",
+      "description": "Product Hunt（只收英文）：名称、标语（60 个字符以内）、简介（260 个字符以内）、maker 的第一条评论；X（加权 280 以内）和 LinkedIn（3000 个字符以内）各一条。不请人点赞。 / Product Hunt (English only): name, tagline within 60 characters, description within 260, the maker's first comment; one post each for X (280 weighted) and LinkedIn (3,000 characters). No asking for upvotes.",
+      "inputs": [
+        "facts",
+        "messaging"
+      ],
+      "executor": {
+        "type": "llm",
+        "prompt": "prompts/posts.md",
+        "effort": "medium"
+      },
+      "outputs": [
+        {
+          "type": "application/json",
+          "path": "posts.json",
+          "schema": "schemas/posts.schema.json"
+        }
+      ]
+    },
+    {
+      "id": "faq",
+      "name": "常见问题",
+      "description": "对外的常见问题，和给客服、销售的内部问答。只用资料里的事实；资料里没有答案的问题标成待确认。 / A public FAQ, and internal Q&A for support and sales. Facts from the fact file only; a question the facts can't answer is marked to confirm.",
+      "inputs": [
+        "facts",
+        "messaging"
+      ],
+      "executor": {
+        "type": "llm",
+        "prompt": "prompts/faq.md",
+        "effort": "medium"
+      },
+      "outputs": [
+        {
+          "type": "text/markdown",
+          "path": "faq.md"
+        }
+      ]
+    },
+    {
+      "id": "landing-brief",
+      "name": "落地页简报",
+      "description": "脚本从产品资料里取出落地页要的几节，写成 landing-page 子流程的简报；页面开头接住发布标题，和新闻稿、邮件、帖子说的一样。 / A script takes the sections a landing page needs from the fact file and writes the landing-page sub-flow's brief; the top of the page picks up the launch headline, so it matches the press release, email and posts.",
+      "inputs": [
+        "facts",
+        "messaging"
+      ],
+      "executor": {
+        "type": "script",
+        "run": "node scripts/landing-brief.mjs"
+      },
+      "outputs": [
+        {
+          "type": "text/markdown",
+          "path": "subflows/landing-page/brief.md"
+        }
+      ]
+    },
+    {
+      "id": "landing",
+      "name": "落地页",
+      "description": "运行 subflows/landing-page（和自带的 landing-page 模板一样：结构 → 文案 → 照片 → 生成 → 检查），把网页和它的检查报告复制回来。照片放进 subflows/landing-page/images/，没有也可以。 / Runs subflows/landing-page (the same as the bundled landing-page template: structure → copy → photos → build → check) and copies the page and its check report back. Photos go in subflows/landing-page/images/; none is fine.",
+      "inputs": [
+        "landing-brief"
+      ],
+      "executor": {
+        "type": "workflow",
+        "engine": "flowgit",
+        "file": "subflows/landing-page/flow.json",
+        "params": {
+          "inputs": {
+            "product": "{{inputs.product}}",
+            "audience": "{{inputs.audience}}",
+            "goal": "{{inputs.goal}}",
+            "privacyUrl": "{{inputs.privacyUrl}}",
+            "language": "{{inputs.language}}"
+          },
+          "copy": {
+            "site/index.html": "site/index.html",
+            "site/style.css": "site/style.css",
+            "site/images/": "site/images/",
+            "check-report.md": "landing-check.md"
+          }
+        }
+      },
+      "outputs": [
+        {
+          "type": "text/html",
+          "path": "site/index.html"
+        },
+        {
+          "type": "text/css",
+          "path": "site/style.css"
+        },
+        {
+          "type": "dir",
+          "path": "site/images/"
+        },
+        {
+          "type": "text/markdown",
+          "path": "landing-check.md"
+        }
+      ]
+    },
+    {
+      "id": "kit",
+      "name": "汇总",
+      "description": "把要复制粘贴的东西放进一个文件：关键时间、Product Hunt 的每一栏（带字数）、X 和 LinkedIn 的帖子（带字数），以及每份物料在哪。 / Everything to copy and paste in one file: the key times, each Product Hunt field (with its length), the X and LinkedIn posts (with their lengths), and where every asset is.",
+      "inputs": [
+        "plan",
+        "press",
+        "email",
+        "posts",
+        "faq",
+        "landing"
+      ],
+      "executor": {
+        "type": "script",
+        "run": "node scripts/kit.mjs rules.md"
+      },
+      "outputs": [
+        {
+          "type": "text/markdown",
+          "path": "launch-kit.md"
+        }
+      ]
+    },
+    {
+      "id": "check",
+      "name": "检查",
+      "description": "只提醒：日期和禁发时间、新闻稿的结构和长度、邮件的标题长度和退订、地址、Product Hunt 和 X、LinkedIn 的字数、请人点赞、每条说法的出处、资料里没有的数字、客户原话、绝对化用语、紧迫感、资料说不要写的话、待确认的答案、占位符和落地页检查的结论。 / Warnings only: dates and the embargo, the press release's structure and length, the email's subject length, unsubscribe and postal address, Product Hunt, X and LinkedIn lengths, asking for upvotes, a source for every claim, numbers not in the facts, customer quotes, absolute claims, urgency, things the facts say not to say, answers to confirm, placeholders and the landing page check's verdict.",
+      "inputs": [
+        "facts",
+        "messaging",
+        "plan",
+        "press",
+        "email",
+        "posts",
+        "faq",
+        "landing"
+      ],
+      "executor": {
+        "type": "script",
+        "run": "node scripts/check.mjs rules.md"
+      },
+      "outputs": [
+        {
+          "type": "text/markdown",
+          "path": "check-report.md"
+        }
+      ]
+    }
+  ]
+}

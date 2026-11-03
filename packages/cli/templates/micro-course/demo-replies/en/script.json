@@ -1,0 +1,110 @@
+{
+  "segments": [
+    {
+      "id": "s1",
+      "slides": [
+        {
+          "kind": "intro",
+          "headline": "By the end of this lesson, you'll have a sheet that does the sums",
+          "onScreen": ["Four columns", "Five categories", "Automatic totals"],
+          "visual": "The finished sheet: entries in columns A to D, five categories in column F, a total for each in column G",
+          "narration": "Hi, I'm Lin Xia. I've been a household budgeting consultant for six years, and I've kept my own books in a spreadsheet for eight. Maybe this sounds familiar: you downloaded a budgeting app, logged everything carefully for three days, then forgot about it. At the end of the month you looked at your balance and still had no idea where the money went. By the end of this lesson, you'll build a spreadsheet that totals your spending by category on its own, with five of your own purchases from this week in it. Just like the one you're looking at now."
+        },
+        {
+          "kind": "teach",
+          "headline": "Budgeting apps are hard to keep up because you log every purchase",
+          "onScreen": ["Every purchase, every time"],
+          "visual": "Screenshot of a budgeting app's calendar: the first three days logged, the rest empty",
+          "narration": "Take a look at this screenshot. It's the calendar in a budgeting app. The first three days are filled in, and everything after that is empty. A lot of people end up right here. And the problem isn't your willpower. These apps ask you to log every single purchase. Your morning coffee, your subway ride, your lunch. Several times a day, every day. That's tiring, and almost nobody keeps it up."
+        },
+        {
+          "kind": "teach",
+          "headline": "Try this instead: ten minutes, once a month",
+          "onScreen": ["10 minutes a month"],
+          "visual": "A month on a calendar with one day circled at the end",
+          "narration": "So this course takes a different approach. You don't log every purchase as it happens. Once a month, you spend ten minutes tidying up the month's spending. And you do it in a sheet you build yourself. It has just four columns, and it works out how much you spent in each category on its own. Let's build it together, one step at a time."
+        },
+        {
+          "kind": "question",
+          "headline": "Think about it: where did you get stuck the last time you gave up?",
+          "onScreen": [],
+          "visual": "",
+          "narration": "Pause the video for a moment and think: the last time you gave up on budgeting, where did you get stuck? There's no right answer here. But if your answer is that logging every purchase wore you out, then this approach is made for you. You don't log every purchase. You tidy up once a month."
+        }
+      ]
+    },
+    {
+      "id": "s2",
+      "slides": [
+        {
+          "kind": "teach",
+          "headline": "Four columns are enough to keep a month of spending straight",
+          "onScreen": ["Date · Amount · Category · Note"],
+          "visual": "Screen recording: a blank sheet with Date, Amount, Category and Note typed into row 1, columns A to D",
+          "narration": "Open a blank spreadsheet. In the first row, type four headings. Column A is the date, B is the amount, C is the category, and D is a note. Why only four? Because we want to answer one question: where did the money go? The date helps you find an entry later. The amount is how much you spent. The category is what you spent it on. And the note is for your future self. Two months from now, when you see 45 dollars, the note tells you it was a movie."
+        },
+        {
+          "kind": "teach",
+          "headline": "Start with five categories; too many hide the pattern",
+          "onScreen": ["Food · Transport · Shopping", "Fun · Other"],
+          "visual": "Screen recording: the five category names typed down column F, from F2 to F6",
+          "narration": "Don't split your categories too finely. Five is plenty to start: food, transport, shopping, fun, and other. Some people start with twenty or thirty. Then every entry turns into a decision, and at the end of the month they still can't see where most of the money went. Type these five category names down column F, from F2 to F6. We'll use them in the next part."
+        },
+        {
+          "kind": "teach",
+          "headline": "Type amounts as plain numbers, or they won't be added up",
+          "onScreen": ["18", "not 18 dollars"],
+          "visual": "Screen recording: three sample entries in columns A to D, then a close-up of column B",
+          "narration": "Let's add three entries. November first, 18 dollars, food, noodles near the office. November first, 6 dollars, transport, the subway. November second, 45 dollars, fun, a movie. Now look at column B. In the amount cell I typed just 18, without the word dollars. If you type 18 dollars, the sheet sees text, not a number, and it won't count it when we add things up. Categories work the same way: type them exactly as they appear in column F."
+        },
+        {
+          "kind": "question",
+          "headline": "Which of these three amounts gets left out of the totals?",
+          "onScreen": ["18", "6", "45 dollars"],
+          "visual": "Three cells in column B: 18, 6, 45 dollars",
+          "narration": "Pause the video and find it yourself: here are three amounts in column B. 18, 6, and 45 dollars. Which one will be left out when the sheet adds things up? Let's check. It's the third one, because it says 45 dollars. With the word in the cell, the sheet treats it as text and won't add it. Delete the word, keep the number, and you're done."
+        }
+      ]
+    },
+    {
+      "id": "s3",
+      "slides": [
+        {
+          "kind": "teach",
+          "headline": "One SUMIF and the sheet totals each category for you",
+          "onScreen": ["=SUMIF(C:C, F2, B:B)"],
+          "visual": "Screen recording: click G2, type the formula, press Enter, and 18 appears",
+          "narration": "Now let's make the sheet do the math. Click G2, the cell to the right of food. Type: equals, SUMIF, open bracket, C colon C, comma, F2, comma, B colon B, close bracket. Press Enter, and you'll see 18. That's everything you spent on food so far."
+        },
+        {
+          "kind": "teach",
+          "headline": "SUMIF looks down the categories and adds the matching amounts",
+          "onScreen": ["C:C where to look", "F2 what to find", "B:B what to add"],
+          "visual": "The formula with its three parts labeled: C:C points to the categories, F2 to food, B:B to the amounts",
+          "narration": "So what does the formula say? Look down column C, the categories, for anything that matches F2, which is food. Then add up those rows' amounts from column B. So the first part is where to look, the second is what to look for, and the third is what to add. Keep them in that order. If you swap the two ranges, it looks for the word food among the amounts and gives you zero."
+        },
+        {
+          "kind": "teach",
+          "headline": "Drag it down, and all five totals appear",
+          "onScreen": ["Drag to G6"],
+          "visual": "Screen recording: drag G2's corner down to G6, five totals appear; a new entry changes them",
+          "narration": "Move your mouse to the bottom right corner of G2. When it turns into a small plus sign, drag it down to G6. And there you go: all five totals at once. Food is 18, transport is 6, and fun is 45. From now on, every time you add a purchase, these totals update by themselves. You never have to add it all up again."
+        },
+        {
+          "kind": "question",
+          "headline": "One row says \"meals\" instead of \"food\". What happens to the food total?",
+          "onScreen": [],
+          "visual": "",
+          "narration": "Pause the video and think: one row in column C says meals instead of food. What happens to the food total in G2? Here's the answer. That purchase gets left out. SUMIF only matches text that's exactly the same, so meals and food are two different categories as far as it's concerned. When you fill in a category, copy it exactly from column F."
+        },
+        {
+          "kind": "recap",
+          "headline": "Four columns, five categories and one SUMIF make your budget sheet",
+          "onScreen": ["Four columns", "Five categories", "One SUMIF"],
+          "visual": "",
+          "narration": "Let's recap. One: four columns are enough. Date, amount, category, note. Two: start with five categories, and type amounts as plain numbers. Three: one SUMIF, and the sheet totals each category by itself. Now it's your turn. Enter five purchases you remember from this week, and see which category in column G is the largest. The amounts don't need to be exact. Once you've done that, you have a budget sheet that does the sums for you."
+        }
+      ]
+    }
+  ]
+}

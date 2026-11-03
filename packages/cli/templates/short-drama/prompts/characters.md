@@ -23,9 +23,9 @@ Write the story bible and characters for this vertical micro-drama. Reply with J
 
 - 短剧先定情绪再定故事：观众是为了某种情绪来的（扬眉吐气、心动、解气、好奇），`emotion` 要具体。
 - 主角的目标要能撑起整部剧，阻碍要具体到人；反派或对手要有自己的道理，不要无脑坏。
-- 3 到 5 个人物，名字好记、不重名、不太像。
+- 3 到 5 个人物，名字好记、不重名、不太像。`name` 只写剧本里会用的那个名字，用输出语言写，不在括号里加译名。
 - 避开广电总局管理提示里点名的问题：不渲染奢华拜金，不靠低俗、血腥暴力吸引人，人设和剧情不要极端反智、离谱；涉及老人、孩子的人物要有尊严。
 - Micro-drama starts from the emotion the audience comes for (vindication, a crush, catharsis, curiosity); make `emotion` specific.
 - The lead's goal carries the series and the obstacle is a person; the antagonist has their own reasons.
-- 3 to 5 characters with names that are easy to tell apart.
+- 3 to 5 characters with names that are easy to tell apart. `name` is only the name the script will use, in the output language, with no translation in brackets.
 - Avoid what China's NRTA guidance calls out: glamorized wealth worship, vulgarity or gore as the draw, absurd or anti-intellectual characters and plots; elderly and child characters keep their dignity.

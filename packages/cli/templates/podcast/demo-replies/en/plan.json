@@ -1,0 +1,37 @@
+{
+  "angle": "Shen He of Half Acre Books explains how an independent bookstore keeps people coming back every month with an annual pass and a Thursday book club instead of discounts, so small-shop owners can work out their own reason for customers to return.",
+  "titles": [
+    "Shen He on why her bookstore stopped discounting",
+    "A 399-yuan annual pass and 20 seats every Thursday",
+    "After one half-price day, Half Acre Books never discounted again"
+  ],
+  "segments": [
+    { "kind": "cold-open", "name": "Cold open", "minutes": 0.5, "goal": "Open on Shen He's line about the half-price day" },
+    { "kind": "intro", "name": "Introduction", "minutes": 1, "goal": "Show, host, guest and what this episode is about" },
+    { "kind": "talk", "name": "How the shop started", "minutes": 5, "goal": "How the shop began, and why the 2020 half-price day kept nobody" },
+    { "kind": "talk", "name": "The annual pass", "minutes": 6, "goal": "How the pass is priced, how many renew, and its share of revenue" },
+    { "kind": "ad", "name": "Ad: ShopTally", "minutes": 1, "goal": "The sponsor read, disclosed in its first sentence" },
+    { "kind": "talk", "name": "The Thursday book club", "minutes": 7, "goal": "How the book club runs, and why it runs without ticket profit" },
+    { "kind": "talk", "name": "What she'd do less of", "minutes": 8, "goal": "Mistakes, and one piece of advice for people opening a shop" },
+    { "kind": "outro", "name": "Close", "minutes": 1.5, "goal": "A one-line takeaway, ask listeners to share it with a shop owner, thanks" }
+  ],
+  "questions": [
+    { "segment": "How the shop started", "question": "How did Half Acre Books get started?", "followUp": "What kind of place did you want it to be at the start?" },
+    { "segment": "How the shop started", "question": "What was hardest in those first two years?", "followUp": "Why didn't the people from the half-price day come back?" },
+    { "segment": "The annual pass", "question": "How did you decide the price and perks of the annual pass?", "followUp": "Why one coffee a month instead of a bigger one-off gift?" },
+    { "segment": "The annual pass", "question": "Do members think 399 yuan is too much?", "followUp": "What do renewing members say about why they renew?" },
+    { "segment": "The Thursday book club", "question": "How did the Thursday book club start?", "followUp": "What changed between five or six people and a full room?" },
+    { "segment": "The Thursday book club", "question": "Why run it every week when the tickets don't make money on their own?", "followUp": "What do book club regulars do in the shop afterwards?" },
+    { "segment": "What she'd do less of", "question": "If you started over, what would you do less of?", "followUp": "Why that one?" },
+    { "segment": "What she'd do less of", "question": "What advice would you give a listener who wants to open a shop?", "followUp": "Which moment taught you that?" }
+  ],
+  "facts": [
+    { "claim": "Half Acre Books opened in Hangzhou in 2019: 120 square meters, about 8,000 titles on the shelves.", "source": "Notes: guest" },
+    { "claim": "Since 2021, an annual pass at 399 yuan a year: 10% off books all year, one coffee a month, the book club free.", "source": "Shen He, pre-interview call, February 2026" },
+    { "claim": "620 members at the end of 2025, 71% renewal.", "source": "The shop's membership system export, 2025-12-31 (from Shen He, unaudited)" },
+    { "claim": "In 2025 membership fees were 12% of revenue; books 50%, coffee 30%, events 8%.", "source": "Shen He's 2025 figures (unaudited)" },
+    { "claim": "A book club every Thursday night with 20 seats, free for members, 39 yuan with a drink for everyone else.", "source": "The shop's event page, January 2026" },
+    { "claim": "Rent is 18,000 yuan a month.", "source": "Shen He, pre-interview call" },
+    { "claim": "A store-wide 50%-off clearance day in 2020 drew people who bought only discounted books and rarely came back.", "source": "Shen He, pre-interview call" }
+  ]
+}

@@ -216,4 +216,4 @@ fs.writeFileSync(checkOut, check);
 
 const issues = unknown.length + uncited.length + answerBuried.length;
 console.log(check);
-console.log(issues ? t(`有 ${issues} 处要看一下，见 ${checkOut}。`, `${issues} things to look at; see ${checkOut}.`) : t("检查通过。", "All checks passed."));
+console.log(issues ? t(`有 ${issues} 处要看一下，见 ${checkOut}。`, `${issues} ${issues === 1 ? "thing" : "things"} to look at; see ${checkOut}.`) : t("检查通过。", "All checks passed."));

@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "微课教学设计 / Lesson plan",
+  "type": "object",
+  "required": ["title", "objective", "prerequisites", "hook", "segments", "quiz", "practice", "recap"],
+  "additionalProperties": false,
+  "properties": {
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "description": "这节课的标题 / The lesson title"
+    },
+    "objective": {
+      "type": "object",
+      "required": ["text", "verb", "level"],
+      "additionalProperties": false,
+      "properties": {
+        "text": { "type": "string", "minLength": 1, "description": "学完能做成的一件事，一句话 / The one thing the learner can do after, in one sentence" },
+        "verb": { "type": "string", "minLength": 1, "description": "看得见、能检验的动词 / An observable, checkable verb" },
+        "level": {
+          "enum": ["remember", "understand", "apply", "analyze", "evaluate", "create"],
+          "description": "修订版布鲁姆分类的层级 / The level in the revised Bloom's taxonomy"
+        }
+      }
+    },
+    "prerequisites": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "description": "学之前要会的事 / What the learner needs to know first"
+    },
+    "hook": {
+      "type": "string",
+      "minLength": 1,
+      "description": "开头的问题，来自学员的真实处境 / The opening problem, from the learner's real situation"
+    },
+    "segments": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "title", "minutes", "teaches", "question"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^s[1-9][0-9]*$",
+            "description": "s1、s2……，也是录音、字幕和视频的文件名 / s1, s2, …; also the name of the recording, captions and video"
+          },
+          "title": { "type": "string", "minLength": 1 },
+          "minutes": { "type": "number", "exclusiveMinimum": 0 },
+          "teaches": { "type": "string", "minLength": 1, "description": "这一段讲清的一件事 / The one thing this segment makes clear" },
+          "question": {
+            "type": "object",
+            "required": ["prompt", "answer"],
+            "additionalProperties": false,
+            "properties": {
+              "prompt": { "type": "string", "minLength": 1, "description": "这一段讲完后问学员的小问题 / The question asked after this segment" },
+              "answer": { "type": "string", "minLength": 1, "description": "答案和一句为什么 / The answer and a sentence on why" }
+            }
+          }
+        }
+      }
+    },
+    "quiz": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["question", "options", "answer", "feedback", "segment"],
+        "additionalProperties": false,
+        "properties": {
+          "question": { "type": "string", "minLength": 1 },
+          "options": { "type": "array", "minItems": 2, "items": { "type": "string", "minLength": 1 } },
+          "answer": { "type": "integer", "minimum": 0, "description": "正确选项的序号，从 0 开始 / The index of the right option, from 0" },
+          "feedback": { "type": "string", "minLength": 1, "description": "为什么对，错的选项错在哪 / Why it is right and what the wrong options miss" },
+          "segment": { "type": "string", "minLength": 1, "description": "考的是哪一段的 id / The id of the segment it tests" }
+        }
+      }
+    },
+    "practice": {
+      "type": "string",
+      "minLength": 1,
+      "description": "看完马上能做的练习 / A practice task to do right after"
+    },
+    "recap": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 },
+      "description": "两到四个要点 / Two to four key points"
+    }
+  }
+}

@@ -1,0 +1,267 @@
+{
+  "format": "flowgit",
+  "version": "0.1",
+  "id": "micro-course",
+  "name": "知识付费微课视频",
+  "description": "把一节课做成能上架的教学视频，是「知识付费课程」模板的视频版：课程资料（人）→ 教学设计（一个能检验的目标、6 分钟以内的几段、每段后一道小问题、课后测验）→ 讲稿和幻灯片（一句话标题加画面、对着学员说）→ 幻灯片、提词稿和测验 → 录前检查 → AI 配音（可选，带标识）→ 录制（人）→ 字幕和时间线 → 生成视频（每段一个 1080p 视频）→ 上架前检查（规格、时长、响度、字幕、AI 配音的标识）。 / Turn one lesson into videos ready to sell, the video version of the online-course template: the brief (person) → teaching design (one checkable objective, segments of six minutes or less, a question after each, an end-of-lesson quiz) → script and slides (one-sentence headlines over visuals, spoken to the learner) → slides, a teleprompter script and the quiz → pre-record check → AI voice (optional, labeled) → recording (person) → captions and timeline → video (one 1080p video per segment) → pre-publish check (format, length, loudness, captions, AI voice labels).",
+  "language": "zh",
+  "author": {
+    "name": "Flowgit"
+  },
+  "license": "Apache-2.0",
+  "tags": [
+    "education",
+    "course",
+    "video",
+    "creator"
+  ],
+  "inputs": {
+    "topic": {
+      "type": "string",
+      "description": "这节课教什么，例如：10 分钟做出你的第一张记账表 / What this lesson teaches, e.g. make your first budget spreadsheet in 10 minutes",
+      "required": true
+    },
+    "audience": {
+      "type": "string",
+      "default": "想入门的上班族",
+      "description": "给谁学 / Who it is for"
+    },
+    "minutes": {
+      "type": "number",
+      "default": 6,
+      "description": "目标时长（分钟），会拆成 2 到 4 段，每段不超过 6 分钟 / Target length in minutes, split into 2 to 4 segments of six minutes or less"
+    },
+    "voice": {
+      "type": "string",
+      "enum": [
+        "record",
+        "ai"
+      ],
+      "default": "record",
+      "description": "配音：record 自己录，ai 用语音合成（要设置 FLOWGIT_TTS_API_KEY；视频会标明是 AI 配音）/ Voice: record it yourself, or ai for text-to-speech (needs FLOWGIT_TTS_API_KEY; the video says the voice is AI)"
+    },
+    "language": {
+      "type": "string",
+      "enum": [
+        "zh",
+        "en"
+      ],
+      "default": "zh",
+      "description": "输出语言：zh 中文，en English / Output language: zh or en"
+    }
+  },
+  "stages": [
+    {
+      "id": "brief",
+      "name": "课程资料",
+      "description": "这节课的资料：教什么、学员是谁、学完能做成的一件事、要讲的内容和例子、练习、常见错误、讲师、不要说的话。示例是「知识付费课程」模板第 1 节的视频版。 / The lesson's brief: what it teaches, who the learners are, the one thing they can do after, the content and examples, the practice, common mistakes, the instructor, and what not to say. The sample is the video version of lesson 1 from the online-course template.",
+      "executor": {
+        "type": "human",
+        "instructions": "把 materials/brief.md 换成这节课的资料，标题照原样留着。讲到的数字和例子都要写在资料里；「常见错误」会用来出测验的错误选项；「不要说的话」录前检查会查。 / Replace materials/brief.md with this lesson's brief and keep the headings. Every number and example the lesson uses belongs in the brief; Common mistakes become the quiz's wrong answers; the pre-record check looks for anything under Do not say."
+      },
+      "outputs": [
+        {
+          "type": "text/markdown",
+          "path": "materials/brief.md"
+        }
+      ]
+    },
+    {
+      "id": "plan",
+      "name": "教学设计",
+      "description": "一个用可观察动词写的学习目标、开头的问题、2 到 4 段（每段 6 分钟以内，分钟数加起来等于目标时长）、每段后一道小问题、3 到 5 道课后测验（错误选项来自常见错误，每道有解释）、练习和小结。 / One learning objective with an observable verb, the opening problem, 2 to 4 segments (six minutes or less each, adding up to the target), a question after each segment, 3 to 5 quiz questions (wrong answers from the common mistakes, each with feedback), the practice and the recap.",
+      "inputs": [
+        "brief"
+      ],
+      "executor": {
+        "type": "llm",
+        "prompt": "prompts/plan.md",
+        "effort": "medium"
+      },
+      "outputs": [
+        {
+          "type": "application/json",
+          "path": "plan.json",
+          "schema": "schemas/plan.schema.json"
+        }
+      ]
+    },
+    {
+      "id": "script",
+      "name": "讲稿和幻灯片",
+      "description": "每段几张幻灯片：标题是一句完整的话，正文是能证明它的画面，屏幕上最多三个短词；讲稿写在每张幻灯片下面，口语，对着「你」说。第一张说清学完能做什么，每段最后一张是小问题，最后一段以小结和练习收尾。 / A few slides per segment: each headline is a full sentence, the body is a visual that proves it, with at most three short phrases on screen; the narration sits under each slide, spoken and addressed to the learner. The first slide says what they will be able to do, each segment ends on its question, and the last segment closes with the recap and practice.",
+      "inputs": [
+        "brief",
+        "plan"
+      ],
+      "executor": {
+        "type": "llm",
+        "prompt": "prompts/script.md",
+        "effort": "high"
+      },
+      "outputs": [
+        {
+          "type": "application/json",
+          "path": "script.json",
+          "schema": "schemas/script.schema.json"
+        }
+      ]
+    },
+    {
+      "id": "deck",
+      "name": "幻灯片、提词稿和测验",
+      "description": "deck/index.html 是录屏用的 16:9 幻灯片（方向键翻页，N 键看讲稿，可以打印成 PDF）；teleprompter.md 是按段、按幻灯片排好的提词稿，带预计时长；quiz.md 是课后测验，可以复制进平台的测验功能。 / deck/index.html is a 16:9 slide deck to screen-record (arrow keys to move, N for the narration, printable to PDF); teleprompter.md is the narration by segment and slide with estimated times; quiz.md is the end-of-lesson quiz to paste into the platform's quiz tool.",
+      "inputs": [
+        "plan",
+        "script"
+      ],
+      "executor": {
+        "type": "script",
+        "run": "node scripts/deck.mjs rules.md"
+      },
+      "outputs": [
+        {
+          "type": "dir",
+          "path": "deck/"
+        },
+        {
+          "type": "text/markdown",
+          "path": "teleprompter.md"
+        },
+        {
+          "type": "text/markdown",
+          "path": "quiz.md"
+        }
+      ]
+    },
+    {
+      "id": "precheck",
+      "name": "录前检查",
+      "description": "学习目标的动词能不能检验、每段和全课按讲稿估的时长、每段后有没有小问题、开头和小结、幻灯片标题是不是一句话、屏幕上的字是不是太多、讲稿是不是对着学员说、测验的选项和解释、资料里找不到的统计数字、效果承诺、资料里说不要说的话、占位符。只提醒，不拦。 / Whether the objective's verb is checkable, segment and lesson length estimated from the narration, a question after each segment, the opening and the recap, sentence headlines, too many words on screen, narration addressed to the learner, quiz options and feedback, statistics not in the brief, promised results, anything the brief says not to say, and placeholders. Warnings only.",
+      "inputs": [
+        "brief",
+        "plan",
+        "script",
+        "deck"
+      ],
+      "executor": {
+        "type": "script",
+        "run": "node scripts/precheck.mjs rules.md"
+      },
+      "outputs": [
+        {
+          "type": "text/markdown",
+          "path": "precheck-report.md"
+        }
+      ]
+    },
+    {
+      "id": "voice",
+      "name": "AI 配音",
+      "description": "输入 voice 是 ai 并且设置了 FLOWGIT_TTS_API_KEY 时，按段合成配音 voice/<段>.mp3，每段开头先说一句这是 AI 配音；否则写一份说明就跳过，你自己录。 / When the voice input is ai and FLOWGIT_TTS_API_KEY is set, synthesizes each segment to voice/<segment>.mp3, opening with a sentence that says the voice is AI; otherwise it writes a note and skips, and you record it yourself.",
+      "inputs": [
+        "script"
+      ],
+      "executor": {
+        "type": "script",
+        "run": "node scripts/voice.mjs rules.md"
+      },
+      "outputs": [
+        {
+          "type": "dir",
+          "path": "voice/"
+        }
+      ]
+    },
+    {
+      "id": "record",
+      "name": "录制",
+      "description": "照提词稿一段一段录，文件放进 recordings/，按段命名（s1.mp4 是录屏，s1.m4a 只有声音）；转写工具导出的字幕 s1.srt 也可以放进来。幻灯片要用的截图放进 images/，按幻灯片命名（s2-1.png）。什么都不放也能往下走：没有录音的段会是无声的幻灯片视频。 / Record segment by segment from the teleprompter script and put the files in recordings/, named by segment (s1.mp4 for a screen recording, s1.m4a for audio only); a caption file s1.srt from a transcription tool can go there too. Put screenshots for the slides in images/, named by slide (s2-1.png). The flow continues with neither: a segment with no recording becomes a silent slide video.",
+      "inputs": [
+        "deck",
+        "precheck",
+        "voice"
+      ],
+      "executor": {
+        "type": "human",
+        "instructions": "打开 deck/index.html 全屏，照 teleprompter.md 一段一段录：录屏加讲解存成 recordings/s1.mp4（或 .mov），只录声音存成 recordings/s1.m4a（或 .mp3、.wav），段名见 teleprompter.md。录完用转写工具（剪映、飞书妙记、Whisper 等）导出字幕，存成 recordings/s1.srt，字幕就按你实际说的话来。幻灯片要放的截图存进 images/，名字照幻灯片编号，例如 images/s2-1.png。用 AI 配音时只需要放截图。 / Open deck/index.html full screen and record segment by segment from teleprompter.md: a screen recording with your voice as recordings/s1.mp4 (or .mov), audio only as recordings/s1.m4a (or .mp3, .wav); segment ids are in teleprompter.md. Then export captions from a transcription tool (Descript, Otter, Whisper and so on) as recordings/s1.srt so the captions match what you actually said. Put slide screenshots in images/, named by slide number, e.g. images/s2-1.png. With an AI voice, only the screenshots are needed."
+      },
+      "outputs": [
+        {
+          "type": "dir",
+          "path": "recordings/"
+        },
+        {
+          "type": "dir",
+          "path": "images/"
+        }
+      ]
+    },
+    {
+      "id": "captions",
+      "name": "字幕和时间线",
+      "description": "每段一份 captions/<序号>-<段>.srt 和 .vtt：有你的字幕就用你的，没有就按讲稿切句（中文一行不超过 16 个字，英文两行、每行不超过 42 个字符），按录音或配音的真实时长分配时间，AI 配音的第一句标识也在字幕里。timeline.json 记下每段用哪个声音、哪个画面、每张幻灯片几秒，可以手改。 / One captions/<n>-<segment>.srt and .vtt per segment: yours when you supplied them, otherwise cut from the narration (one Chinese line of up to 16 characters, or two English lines of up to 42) and timed to the real length of the recording or AI voice, including the AI voice notice. timeline.json records each segment's sound, picture and slide times; you can edit it.",
+      "inputs": [
+        "script",
+        "voice",
+        "record"
+      ],
+      "executor": {
+        "type": "script",
+        "run": "node scripts/captions.mjs rules.md"
+      },
+      "outputs": [
+        {
+          "type": "dir",
+          "path": "captions/"
+        },
+        {
+          "type": "application/json",
+          "path": "timeline.json"
+        }
+      ]
+    },
+    {
+      "id": "render",
+      "name": "生成视频",
+      "description": "用 FFmpeg 按时间线每段做一个视频 video/<序号>-<段>.mp4：1920×1080、30 帧、H.264，AAC 立体声 256 kb/s；画面是你的录屏，没有录屏就画幻灯片（有截图就放截图）；声音调到 -16 LUFS；AI 配音的视频右上角一直标着「AI 合成配音」。字幕不烧进画面，上传时另传。 / Renders one video per segment from the timeline with FFmpeg, video/<n>-<segment>.mp4: 1920×1080, 30 fps, H.264, stereo AAC at 256 kb/s; the picture is your screen recording or else the slides (with your screenshots when present); the sound is set to -16 LUFS; a video with an AI voice carries an \"AI voice\" label in the top right throughout. Captions are not burned in; upload them alongside.",
+      "inputs": [
+        "captions"
+      ],
+      "executor": {
+        "type": "script",
+        "run": "node scripts/render.mjs rules.md",
+        "requires": [
+          "ffmpeg"
+        ]
+      },
+      "outputs": [
+        {
+          "type": "dir",
+          "path": "video/"
+        }
+      ]
+    },
+    {
+      "id": "check",
+      "name": "上架前检查",
+      "description": "每段视频的分辨率、比例、编码和声道，每段时长，有没有讲解声音，响度和真峰值，字幕在不在、每行多长、读得过来吗、按讲稿估的字幕和录音对不对得上，AI 配音有没有说出来和标出来，再列出上架前要自己确认的事。只提醒，不拦。 / Each video's resolution, aspect ratio, codecs and channels, each segment's length, whether there is a voice, loudness and true peak, whether captions exist, line length, reading speed and captions estimated from a script over a real recording, whether an AI voice is said and shown, and a list of things to confirm yourself before publishing. Warnings only.",
+      "inputs": [
+        "brief",
+        "plan",
+        "captions",
+        "render"
+      ],
+      "executor": {
+        "type": "script",
+        "run": "node scripts/check.mjs rules.md"
+      },
+      "outputs": [
+        {
+          "type": "text/markdown",
+          "path": "check-report.md"
+        }
+      ]
+    }
+  ]
+}

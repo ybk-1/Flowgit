@@ -1,0 +1,74 @@
+{
+  "title": "Make your first budget spreadsheet in 10 minutes",
+  "objective": {
+    "text": "Build a budget sheet that totals your spending by category on its own, with five of your purchases from this week in it",
+    "verb": "build",
+    "level": "apply"
+  },
+  "prerequisites": ["Open Excel or Google Sheets", "Type numbers into cells"],
+  "hook": "You logged three days in a budgeting app, then forgot, and at month end you still don't know where the money went. The problem isn't your willpower; it's being asked to log every single purchase.",
+  "segments": [
+    {
+      "id": "s1",
+      "title": "Why budgeting apps don't stick",
+      "minutes": 2,
+      "teaches": "You don't need to log every purchase; ten minutes a month with one sheet is enough",
+      "question": {
+        "prompt": "The last time you gave up on budgeting, where did you get stuck?",
+        "answer": "There's no right answer. If it was logging every purchase, this lesson's approach suits you: you tidy up once a month."
+      }
+    },
+    {
+      "id": "s2",
+      "title": "Four columns and five categories",
+      "minutes": 2,
+      "teaches": "Set up the date, amount, category and note columns, start with five categories, and type amounts as plain numbers",
+      "question": {
+        "prompt": "Of the three amounts 18, 6 and \"45 dollars\" in column B, which one gets left out of the totals?",
+        "answer": "\"45 dollars\". With the word in it, the sheet treats it as text and won't add it; delete the word and keep the number."
+      }
+    },
+    {
+      "id": "s3",
+      "title": "Let the sheet total each category",
+      "minutes": 2,
+      "teaches": "Use SUMIF to total a category, drag it down for all five, and every new entry is counted by itself",
+      "question": {
+        "prompt": "One row in column C says \"meals\" instead of \"food\". What happens to the food total in G2?",
+        "answer": "That purchase is left out. SUMIF only matches identical text, so to SUMIF \"meals\" and \"food\" are two different categories."
+      }
+    }
+  ],
+  "quiz": [
+    {
+      "question": "Which formula in G2 adds up everything you spent on food?",
+      "options": ["=SUMIF(C:C, F2, B:B)", "=SUMIF(B:B, F2, C:C)", "=SUM(B:B)"],
+      "answer": 0,
+      "feedback": "SUMIF takes where to look (the categories in column C), what to look for (\"food\" in F2), and what to add (the amounts in column B). Swap the two ranges and it looks for \"food\" among the amounts and returns 0; =SUM(B:B) adds every amount, whatever the category.",
+      "segment": "s3"
+    },
+    {
+      "question": "You spent 18 dollars on noodles near the office on 1 November. What goes in the amount column?",
+      "options": ["18 dollars", "18", "eighteen"],
+      "answer": 1,
+      "feedback": "Just the number, 18. \"18 dollars\" or \"eighteen\" is text to the sheet, so it won't be added to the totals.",
+      "segment": "s2"
+    },
+    {
+      "question": "When you start a budget, how many categories should you use?",
+      "options": ["None, just the date and the amount of each purchase", "Twenty or thirty, because finer is clearer", "Five: food, transport, shopping, fun, other"],
+      "answer": 2,
+      "feedback": "Start with five. With none, you can't see where the money goes; with too many, you hesitate over every entry and can't see the pattern.",
+      "segment": "s2"
+    },
+    {
+      "question": "What is the quickest way to see which category cost you the most this week?",
+      "options": ["Add up column B from top to bottom", "Compare the five totals in column G and find the largest", "Count which category appears most often in column C"],
+      "answer": 1,
+      "feedback": "Column G already totals each category, so just compare them. Adding by hand is slow and error-prone, and appearing often isn't the same as costing the most: one 45-dollar movie costs more than two 18-dollar bowls of noodles.",
+      "segment": "s3"
+    }
+  ],
+  "practice": "Enter five purchases you remember from this week and see which category in column G is largest. The amounts don't need to be exact.",
+  "recap": ["Four columns are enough: date, amount, category, note", "Start with five categories and type amounts as plain numbers", "One SUMIF and the sheet totals each category by itself"]
+}

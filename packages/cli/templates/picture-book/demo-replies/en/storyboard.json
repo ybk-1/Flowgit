@@ -1,0 +1,159 @@
+{
+  "format": "picture-book",
+  "cover": {
+    "art": "Millie looks up, both hands holding the yellow hat on her head as the wind tips the white daisy sideways; Beans at her feet; a little blue bird flies across the top right.",
+    "alt": "Millie holds her yellow hat in the wind, with Beans at her feet and a little blue bird flying by."
+  },
+  "dedication": "For the real Millie.",
+  "units": [
+    {
+      "pages": [
+        4,
+        5
+      ],
+      "text": "Millie had a yellow hat.\nWherever she went, the hat went too.",
+      "art": "Millie stands at her front door in the yellow hat, Beans wagging at her feet; by the path the branches already bend in the wind and the clouds race.",
+      "alt": "Millie stands at her door in her yellow hat, with Beans at her feet, as the wind bends the trees.",
+      "turn": "The wind was getting stronger."
+    },
+    {
+      "pages": [
+        6,
+        7
+      ],
+      "text": "Whoosh! The wind blew, and off went the hat!\n“My hat!”",
+      "art": "The yellow hat tumbles through the air, daisy down; Millie lunges after it with her arms out, and Beans leaps with all four paws off the ground.",
+      "alt": "The wind carries the yellow hat into the air as Millie reaches for it and Beans jumps.",
+      "turn": "Where will the hat land?"
+    },
+    {
+      "pages": [
+        8,
+        9
+      ],
+      "text": "The hat landed in a puddle.\nA mouse hopped in.\n“This is my boat,” said the mouse.",
+      "art": "The hat floats upside down in a shallow puddle with the mouse inside, rowing with a twig; Beans lies at the edge, nose almost in the water; Millie has just run up.",
+      "alt": "A mouse rows the floating yellow hat across a puddle while Beans watches from the edge.",
+      "turn": "Millie wants her hat back."
+    },
+    {
+      "pages": [
+        10,
+        11
+      ],
+      "text": "“That's my hat!” said Millie.\nWhoosh! The wind blew, and off went the hat again!",
+      "art": "The hat lifts out of the puddle, shaking off drops; the mouse stands on the bank hugging its twig, mouth open; Millie and Beans run after the hat again.",
+      "alt": "The wind lifts the hat out of the puddle while the mouse watches it fly away.",
+      "turn": "Where will it land this time?"
+    },
+    {
+      "pages": [
+        12,
+        13
+      ],
+      "text": "It began to rain.\n“This is my umbrella,” said the frog.",
+      "art": "In a light rain the hat sits brim-down on the grass, the frog's eyes peeking out from under it; Millie crouches beside it with her hair getting wet.",
+      "alt": "In the rain, a frog hides under the yellow hat on the grass while Millie crouches beside it.",
+      "turn": "Millie reached for the hat…"
+    },
+    {
+      "pages": [
+        14,
+        15
+      ],
+      "text": "“That's my hat!” said Millie.\nWhoosh! The wind blew, and off went the hat again!",
+      "art": "The wind flips the hat up, the frog dives into the grass covering its head, Millie's hands close on nothing, and Beans runs ahead barking.",
+      "alt": "The wind flips the yellow hat off the frog, and Millie's hands grab only air.",
+      "turn": "This time the hat flew higher."
+    },
+    {
+      "pages": [
+        16,
+        17
+      ],
+      "text": "Up, up went the hat,\nand caught on a branch.",
+      "art": "A huge tree fills the spread, with the yellow hat tiny on a branch at the top right; Millie and Beans look very small underneath.",
+      "alt": "The yellow hat hangs high in a big tree while Millie and Beans look up from below.",
+      "turn": "Can Millie reach it?"
+    },
+    {
+      "pages": [
+        18,
+        19
+      ],
+      "text": "Millie stood on tiptoe.\nShe couldn't reach.\nBeans jumped.\nHe couldn't reach either.",
+      "art": "Millie stretches on tiptoe under the tree, arm straight up; Beans is in mid-jump with his ears flying; the hat is still far above.",
+      "alt": "Millie stretches on tiptoe and Beans jumps, but neither can reach the hat in the tree.",
+      "turn": "Something fluttered in the branches."
+    },
+    {
+      "pages": [
+        20,
+        21
+      ],
+      "text": "A little blue bird flew down\nwith a twig in its beak.\nIt put the twig in the hat.",
+      "art": "A little blue bird flies down with a twig in its beak and puts the twig in the hat.",
+      "alt": "A little blue bird carries a twig into the yellow hat in the tree.",
+      "turn": "What does the bird want with the hat?"
+    },
+    {
+      "pages": [
+        22,
+        23
+      ],
+      "text": "“That's my hat,” Millie whispered.\nThe bird tilted its head and looked at her.",
+      "art": "Close-up: the bird on the brim, head tilted, a blade of grass in its beak; below, Millie looks up with a frown.",
+      "alt": "The bird tilts its head on the hat's brim as Millie frowns up at it.",
+      "turn": "Millie watched the bird fly off, and come back."
+    },
+    {
+      "pages": [
+        24,
+        25
+      ],
+      "text": "",
+      "art": "Wordless. A row of small pictures: the bird brings twigs, dry grass and a feather, trip after trip, and the nest fills the hat; Millie's frown turns into a dreamy stare while Beans falls asleep at her feet.",
+      "alt": "Trip after trip, the bird fills the hat with twigs and grass while Millie watches.",
+      "turn": "What will Millie do?"
+    },
+    {
+      "pages": [
+        26,
+        27
+      ],
+      "text": "Millie thought for a long time.\n“You can keep it,” she said.",
+      "art": "Millie waves up at the tree, a little sad; the bird spreads its wings at the edge of the nest; Beans tilts his head at Millie.",
+      "alt": "Millie waves to the little blue bird, and it spreads its wings.",
+      "turn": "On the way home…"
+    },
+    {
+      "pages": [
+        28,
+        29
+      ],
+      "text": "On the way home, the wind was still blowing.\nMillie's head felt cool.\nBeans brought her a blue feather.",
+      "art": "The path at dusk: Millie, hatless, her hair blown about; Beans looks up with a sky-blue feather in his mouth; far behind, a speck of yellow in the big tree.",
+      "alt": "At dusk, Millie walks home without her hat, and Beans brings her a blue feather.",
+      "turn": "Winter came, and went."
+    },
+    {
+      "pages": [
+        30,
+        31
+      ],
+      "text": "Winter came, and went.\nMillie often visited the tree.\nWhoosh! The wind blew,\nand the hat stayed put.",
+      "art": "Left page: the tree in snow, a little snow on the yellow hat; right page: early spring, new buds; Millie and Beans under the tree on both pages, the blue feather tucked behind Millie's ear.",
+      "alt": "From winter to early spring, Millie and Beans visit the tree with the yellow hat in it.",
+      "turn": "A tiny cheeping came from the tree."
+    },
+    {
+      "pages": [
+        32
+      ],
+      "text": "",
+      "art": "Wordless. In the spring tree, three baby birds with open beaks peek out of the yellow-hat nest, the white daisy still on the brim; Millie and Beans look up from below, and Millie is smiling.",
+      "alt": "Three baby birds peek out of the yellow-hat nest as Millie and Beans smile up at them.",
+      "turn": ""
+    }
+  ]
+}

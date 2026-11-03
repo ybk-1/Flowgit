@@ -44,7 +44,11 @@ const episodes = parts.map((part) => {
 const tooShort = episodes.filter((e) => e.estimate < seconds * 0.6);
 const tooLong = episodes.filter((e) => e.estimate > seconds * 1.4);
 const noHook = episodes.filter((e) => !e.cliffhanger);
-const unused = names.filter((name) => !script.includes(name));
+// "Lin Wen (林文)" counts as used when the script says "Lin Wen": a bracketed translation is not part of the name.
+const unused = names.filter((name) => {
+  const bare = name.replace(/\s*[（(][^）)]*[）)]\s*/g, " ").trim() || name;
+  return !script.includes(name) && !script.includes(bare);
+});
 const narrated = episodes.filter((e) => e.narratedOpening);
 const noPayoff = beatList.filter((b) => !String(b.payoff ?? "").trim()).map((b) => b.n);
 const paywallEpisode = episodes.find((e) => e.n === paywallAt);
@@ -86,4 +90,4 @@ const out = outputs[0]?.path ?? "check-report.md";
 fs.writeFileSync(out, `${lines.join("\n")}\n`);
 console.log(lines.join("\n"));
 const issues = (episodes.length === wanted ? 0 : 1) + tooShort.length + tooLong.length + noHook.length + unused.length + narrated.length + noPayoff.length + (paywallProblem ? 1 : 0);
-console.log(issues ? t(`有 ${issues} 处可以改，见 ${out}。`, `${issues} things to improve; see ${out}.`) : t("检查通过。", "All checks passed."));
+console.log(issues ? t(`有 ${issues} 处可以改，见 ${out}。`, `${issues} ${issues === 1 ? "thing" : "things"} to improve; see ${out}.`) : t("检查通过。", "All checks passed."));

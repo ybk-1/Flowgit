@@ -184,11 +184,11 @@ const sections = [
 ];
 const issues = missing.length + owners.length + dates.length + sources.length + duplicates.length + minuteStamps.length;
 lines.push(
-  t(`待办 ${actions.length} 条。`, `${actions.length} action(s).`),
+  t(`待办 ${actions.length} 条。`, `${actions.length} ${actions.length === 1 ? "action" : "actions"}.`),
   "",
   ...sections.flatMap(([title, items]) => [title, list(items), ""]),
   issues
-    ? t(`有 ${issues} 处要看一下。这些检查只做提醒，纪要可以继续往下写，请你自己通读。`, `${issues} thing(s) to look at. These checks only warn, so you can keep going; read the minutes yourself.`)
+    ? t(`有 ${issues} 处要看一下。这些检查只做提醒，纪要可以继续往下写，请你自己通读。`, `${issues} ${issues === 1 ? "thing" : "things"} to look at. These checks only warn, so you can keep going; read the minutes yourself.`)
     : t("检查通过。这些检查只做提醒，不能代替你自己通读纪要。", "All checks passed. These checks only warn; they do not replace reading the minutes yourself."),
   "",
 );

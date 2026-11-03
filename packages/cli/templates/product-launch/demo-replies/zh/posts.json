@@ -1,0 +1,11 @@
+{
+  "productHunt": {
+    "name": "ShopTally Snap",
+    "tagline": "Snap a receipt and it's booked, for small shop owners",
+    "description": "A new feature of the ShopTally bookkeeping app: snap a paper receipt and the amount, date and vendor go into your books. Receipts are read on the phone, never uploaded.",
+    "firstComment": "Hi Product Hunt, I'm Ji Bai, founder of ShopTally. We make a bookkeeping app for small shops: cafés, bookshops and florists run by one to three people.\n\nThe owners we talk to keep a drawer full of supplier receipts and spend an evening at month end typing them into a spreadsheet. Snap moves that to the moment the delivery comes: take a photo, and the amount, date and vendor go straight into the ShopTally books. Receipts are read on the phone, and the photos are never uploaded. It reads receipts in Chinese and English, and you can fix any entry; the original photo stays with it.\n\n41 small shops used it for three weeks in our beta. Shen He, who owns Half Acre Books and had free Pro during the beta, put it this way: \"Month end used to cost me an evening of typing up receipts. Now I snap them when the delivery comes.\"\n\nThe first 30 receipts each month are free; beyond 30, ShopTally Pro costs 18 yuan a month. Update the app to version 3.2 on iOS or Android to try it. We'd love to hear which receipts it struggles with.",
+    "translation": "标语：拍一张小票，账就记好了，给小店店主。\n\n简介：店小算记账 App 的新功能：拍一张纸质小票，金额、日期和商家就进了你的账本。小票在手机上识别，不上传。\n\n第一条评论：\n\n大家好，我是店小算的创始人季白。我们做给小店用的记账 App：一个人到三个人打理的咖啡馆、书店和花店。\n\n我们聊过的店主都攒着一抽屉进货小票，月底要花一个晚上把它们敲进表格。拍小票把这件事挪到了进货的那一刻：拍一张，金额、日期和商家直接进店小算的账本。小票在手机上识别，照片不上传。中文和英文的小票都能读，每一笔都能改，原来的照片一直跟着它。\n\n内测里，41 家小店用了三周。半亩书店的店主沈禾在内测期间免费使用 Pro，她是这么说的：「以前月底要花一个晚上敲小票，现在进货的时候顺手拍一下。」\n\n每月前 30 张小票免费；超过 30 张用店小算 Pro，每月 18 元。在 iOS 或 Android 上把 App 更新到 3.2 版就能试。很想听听哪些小票它还读不好。"
+  },
+  "x": "店小算的新功能拍小票今天上线：进货时拍一张小票，金额、日期和商家就记进账本。识别在手机上完成，照片不上传。每月前 30 张免费，把 App 更新到 3.2 版就能用。https://shoptally.example",
+  "linkedin": "很多开小店的人，月底要花一个晚上，把一抽屉的进货小票一张张敲进表格。\n\n今天，店小算推出新功能「拍小票」。进货的时候用手机拍一张纸质小票，金额、日期和商家就记进店小算的账本。记错了随时改，原来的照片一直跟着这笔账。\n\n我们很在意的一点是：小票在手机上识别，照片不上传服务器。进货单价和供应商，是一家店自己的事。\n\n2026 年 10 月到 11 月，41 家小店内测了三周。半亩书店店主沈禾（内测期间免费使用 Pro）说：「以前月底要花一个晚上敲小票，现在进货的时候顺手拍一下。」\n\n每月前 30 张小票免费；超过 30 张用店小算 Pro，每月 18 元。把店小算 App 更新到 3.2 版就能用，iOS 和 Android 都有。\n\n如果你也开店，或者身边有开店的朋友，欢迎试试，再告诉我们哪种小票它还读不好。\n\nhttps://shoptally.example"
+}

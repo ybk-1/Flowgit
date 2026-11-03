@@ -126,7 +126,7 @@ export function anthropicBody(req: LlmRequest): Record<string, unknown> {
     model: req.model,
     max_tokens: req.maxTokens,
     system: req.system,
-    messages: [{ role: "user", content: req.prompt }],
+    messages: [...(req.history ?? []), { role: "user", content: req.prompt }],
   };
   if (req.provider.claudeApi) {
     body.betas = ["server-side-fallback-2026-07-01"];
@@ -140,10 +140,7 @@ export function anthropicBody(req: LlmRequest): Record<string, unknown> {
 export function openaiBody(req: LlmRequest): Record<string, unknown> {
   return {
     model: req.model,
-    messages: [
-      { role: "system", content: req.system },
-      { role: "user", content: req.prompt },
-    ],
+    messages: [{ role: "system", content: req.system }, ...(req.history ?? []), { role: "user", content: req.prompt }],
     // OpenAI's own API replaced max_tokens with max_completion_tokens; compatible servers still use max_tokens.
     [req.provider.openaiApi ? "max_completion_tokens" : "max_tokens"]: req.maxTokens,
     stream: true,
@@ -336,12 +333,18 @@ export const llmExecutor: StageExecutor = {
     const res = await resolveLlm(ctx.options)(req);
     const ms = Date.now() - started;
     if (res.model !== req.model) ctx.log(`实际由 ${res.model} 回复 / served by ${res.model}`);
+    let repair: LlmResponse | undefined;
+    // A reply that can't be used was still paid for: keep its usage on the error run.
+    const unusable = (err: unknown, label: string, text: string): Error => {
+      logUsage();
+      return Object.assign(new Error(`${(err as Error).message}\n--- ${label} ---\n${truncate(text, 2000)}`), { params: params() });
+    };
     let content = res.text;
     if (json) {
       try {
         content = extractJson(res.text);
       } catch (err) {
-        throw new Error(`${(err as Error).message}\n--- 模型回复 / model reply ---\n${truncate(res.text, 2000)}`);
+        throw unusable(err, "模型回复 / model reply", res.text);
       }
     }
     const abs = path.join(loaded.dir, outputRel(output));
@@ -351,30 +354,36 @@ export const llmExecutor: StageExecutor = {
     };
     write(content);
     ctx.log(`已写入 / wrote ${outputRel(output)} (${content.length} chars, ${ms} ms)`);
-    let repair: LlmResponse | undefined;
     if (output.schema) {
       const problems = schemaProblems(loaded.dir, stage);
       if (problems.length) {
         ctx.log(`产物不符合 schema，自动再试一次 / output failed the schema, retrying once`);
+        // The repair continues the same conversation: the model sees its instructions and its whole
+        // reply, so it fixes only what failed instead of rewriting a truncated copy (or switching language).
         const repairPrompt = [
-          "你上一次的回复不符合 JSON Schema。请只输出改好的 JSON，不要解释。",
-          "Your previous reply did not match the JSON Schema. Reply with only the corrected JSON, no explanation.",
-          "",
-          "上一次的回复 / previous reply:",
-          truncate(res.text, 4000),
+          "你上一次的回复不符合 JSON Schema。按下面的校验错误改好，输出改好后的完整 JSON，不要解释。内容和语言保持不变，只改不符合的地方。",
+          "Your previous reply did not match the JSON Schema. Fix the validation errors below and reply with the complete corrected JSON only, no explanation. Keep the content and the language as they were; change only what fails.",
           "",
           "校验错误 / validation errors:",
           problems.slice(0, 5).map((p) => `${p.file} ${p.path}: ${p.message}`).join("\n"),
           "",
           "JSON Schema:",
-          truncate(schemaTexts(loaded.dir, stage).join("\n\n"), 4000),
+          truncate(schemaTexts(loaded.dir, stage).join("\n\n"), 8000),
         ].join("\n");
-        repair = await resolveLlm(ctx.options)({ ...req, repair: true, prompt: repairPrompt });
+        repair = await resolveLlm(ctx.options)({
+          ...req,
+          repair: true,
+          history: [
+            { role: "user", content: req.prompt },
+            { role: "assistant", content: res.text },
+          ],
+          prompt: repairPrompt,
+        });
         let repaired = repair.text;
         try {
           repaired = json ? extractJson(repair.text) : repair.text;
         } catch (err) {
-          throw new Error(`${(err as Error).message}\n--- 修复回复 / repair reply ---\n${truncate(repair.text, 2000)}`);
+          throw unusable(err, "修复回复 / repair reply", repair.text);
         }
         write(repaired);
         const again = schemaProblems(loaded.dir, stage);

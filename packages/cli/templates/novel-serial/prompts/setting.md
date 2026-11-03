@@ -36,3 +36,6 @@ How to write it:
 - The edge needs a limit or cost (`cost`), or there is no conflict; `rules` are limits, not an encyclopedia.
 - Make `hook` concrete, not "exciting" or "satisfying". Avoid formula and copycat setups; give the book something of its own.
 - Keep the content clean: nothing vulgar, gratuitously gory or discriminatory.
+
+输出语言是 {{inputs.language}}。是 en 时，JSON 里每一个字符串都写英文（书名、人名、规则都是英文），即使点子、类型或上面的示例是中文；是 zh 时写中文。
+The output language is {{inputs.language}}. If it is en, every string in the JSON is English (the title, names and rules too), even when the idea, the genre or the examples above are in Chinese; if it is zh, Chinese.

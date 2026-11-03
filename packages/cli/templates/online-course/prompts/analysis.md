@@ -29,3 +29,6 @@ Analyze the learners for this online course and set its outcomes. Reply with JSO
 - This is the Analysis step of ADDIE: where the learners are, where they need to be; the course teaches only the gap.
 - 3 to 6 `outcomes`, `id` o1, o2, …, each with an observable verb (build, write, calculate, compare, judge, design…), never "know", "understand" or "master"; `level` is a revised-Bloom level (remember, understand, apply, analyze, evaluate, create), with at least half at apply or above.
 - Be honest in `notFor`: people who already know this, people who need a certificate, and so on.
+
+输出语言是 {{inputs.language}}。是 en 时，JSON 里每一个字符串全部写英文，即使主题、学员描述或上面的示例是中文；是 zh 时写中文。
+The output language is {{inputs.language}}. If it is en, every string in the JSON is in English, even when the topic, the learner description or the examples above are in Chinese; if it is zh, Chinese.

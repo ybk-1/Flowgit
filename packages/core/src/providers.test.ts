@@ -231,6 +231,17 @@ describe("model specs and provider config", () => {
     expect(ds).toMatchObject({ max_tokens: 1000, messages: [{ role: "system", content: "sys" }, { role: "user", content: "hi" }] });
     expect(JSON.stringify(ds)).not.toMatch(/effort/);
   });
+
+  it("sends earlier turns before the prompt in both protocols", () => {
+    const all = loadProviders();
+    const history: LlmRequest["history"] = [
+      { role: "user", content: "first" },
+      { role: "assistant", content: "reply" },
+    ];
+    const req = (provider: ResolvedProvider): LlmRequest => ({ stageId: "s", provider, model: "m", system: "sys", prompt: "fix it", maxTokens: 1000, history });
+    expect(anthropicBody(req(effectiveProvider(all.glm))).messages).toEqual([...history!, { role: "user", content: "fix it" }]);
+    expect(openaiBody(req(effectiveProvider(all.deepseek))).messages).toEqual([{ role: "system", content: "sys" }, ...history!, { role: "user", content: "fix it" }]);
+  });
 });
 
 describe("calling a provider over HTTP", () => {

@@ -44,3 +44,6 @@ Build a day-by-day itinerary from the candidate places. Reply with JSON only.
 - Main sights (`type` `sight`) per day stay within the pace. Leave at least 60 minutes free (`free`) every day; no box-ticking rush.
 - Every day has a `backup`: an indoor or alternative option for rain, heat or sold-out bookings.
 - `budget` covers stay, food, tickets, local transport and other, adding up to no more than the budget per person.
+
+交之前逐天数一遍：地点清单里 `type` 是 `sight` 的站，relaxed 每天不超过 2 个，normal 不超过 3 个，packed 不超过 4 个。超了就把多的那个写进 `backup`，或者挪到别的天；`food` 和 `walk` 的站不算主要景点。输出语言是 {{inputs.language}}：是 en 时全部写英文，地名可以在英文后面括注中文。
+Before replying, count each day's stops whose place has `type` `sight`: at most 2 for relaxed, 3 for normal, 4 for packed. If a day has more, put the extra one in `backup` or move it to another day; `food` and `walk` stops are not main sights. The output language is {{inputs.language}}: if it is en, everything is English, and a place name may carry its Chinese name in brackets after the English.

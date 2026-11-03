@@ -1,0 +1,245 @@
+{
+  "format": "flowgit",
+  "version": "0.1",
+  "id": "picture-book",
+  "name": "绘本 / 漫画",
+  "description": "做一本绘本或一篇短漫画：创作说明（人）→ 版式（脚本按页数排好每个跨页或每一页）→ 故事（角色外观、三次尝试、主角自己解决、重复句）→ 分页（每个跨页的文字、插图说明、图片描述和翻页钩子；漫画是每页的分格和对白）→ 文稿和插画说明（投稿稿、分页稿、给画家的尺寸和角色表、样书 HTML）→ 画前检查 → 插图（人）→ 成书预览 → 印刷检查（尺寸、分辨率、出血、AI 插图的标识和声明）。 / Make a picture book or a short comic: a brief (person) → layout (a script lays out every spread or page for the page count) → story (character looks, three tries, the main character solves it, a refrain) → pagination (each spread's words, art note, image description and page-turn hook; for a comic, each page's panels and balloons) → manuscript and art brief (a submission manuscript, the paginated text, sizes and a character sheet for the illustrator, an HTML dummy) → pre-art check → art (person) → book preview → print check (size, resolution, bleed, and labels and disclosures for AI art).",
+  "language": "zh",
+  "author": {
+    "name": "Flowgit"
+  },
+  "license": "Apache-2.0",
+  "tags": [
+    "picture-book",
+    "comic",
+    "children",
+    "writing",
+    "illustration"
+  ],
+  "inputs": {
+    "format": {
+      "type": "string",
+      "enum": [
+        "picture-book",
+        "comic"
+      ],
+      "default": "picture-book",
+      "description": "形式：picture-book 绘本，comic 漫画（按页分格） / Format: picture-book, or comic (pages of panels)"
+    },
+    "age": {
+      "type": "string",
+      "default": "3-6",
+      "description": "读者年龄，例如 3-6（绘本，大人读给孩子听）或 8-12（漫画） / Reader age, such as 3-6 (a picture book read aloud by an adult) or 8-12 (a comic)"
+    },
+    "pages": {
+      "type": "number",
+      "default": 32,
+      "description": "总页数。绘本一般 32 页（也有 24、40、48，按 8 的倍数印），漫画短篇一般 8 到 24 页 / Total pages. Picture books are usually 32 (also 24, 40 or 48, printed in multiples of 8); short comics usually 8 to 24"
+    },
+    "trim": {
+      "type": "string",
+      "default": "8.5x8.5in",
+      "description": "成书尺寸（宽x高），单位 in 或 mm，例如 8.5x8.5in、8x10in、210x285mm / Trim size (width x height) in in or mm, such as 8.5x8.5in, 8x10in or 210x285mm"
+    },
+    "author": {
+      "type": "string",
+      "default": "",
+      "description": "作者署名，印在书名页上，可选 / Author credit for the title page, optional"
+    },
+    "aiArt": {
+      "type": "boolean",
+      "default": false,
+      "description": "插图用 AI 生成时打开：印刷检查会列出要做的标识和声明 / Turn on when the art is AI-generated: the print check lists the labels and disclosures to make"
+    },
+    "language": {
+      "type": "string",
+      "enum": [
+        "zh",
+        "en"
+      ],
+      "default": "zh",
+      "description": "输出语言：zh 中文，en English / Output language: zh or en"
+    }
+  },
+  "stages": [
+    {
+      "id": "brief",
+      "name": "创作说明",
+      "description": "这本书给谁、讲什么、必须有和不要有的东西、角色长什么样。示例是虚构的《米粒的黄帽子》。 / Who the book is for, what happens, what must and must not be in it, and what the characters look like. The sample is a fictional book, Millie's Yellow Hat.",
+      "executor": {
+        "type": "human",
+        "instructions": "把 materials/brief.md 换成你的创作说明：给谁读（几岁、谁读给谁听）、想讲的故事和感觉、角色的样子、一定要有的细节、不要出现的东西（比如危险动作）。写的是“感觉”，不要写成一句道理。 / Replace materials/brief.md with your brief: who it is for (what age, who reads it to whom), the story and the feeling you want, what the characters look like, details that must be there, and things that must not (such as unsafe behaviour). Write the feeling, not a moral."
+      },
+      "outputs": [
+        {
+          "type": "text/markdown",
+          "path": "materials/brief.md"
+        }
+      ]
+    },
+    {
+      "id": "layout",
+      "name": "版式",
+      "description": "按页数和形式排好每个单元：绘本是第 1 到 3 页前页、4–5 到倒数第二页的跨页、最后一页单页；漫画是每一页，标出左右页和翻页。还算出每张图的像素尺寸。 / Lays out every unit for the page count and format: for a picture book, front matter on pages 1 to 3, spreads from 4–5 to the second-to-last page, and a single last page; for a comic, every page, marked left or right with its page turns. It also works out each image's pixel size.",
+      "executor": {
+        "type": "script",
+        "run": "node scripts/layout.mjs"
+      },
+      "outputs": [
+        {
+          "type": "text/markdown",
+          "path": "layout.md"
+        }
+      ]
+    },
+    {
+      "id": "story",
+      "name": "故事",
+      "description": "书名、一句话梗概、藏在故事下面的感觉、角色（外观写具体，前后画得一样）、开头—问题—三次尝试—转折—主角自己解决—结尾、重复句、画风建议。 / Title, logline, the feeling underneath, characters (concrete looks so they are drawn the same every time), the beats from opening through three tries to a turn, the main character's own solution and the ending, a refrain, and an art style.",
+      "inputs": [
+        "brief"
+      ],
+      "executor": {
+        "type": "llm",
+        "prompt": "prompts/story.md",
+        "effort": "medium"
+      },
+      "outputs": [
+        {
+          "type": "application/json",
+          "path": "story.json",
+          "schema": "schemas/story.schema.json"
+        }
+      ]
+    },
+    {
+      "id": "storyboard",
+      "name": "分页",
+      "description": "按版式一个单元一项：绘本写每个跨页的文字、插图说明（只写文字没说的）、图片描述和翻页钩子；漫画写每页的分格、画面和对白。 / One item per layout unit: for a picture book, each spread's words, an art note (only what the words don't say), an image description and a page-turn hook; for a comic, each page's panels, art and balloons.",
+      "inputs": [
+        "brief",
+        "story",
+        "layout"
+      ],
+      "executor": {
+        "type": "llm",
+        "prompt": "prompts/storyboard.md",
+        "effort": "high"
+      },
+      "outputs": [
+        {
+          "type": "application/json",
+          "path": "storyboard.json",
+          "schema": "schemas/storyboard.schema.json"
+        }
+      ]
+    },
+    {
+      "id": "manuscript",
+      "name": "文稿和插画说明",
+      "description": "投稿稿（只有文字，插图说明只留在没有文字的跨页）、分页稿、给画家的插画说明（尺寸、出血、中缝、角色表、每张图画什么）和样书 dummy.html。漫画写成按页分格的完整脚本。 / A submission manuscript (words only, with art notes kept only for wordless spreads), the paginated text, an art brief for the illustrator (sizes, bleed, gutter, character sheet, what each image shows) and dummy.html. A comic becomes a full script, page by page and panel by panel.",
+      "inputs": [
+        "story",
+        "storyboard",
+        "layout"
+      ],
+      "executor": {
+        "type": "script",
+        "run": "node scripts/book.mjs manuscript"
+      },
+      "outputs": [
+        {
+          "type": "text/markdown",
+          "path": "manuscript.md"
+        },
+        {
+          "type": "text/markdown",
+          "path": "art-brief.md"
+        },
+        {
+          "type": "text/html",
+          "path": "dummy.html"
+        }
+      ]
+    },
+    {
+      "id": "precheck",
+      "name": "画前检查",
+      "description": "单元和版式对不对得上、总字数、插图说明是不是在重复文字、翻页钩子、图片描述的长度、像在讲道理的句子、主角是不是自己解决、重复句出现几次；漫画还查每个对白框和每格的字数、说话人。只提醒，不拦。 / Whether the units match the layout, the word count, art notes that repeat the words, page-turn hooks, image description length, lines that preach, whether the main character solves the problem, and how often the refrain comes back; for a comic, words per balloon and per panel, and the speakers. Warnings only.",
+      "inputs": [
+        "brief",
+        "story",
+        "storyboard",
+        "layout"
+      ],
+      "executor": {
+        "type": "script",
+        "run": "node scripts/precheck.mjs"
+      },
+      "outputs": [
+        {
+          "type": "text/markdown",
+          "path": "precheck-report.md"
+        }
+      ]
+    },
+    {
+      "id": "art",
+      "name": "插图",
+      "description": "照插画说明画好每一张图，放进 art/，文件名照 art-brief.md 写（p04-05.png、p32.png、cover.png）。 / Draw every image from the art brief and put it in art/, named as art-brief.md says (p04-05.png, p32.png, cover.png).",
+      "inputs": [
+        "manuscript",
+        "precheck"
+      ],
+      "executor": {
+        "type": "human",
+        "instructions": "照 art-brief.md 画图（或请画家画），把图放进 art/：跨页叫 p04-05.png 这样，单页叫 p32.png，封面叫 cover.png，PNG 或 JPEG 都行。尺寸照 art-brief.md 里的像素，图要画到出血线，文字和脸不要放在中缝和裁切线附近。用 AI 生成的图，把输入 aiArt 打开。 / Draw from art-brief.md (or have an illustrator do it) and put the images in art/: spreads named like p04-05.png, single pages like p32.png, the cover cover.png, as PNG or JPEG. Use the pixel sizes in art-brief.md, run the art to the bleed line, and keep text and faces away from the gutter and the trim. For AI-generated art, turn on the aiArt input."
+      },
+      "outputs": [
+        {
+          "type": "dir",
+          "path": "art/"
+        }
+      ]
+    },
+    {
+      "id": "book",
+      "name": "成书预览",
+      "description": "把 art/ 里的图和文字排进 book.html，按页码翻，还没有的图显示插图说明。 / Puts the images from art/ and the words into book.html, page by page; an image still missing shows its art note.",
+      "inputs": [
+        "storyboard",
+        "art"
+      ],
+      "executor": {
+        "type": "script",
+        "run": "node scripts/book.mjs book"
+      },
+      "outputs": [
+        {
+          "type": "text/html",
+          "path": "book.html"
+        }
+      ]
+    },
+    {
+      "id": "check",
+      "name": "印刷检查",
+      "description": "每个单元有没有图、像素够不够 300 DPI 加出血、比例对不对、多出来的文件；打开 aiArt 时列出 KDP 的 AI 内容声明、《人工智能生成合成内容标识办法》和美国版权局的登记要求。只提醒，不拦。 / Whether every unit has its image, enough pixels for 300 DPI with bleed, the right proportions, and stray files; with aiArt on, KDP's AI content disclosure, China's labeling measures for AI-generated content, and the US Copyright Office's registration guidance. Warnings only.",
+      "inputs": [
+        "storyboard",
+        "art",
+        "book"
+      ],
+      "executor": {
+        "type": "script",
+        "run": "node scripts/check.mjs"
+      },
+      "outputs": [
+        {
+          "type": "text/markdown",
+          "path": "check-report.md"
+        }
+      ]
+    }
+  ]
+}

@@ -21,6 +21,6 @@ Compare the job description with the current resume and reply with one JSON obje
 规则 / Rules:
 
 - 只根据给你的两份材料，不要编造候选人没写过的经历。
-- `keywords` 用职位描述里的原词，并且原简历里要能找到依据（同义词可以，但不要加入没提过的技术）。
+- `keywords` 用职位描述里的原词，并且原简历里要能找到依据（同义词可以，但不要加入没提过的技术）。职位描述同一个词有中英两种写法时，取输出语言那一种；只有另一种语言时，译成输出语言，简历会照这个译法写。
 - Only use the two documents you were given. Do not invent experience the candidate did not write.
-- `keywords` are words from the job description that the original resume can support. Do not add technologies that were never mentioned.
+- `keywords` are words from the job description that the original resume can support. Do not add technologies that were never mentioned. When the job description gives a term in both Chinese and English, take the one in the output language; when it has only the other language, translate the term, and the resume will use that translation.

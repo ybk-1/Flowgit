@@ -4,6 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import zlib from "node:zlib";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 // Runs the built CLI (dist/) against the bundled short-video template,
@@ -75,14 +76,14 @@ describe("flowgit CLI with the short-video template", () => {
     expect(list.status).toBe(0);
     const templates = JSON.parse(list.stdout) as { id: string; default: boolean; stages: { executor: string }[] }[];
     expect(templates[0]).toMatchObject({ id: "short-video", default: true });
-    expect(templates.map((t) => t.id)).toEqual(expect.arrayContaining(["weekly-report", "article", "support-sop", "job-application", "research-report", "ecommerce-listing", "slides", "live-selling", "short-drama", "lesson-plan", "novel-serial", "business-plan", "event-plan", "hiring", "travel-guide", "online-course", "landing-page", "social-posts", "data-report", "meeting-notes"]));
+    expect(templates.map((t) => t.id)).toEqual(expect.arrayContaining(["weekly-report", "article", "support-sop", "job-application", "research-report", "ecommerce-listing", "slides", "live-selling", "short-drama", "lesson-plan", "novel-serial", "business-plan", "event-plan", "hiring", "travel-guide", "online-course", "landing-page", "social-posts", "data-report", "meeting-notes", "podcast", "picture-book", "product-launch", "micro-course"]));
     const listed = spawnSync(process.execPath, [cli, "templates"], { encoding: "utf8", env: { ...process.env, NO_COLOR: "1" } });
     expect(listed.stdout).toMatch(/weekly-report\s+周报（入门示例）\s+随手记 human → 周报草稿 llm → 检查 script/);
     expect(listed.stdout).toMatch(/landing-page\s+落地页\s+简报 human → 结构 llm → 文案 llm → 照片 human → 生成 script → 检查 script/);
 
     const wrong = spawnSync(process.execPath, [cli, "init", path.join(work, "nope"), "-t", "no-such-template"], { encoding: "utf8" });
     expect(wrong.status).toBe(1);
-    expect(wrong.stderr).toContain("bundled templates: short-video, article, business-plan, data-report, ecommerce-listing, event-plan, hiring, job-application, landing-page, lesson-plan, live-selling, meeting-notes, novel-serial, online-course, research-report, short-drama, slides, social-posts, support-sop, travel-guide, weekly-report");
+    expect(wrong.stderr).toContain("bundled templates: short-video, article, business-plan, data-report, ecommerce-listing, event-plan, hiring, job-application, landing-page, lesson-plan, live-selling, meeting-notes, micro-course, novel-serial, online-course, picture-book, podcast, product-launch, research-report, short-drama, slides, social-posts, support-sop, travel-guide, weekly-report");
   });
 
   it("shows a short, quoted path when the new flow is below the current folder", () => {
@@ -1484,14 +1485,14 @@ describe("meeting-notes template", () => {
     expect(clean).toContain("Here today: Lin Xia, Zhou Heng, and Shen Yu.");
     expect(clean).not.toContain("[0:48]");
     const report = fs.readFileSync(path.join(dir, "check-report.md"), "utf8");
-    expect(report).toContain("4 action(s).");
+    expect(report).toContain("4 actions.");
     expect(report).toContain("Zhou Heng: Deliver the 380 gram structure sketch for the next version only, and write the real estimate if 380 grams is missed (2026-03-11, source 8:50)");
     expect(report).toContain("Lin Xia: Lock the launch list (title, detail page, 7-day returns, 1-year motor warranty) and send it to the group (2026-03-11, source 16:40)");
     expect(report).toContain("Shen Yu: Write 5 support answers (weight, ice, charging, returns, warranty) from facts already on record, with no new promises (2026-03-09, source 22:15)");
     expect(report).toContain("Shen Yu: Send the draft answers to Lin Xia for a quick look (date TBD, source 28:50)");
     expect(report).toContain("#4 Send the draft answers to Lin Xia for a quick look: no date was named; add one.");
     expect(report).toContain("None.");
-    expect(report).toContain("1 thing(s) to look at.");
+    expect(report).toContain("1 thing to look at.");
   });
 
   it("reads a GBK .txt with a name-and-time line above the words, and keeps an action nobody took", () => {
@@ -1571,6 +1572,849 @@ describe("meeting-notes template", () => {
     expect(format).toContain("## 格式错误");
     expect(format).toContain("actions.json 必须是数组。");
   });
+});
+
+describe("podcast template", () => {
+  let root: string;
+
+  function runIn(dir: string, args: string[], env: Record<string, string> = {}) {
+    const r = spawnSync(process.execPath, [cli, "-C", dir, ...args], {
+      encoding: "utf8",
+      env: { ...process.env, NO_COLOR: "1", ...env },
+    });
+    return { code: r.status, out: `${r.stdout}${r.stderr}` };
+  }
+
+  beforeAll(() => {
+    if (!fs.existsSync(cli)) throw new Error("Build the CLI first: pnpm -r run build");
+    root = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-podcast-"));
+  });
+
+  afterAll(() => {
+    if (root) fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  it("runs the Chinese sample: transcript with speakers, chapters on block starts, and the planted yes/no question", () => {
+    const dir = path.join(root, "zh");
+    const init = spawnSync(process.execPath, [cli, "init", dir, "-t", "podcast"], { encoding: "utf8" });
+    expect(init.status, `${init.stdout}${init.stderr}`).toBe(0);
+    expect(runIn(dir, ["inputs", "set", "show=开店手记", "host=陆遥", "topic=一家独立书店怎么靠会员和活动活下来", "guest=沈禾，半亩书店创始人", "sponsor=店小算", "language=zh"]).code).toBe(0);
+    const ran = runIn(dir, ["run", "all"], { FLOWGIT_LLM_MOCK_DIR: path.join(dir, "demo-replies", "zh") });
+    expect(ran.code, ran.out).toBe(0);
+    for (const file of ["plan.json", "script.md", "prep.md", "precheck-report.md", "transcript.md", "publish/transcript.vtt", "shownotes.md", "check-report.md"]) {
+      expect(fs.existsSync(path.join(dir, file)), file).toBe(true);
+    }
+    const transcript = fs.readFileSync(path.join(dir, "transcript.md"), "utf8");
+    expect(transcript).toContain("来源：recording/episode-zh.srt");
+    expect(transcript).toContain("时长：30:40");
+    expect(transcript).toContain("说话人：沈禾、陆遥");
+    expect(transcript).toContain("章节上限：4 个（Apple 建议每小时不超过 6 个）");
+    // one-minute blocks: the ad at 12:30 and the next question at 13:40 are separate blocks
+    expect(transcript).toContain("[12:30] 陆遥：插一段广告。");
+    expect(transcript).toContain("[13:40] 陆遥：回到书店。");
+    const vtt = fs.readFileSync(path.join(dir, "publish", "transcript.vtt"), "utf8");
+    expect(vtt.startsWith("WEBVTT\n\n00:00:00.500 --> 00:00:24.000\n<v 沈禾>我们试过一次全场五折。")).toBe(true);
+    const precheck = fs.readFileSync(path.join(dir, "precheck-report.md"), "utf8");
+    expect(precheck).toContain("分段 8 段，共 30 分钟（目标 30 分钟），对得上。");
+    expect(precheck).toContain("- 会员会不会觉得 399 元贵？");
+    expect(ran.out).toContain("有 1 处要看一下，见 precheck-report.md。");
+    const check = fs.readFileSync(path.join(dir, "check-report.md"), "utf8");
+    expect(check).toContain("时长 30:40（目标 30 分钟）。");
+    expect(check).toContain("章节 4 个：00:00、06:40、13:40、21:30。");
+    expect(check).toContain("recording/ 里没有成品音频，跳过响度检查。");
+    expect(ran.out).toContain("检查通过。");
+    // the guest's unsourced claim stays out of the show notes
+    expect(fs.readFileSync(path.join(dir, "shownotes.md"), "utf8")).not.toContain("关了一半");
+  });
+
+  it("runs the English sample", () => {
+    const dir = path.join(root, "en");
+    const init = spawnSync(process.execPath, [cli, "init", dir, "-t", "podcast"], { encoding: "utf8" });
+    expect(init.status, `${init.stdout}${init.stderr}`).toBe(0);
+    expect(runIn(dir, ["inputs", "set", "show=Shop Notes", "host=Lu Yao", "topic=How an independent bookstore lives on members and events", "guest=Shen He, founder of Half Acre Books", "sponsor=ShopTally", "language=en"]).code).toBe(0);
+    const ran = runIn(dir, ["run", "all"], { FLOWGIT_LLM_MOCK_DIR: path.join(dir, "demo-replies", "en") });
+    expect(ran.code, ran.out).toBe(0);
+    const transcript = fs.readFileSync(path.join(dir, "transcript.md"), "utf8");
+    expect(transcript).toContain("Speakers: Shen He, Lu Yao");
+    expect(transcript).toContain("Chapter limit: 4 (Apple suggests no more than six an hour)");
+    expect(fs.readFileSync(path.join(dir, "publish", "transcript.vtt"), "utf8")).toContain("<v Lu Yao>A quick ad. This episode is sponsored by ShopTally");
+    const precheck = fs.readFileSync(path.join(dir, "precheck-report.md"), "utf8");
+    expect(precheck).toContain("8 segments, 30 minutes in all (target 30), matches.");
+    expect(precheck).toContain("- Do members think 399 yuan is too much?");
+    expect(ran.out).toContain("1 thing to look at; see precheck-report.md.");
+    const check = fs.readFileSync(path.join(dir, "check-report.md"), "utf8");
+    expect(check).toContain("4 chapters: 00:00, 06:40, 13:40, 21:30.");
+    expect(ran.out).toContain("All checks passed.");
+  });
+
+  it("flags an ad that isn't disclosed first, too many talk segments, chapters off the transcript, and loud or quiet audio", () => {
+    const dir = path.join(root, "zh");
+    const script = path.join(dir, "script.md");
+    fs.writeFileSync(script, fs.readFileSync(script, "utf8").replace("陆遥：插一段广告。本期节目由店小算赞助。", "陆遥：本期节目由店小算赞助，它是最好用的记账应用。"));
+    // a fifth talk segment: more chapters than a 30-minute episode should have
+    const planPath = path.join(dir, "plan.json");
+    const plan = JSON.parse(fs.readFileSync(planPath, "utf8"));
+    plan.segments[0].kind = "talk";
+    fs.writeFileSync(planPath, `${JSON.stringify(plan, null, 2)}\n`);
+    const pre = runIn(dir, ["run", "precheck"]);
+    expect(pre.code, pre.out).toBe(0);
+    const precheck = fs.readFileSync(path.join(dir, "precheck-report.md"), "utf8");
+    expect(precheck).toContain("- 第一句没有说明是广告：「本期节目由店小算赞助，它是最好用的记账应用。」");
+    expect(precheck).toContain("## 广告里的绝对化用语（《广告法》第九条）\n- 最好");
+    expect(precheck).toContain("- 访谈段（talk）有 5 个，目标 30 分钟最多 4 个：一个访谈段就是一个章节，Apple 建议每小时不超过 6 个章节");
+
+    const notes = path.join(dir, "shownotes.md");
+    fs.writeFileSync(notes, fs.readFileSync(notes, "utf8").replace("13:40 每周四的读书会", "12:00 每周四的读书会").replace(/21:30 重来会少做什么\r?\n/, ""));
+    if (hasFfmpeg) {
+      const tone = spawnSync("ffmpeg", ["-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i", "sine=frequency=440:duration=3", "-af", "volume=-12dB", path.join(dir, "recording", "episode.wav")]);
+      expect(tone.status).toBe(0);
+    }
+    const checked = runIn(dir, ["run", "check"]);
+    expect(checked.code, checked.out).toBe(0);
+    const report = fs.readFileSync(path.join(dir, "check-report.md"), "utf8");
+    expect(report).toContain("- 12:00 不是文字稿里任何一段的开头。");
+    expect(report).toContain("章节 3 个：00:00、06:40、12:00。");
+    if (hasFfmpeg) expect(report).toMatch(/- episode\.wav：响度 -\d+(?:\.\d+)? LUFS，Apple 建议 -16（±1）。/);
+    expect(report).not.toContain("检查通过。");
+  });
+});
+
+describe("picture-book template", () => {
+  let root: string;
+
+  function runIn(dir: string, args: string[], env: Record<string, string> = {}) {
+    const r = spawnSync(process.execPath, [cli, "-C", dir, ...args], {
+      encoding: "utf8",
+      env: { ...process.env, NO_COLOR: "1", ...env },
+    });
+    return { code: r.status, out: `${r.stdout}${r.stderr}` };
+  }
+
+  /** A blank 1-bit grayscale PNG: real pixels, a few kilobytes on disk. */
+  function blankPng(file: string, width: number, height: number) {
+    const table = Array.from({ length: 256 }, (_, n) => {
+      let c = n;
+      for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+      return c >>> 0;
+    });
+    const crc = (buf: Buffer) => {
+      let c = 0xffffffff;
+      for (const b of buf) c = table[(c ^ b) & 0xff] ^ (c >>> 8);
+      return (c ^ 0xffffffff) >>> 0;
+    };
+    const chunk = (type: string, data: Buffer) => {
+      const body = Buffer.concat([Buffer.from(type, "ascii"), data]);
+      const head = Buffer.alloc(4);
+      head.writeUInt32BE(data.length);
+      const tail = Buffer.alloc(4);
+      tail.writeUInt32BE(crc(body));
+      return Buffer.concat([head, body, tail]);
+    };
+    const ihdr = Buffer.alloc(13);
+    ihdr.writeUInt32BE(width, 0);
+    ihdr.writeUInt32BE(height, 4);
+    ihdr[8] = 1; // bit depth 1, colour type 0 (grayscale)
+    const pixels = Buffer.alloc((1 + Math.ceil(width / 8)) * height);
+    const signature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    fs.writeFileSync(file, Buffer.concat([signature, chunk("IHDR", ihdr), chunk("IDAT", zlib.deflateSync(pixels)), chunk("IEND", Buffer.alloc(0))]));
+  }
+
+  /** The head of a baseline JPEG (SOI, APP0, SOF0, EOI): the check reads only the frame header. */
+  function jpegHead(file: string, width: number, height: number) {
+    const app0 = [0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00];
+    const sof0 = [0xff, 0xc0, 0x00, 0x11, 0x08, height >> 8, height & 0xff, width >> 8, width & 0xff, 0x03, 0x01, 0x22, 0x00, 0x02, 0x11, 0x01, 0x03, 0x11, 0x01];
+    fs.writeFileSync(file, Buffer.from([0xff, 0xd8, ...app0, ...sof0, 0xff, 0xd9]));
+  }
+
+  beforeAll(() => {
+    if (!fs.existsSync(cli)) throw new Error("Build the CLI first: pnpm -r run build");
+    root = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-picture-book-"));
+  });
+
+  afterAll(() => {
+    if (root) fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  it("runs the Chinese sample: spreads at 300 DPI with bleed, art notes only where there are no words, and the planted art note", () => {
+    const dir = path.join(root, "zh");
+    const init = spawnSync(process.execPath, [cli, "init", dir, "-t", "picture-book"], { encoding: "utf8" });
+    expect(init.status, `${init.stdout}${init.stderr}`).toBe(0);
+    const ran = runIn(dir, ["run", "all"], { FLOWGIT_LLM_MOCK_DIR: path.join(dir, "demo-replies", "zh") });
+    expect(ran.code, ran.out).toBe(0);
+    for (const file of ["layout.md", "story.json", "storyboard.json", "manuscript.md", "art-brief.md", "dummy.html", "precheck-report.md", "book.html", "check-report.md"]) {
+      expect(fs.existsSync(path.join(dir, file)), file).toBe(true);
+    }
+    const layout = fs.readFileSync(path.join(dir, "layout.md"), "utf8");
+    expect(layout).toContain("单页 2588×2625 像素，跨页 5175×2625 像素");
+    expect(layout).toContain("| 1 | [4, 5] | 跨页 | p04-05.png |");
+    expect(layout).toContain("| 15 | [32] | 左页，最后一页 | p32.png |");
+    const manuscript = fs.readFileSync(path.join(dir, "manuscript.md"), "utf8");
+    expect(manuscript).toContain("32 页绘本 · 约 244 字 · 3-6 岁");
+    // the two wordless spreads keep an art note in the manuscript; the others don't
+    expect(manuscript.match(/（（插图：/g)).toHaveLength(2);
+    expect(fs.readFileSync(path.join(dir, "art-brief.md"), "utf8")).toContain("文字和脸离裁切线至少 0.375 英寸（约 113 像素）");
+    const precheck = fs.readFileSync(path.join(dir, "precheck-report.md"), "utf8");
+    expect(precheck).toContain("15 个单元（绘本，32 页），和版式对得上。");
+    expect(precheck).toContain("全书 244 字（上限 1000）。");
+    expect(precheck).toContain("（插图说明只写字里没说的，Underdown）\n- 第 20–21 页");
+    expect(ran.out).toContain("有 1 处要看一下，见 precheck-report.md。");
+    expect(ran.out).toContain("排好了 book.html：16 张图里有 0 张。");
+    const check = fs.readFileSync(path.join(dir, "check-report.md"), "utf8");
+    expect(check).toContain("16 张图：有 0 张，缺 16 张。");
+    expect(check).toContain("- 缺 16 张：cover.png、p04-05.png、");
+    expect(check).not.toContain("AI 插图");
+  });
+
+  it("runs the English sample", () => {
+    const dir = path.join(root, "en");
+    const init = spawnSync(process.execPath, [cli, "init", dir, "-t", "picture-book"], { encoding: "utf8" });
+    expect(init.status, `${init.stdout}${init.stderr}`).toBe(0);
+    expect(runIn(dir, ["inputs", "set", "language=en"]).code).toBe(0);
+    const ran = runIn(dir, ["run", "all"], { FLOWGIT_LLM_MOCK_DIR: path.join(dir, "demo-replies", "en") });
+    expect(ran.code, ran.out).toBe(0);
+    expect(ran.out).toContain("Wrote manuscript.md (186 words), art-brief.md and dummy.html: 15 units.");
+    const manuscript = fs.readFileSync(path.join(dir, "manuscript.md"), "utf8");
+    expect(manuscript).toContain("A 32-page picture book · 186 words · ages 3-6");
+    expect(manuscript.match(/\(\(Art: /g)).toHaveLength(2);
+    const precheck = fs.readFileSync(path.join(dir, "precheck-report.md"), "utf8");
+    expect(precheck).toContain("15 units (picture book, 32 pages), matching the layout.");
+    expect(precheck).toContain("186 words in all (limit 600).");
+    expect(ran.out).toContain("1 thing to look at; see precheck-report.md.");
+    expect(fs.readFileSync(path.join(dir, "check-report.md"), "utf8")).toContain("16 images: 0 in place, 16 missing.");
+  });
+
+  it("checks the art for print: pixels, proportions, formats, stray files and the AI art notes", () => {
+    const dir = path.join(root, "zh");
+    const art = path.join(dir, "art");
+    blankPng(path.join(art, "cover.png"), 2588, 2625);
+    blankPng(path.join(art, "p04-05.png"), 5175, 2625);
+    blankPng(path.join(art, "p06-07.png"), 2048, 1024);
+    jpegHead(path.join(art, "p08-09.jpg"), 5175, 2625);
+    blankPng(path.join(art, "p10-11.png"), 2625, 2625);
+    fs.writeFileSync(path.join(art, "p12-13.webp"), "RIFF");
+    blankPng(path.join(art, "extra.png"), 10, 10);
+    expect(runIn(dir, ["inputs", "set", "aiArt=true"]).code).toBe(0);
+    const ran = runIn(dir, ["run", "all"], { FLOWGIT_LLM_MOCK_DIR: path.join(dir, "demo-replies", "zh") });
+    expect(ran.code, ran.out).toBe(0);
+    expect(ran.out).toContain("排好了 book.html：16 张图里有 5 张。");
+    expect(fs.readFileSync(path.join(dir, "book.html"), "utf8")).toContain('<img src="art/p08-09.jpg"');
+    const check = fs.readFileSync(path.join(dir, "check-report.md"), "utf8");
+    expect(check).toContain("16 张图：有 5 张，缺 11 张。");
+    expect(check).toContain("- 缺 11 张：p12-13.png、p14-15.png、");
+    expect(check).toContain("- p06-07.png：2048×1024，要 5175×2625（现在只有约 117 DPI）");
+    expect(check).toContain("- p10-11.png：2625×2625，要 5175×2625（现在只有约 152 DPI）");
+    expect(check).toContain("## 比例不对\n- p10-11.png：宽高比 1.00，应该是 1.97（5175×2625），印的时候会被裁掉或留白\n");
+    expect(check).toContain("## 模板认不了的格式（用 PNG 或 JPEG）\n- p12-13.webp\n");
+    expect(check).toContain("## 对不上任何一页的文件\n- extra.png\n");
+    expect(check).toContain("## AI 插图要做的标识和声明\n- KDP：");
+    expect(check).toContain("《人工智能生成合成内容标识办法》第十条");
+    expect(ran.out).toContain("有 6 处要看一下，见 check-report.md。另有 AI 插图的标识和声明要做，见报告。");
+    // the art brief adds an image prompt for each picture when the art is AI-generated
+    expect(fs.readFileSync(path.join(dir, "art-brief.md"), "utf8")).toContain("画图提示");
+  });
+
+  it("lays out a comic page by page and checks its balloons, speakers and page turns", () => {
+    const dir = path.join(root, "comic");
+    const init = spawnSync(process.execPath, [cli, "init", dir, "-t", "picture-book"], { encoding: "utf8" });
+    expect(init.status, `${init.stdout}${init.stderr}`).toBe(0);
+    expect(runIn(dir, ["inputs", "set", "format=comic", "pages=8", "age=8-12", "trim=6.625x10.25in"]).code).toBe(0);
+    const mock = path.join(root, "comic-replies");
+    fs.mkdirSync(mock);
+    fs.copyFileSync(path.join(dir, "demo-replies", "zh", "story.json"), path.join(mock, "story.json"));
+    const units = Array.from({ length: 8 }, (_, i) => {
+      const page = i + 1;
+      return {
+        pages: [page],
+        text: "",
+        art: `第 ${page} 页：公园里，风很大。`,
+        alt: `米粒在公园里追她的黄帽子（第 ${page} 页）。`,
+        // a hook on every odd page but page 3
+        turn: page % 2 === 1 && page !== 3 ? "帽子会落到哪儿？" : "",
+        panels: [{ art: "米粒追着帽子跑，豆豆跟在后面。", lines: [{ kind: page % 3 === 1 ? "speech" : "thought", who: "米粒", text: page % 3 === 1 ? "呼——风一吹，帽子飞走了！" : "等等我！" }] }],
+      };
+    });
+    units[0].panels[0].lines.unshift({ kind: "caption", who: "", text: "星期六，有风。" });
+    units[4].panels.push({ art: "米粒对着帽子说话。", lines: [{ kind: "speech", who: "米粒", text: "帽子帽子你别跑了，我给你找一个风吹不到的地方，我们一起坐在这里晒太阳，等你干了我们再回家好不好？" }] });
+    units[5].panels.push({ art: "远处有人在喊。", lines: [{ kind: "shout", who: "老师", text: "别爬树！" }] });
+    const board = { format: "comic", cover: { art: "米粒伸手去够半空中的黄帽子。", alt: "小女孩伸手去抓被风吹起的黄帽子。" }, dedication: "", units };
+    fs.writeFileSync(path.join(mock, "storyboard.json"), `${JSON.stringify(board, null, 2)}\n`);
+    const ran = runIn(dir, ["run", "all"], { FLOWGIT_LLM_MOCK_DIR: mock });
+    expect(ran.code, ran.out).toBe(0);
+    const layout = fs.readFileSync(path.join(dir, "layout.md"), "utf8");
+    expect(layout).toContain("单页 2025×3150 像素");
+    expect(layout).toContain("| 8 | [8] |");
+    const manuscript = fs.readFileSync(path.join(dir, "manuscript.md"), "utf8");
+    expect(manuscript).toContain("### 第 1 页（右页，1 格）");
+    expect(manuscript).toContain("1. 旁白：星期六，有风。\n2. 米粒：呼——风一吹，帽子飞走了！");
+    expect(manuscript).toContain("1. 米粒（心想）：等等我！");
+    expect(manuscript).toContain("1. 老师（喊）：别爬树！");
+    expect(manuscript).toContain("（翻页：帽子会落到哪儿？）");
+    const precheck = fs.readFileSync(path.join(dir, "precheck-report.md"), "utf8");
+    expect(precheck).toContain("8 个单元（漫画，8 页），和版式对得上。");
+    expect(precheck).toContain("- 8 页：单独印成 KDP 平装书最少要 24 页");
+    expect(precheck).toContain("## 没有翻页钩子\n- 第 3 页\n");
+    expect(precheck).toContain("- 第 5 页第 2 格：一个框 44 字，超过 40");
+    expect(precheck).toContain("- 第 6 页第 2 格：老师 不在故事的角色里");
+    expect(precheck).toContain("## 重复句\n没有。");
+    expect(precheck).not.toContain("## 字数");
+    expect(fs.readFileSync(path.join(dir, "check-report.md"), "utf8")).toContain("9 张图：有 0 张，缺 9 张。");
+  });
+});
+
+describe("product-launch template", () => {
+  let root: string;
+  const templates = path.join(here, "..", "templates");
+
+  function runIn(dir: string, args: string[], env: Record<string, string> = {}) {
+    const r = spawnSync(process.execPath, [cli, "-C", dir, ...args], {
+      encoding: "utf8",
+      env: { ...process.env, NO_COLOR: "1", FLOWGIT_HOME: path.join(root, "home"), ...env },
+    });
+    return { code: r.status, out: `${r.stdout}${r.stderr}` };
+  }
+
+  function init(dir: string, inputs: string[]) {
+    const r = spawnSync(process.execPath, [cli, "init", dir, "-t", "product-launch"], { encoding: "utf8" });
+    expect(r.status, `${r.stdout}${r.stderr}`).toBe(0);
+    const set = runIn(dir, ["inputs", "set", ...inputs]);
+    expect(set.code, set.out).toBe(0);
+  }
+
+  /** Replaces each `from` once in a flow file, failing loudly when the sample changed. */
+  function plant(file: string, pairs: [string, string][]) {
+    // a Windows checkout gives the demo replies, and so the outputs, CRLF line endings
+    let text = fs.readFileSync(file, "utf8").replace(/\r\n/g, "\n");
+    for (const [from, to] of pairs) {
+      expect(text.includes(from), `${path.basename(file)}: ${from}`).toBe(true);
+      text = text.replace(from, to);
+    }
+    fs.writeFileSync(file, text);
+  }
+
+  function editPosts(dir: string, edit: (posts: { productHunt: Record<string, string>; x: string; linkedin: string }) => void) {
+    const file = path.join(dir, "posts.json");
+    const posts = JSON.parse(fs.readFileSync(file, "utf8"));
+    edit(posts);
+    fs.writeFileSync(file, `${JSON.stringify(posts, null, 2)}\n`);
+  }
+
+  beforeAll(() => {
+    if (!fs.existsSync(cli)) throw new Error("Build the CLI first: pnpm -r run build");
+    root = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-product-launch-"));
+  });
+
+  afterAll(() => {
+    if (root) fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  it("keeps its landing page sub-flow the same as the landing-page template", () => {
+    for (const file of ["flow.json", "prompts/structure.md", "prompts/copy.md", "scripts/build.mjs", "scripts/check.mjs", "images/.gitkeep"]) {
+      const copy = fs.readFileSync(path.join(templates, "product-launch", "subflows", "landing-page", file), "utf8");
+      expect(copy, `subflows/landing-page/${file}`).toBe(fs.readFileSync(path.join(templates, "landing-page", file), "utf8"));
+    }
+  });
+
+  it("runs the Chinese sample: one headline across the assets, the landing page through its sub-flow, and three answers to confirm", () => {
+    const dir = path.join(root, "zh");
+    init(dir, ["product=拍小票", "audience=开小店的人", "goal=留下邮箱，收到下载链接", "launchDate=2026-12-01", "embargo=true"]);
+    const ran = runIn(dir, ["run", "all"], { FLOWGIT_LLM_MOCK_DIR: path.join(dir, "demo-replies", "zh") });
+    expect(ran.code, ran.out).toBe(0);
+    for (const file of ["messaging.json", "launch-plan.md", "fact-sheet.md", "press-release.md", "email.md", "posts.json", "faq.md", "subflows/landing-page/brief.md", "site/index.html", "site/style.css", "landing-check.md", "launch-kit.md", "check-report.md"]) {
+      expect(fs.existsSync(path.join(dir, file)), file).toBe(true);
+    }
+    expect(ran.out).toContain("写好了 launch-plan.md 和 fact-sheet.md：二级，时间表 11 项。公开发布 2026年12月1日 9:00（中国标准时间）；Product Hunt 2026年12月1日 16:01（中国标准时间）。");
+    const plan = fs.readFileSync(path.join(dir, "launch-plan.md"), "utf8");
+    expect(plan).toContain("新闻稿第一行：禁发至 2026年12月1日 9:00（中国标准时间）");
+    expect(plan).toContain("| 2026-11-17（周二） | 把新闻稿发给记者，第一行写明：禁发至 2026年12月1日 9:00（中国标准时间）。");
+    expect(plan).toContain("| 2026-12-15（周二） | CAN-SPAM：每一条退订都要在 10 个工作日内生效");
+    expect(fs.readFileSync(path.join(dir, "press-release.md"), "utf8").split(/\r?\n/)[0]).toBe("禁发至 2026年12月1日 9:00（中国标准时间）");
+    // the landing page's brief comes from the facts, and the page opens with the launch headline
+    expect(fs.readFileSync(path.join(dir, "subflows", "landing-page", "brief.md"), "utf8")).toContain("这些物料都用同一句发布标题：「拍一张小票，账就记好了」。页面开头要接住这句话。");
+    expect(fs.readFileSync(path.join(dir, "site", "index.html"), "utf8")).toContain("<h1>拍一张小票，账就记好了</h1>");
+    expect(ran.out).toContain("[子流程 / sub-flow landing] 没有必须修的问题；上线前确认 2 项。");
+    expect(fs.existsSync(path.join(dir, "subflows", "landing-page", "runs", "check", "1", "run.json"))).toBe(true);
+    expect(ran.out).toContain("写好了 launch-kit.md：X 加权 175/280，LinkedIn 385/3000，Product Hunt 标语 53/60。");
+    const kit = fs.readFileSync(path.join(dir, "launch-kit.md"), "utf8");
+    expect(kit).toContain("### 标语（Tagline，53/60）\n\n```text\nSnap a receipt and it's booked, for small shop owners\n```");
+    expect(kit).toContain("- 主题（11/60）：拍一张小票，账就记好了");
+    expect(ran.out).toContain("有 4 处要看一下。");
+    const check = fs.readFileSync(path.join(dir, "check-report.md"), "utf8");
+    expect(check).toContain(
+      "### 待确认的回答\n\n- 常见问题：Pro 能退款或者随时取消吗？\n- 常见问题：用户想删掉一张小票的照片和那笔账，怎么做？\n- 常见问题：以后能读更多种类的单据吗？\n",
+    );
+    expect(check).toContain("- 落地页检查：没有必须修的问题；上线前确认 2 项。（见 landing-check.md）");
+    expect(check).toContain("- [ ] 禁发：给记者的邮件正文里也写明禁发到什么时候、哪个时区。");
+    expect(check).toContain("| 客户原话 | FTC 背书指南；16 CFR 465 | 通过 |");
+  });
+
+  it("finds the problems planted in the Chinese assets", () => {
+    const dir = path.join(root, "zh");
+    plant(path.join(dir, "press-release.md"), [
+      ["禁发至 2026年12月1日 9:00（中国标准时间）\n", "即时发布\n"],
+      ["今天推出新功能「拍小票」", "今天推出全球首款新功能「拍小票」"],
+      ["」店小算创始人季白说，「", "」季白说，「"],
+      ["每月前 30 张小票免费；", "每月前 30 张小票免费，限时到 12月2日 周三；"],
+    ]);
+    plant(path.join(dir, "email.md"), [
+      ["主题：拍一张小票", "主题：回复：拍一张小票"],
+      ["\n按钮：更新到 3.2 版", "\n按钮：看看内测故事 → https://blog.example.com\n\n按钮：更新到 3.2 版"],
+      ["发件人：店小算，上海市示例区样板路 100 号", "发件人：店小算"],
+    ]);
+    plant(path.join(dir, "faq.md"), [["能，中文和英文的小票都能读。", "能，中文和英文的小票都能读，准确率 99%，业内最佳。TODO"]]);
+    editPosts(dir, (posts) => {
+      posts.productHunt.tagline = "拍一张小票，账就记好了 Snap a receipt";
+      posts.productHunt.firstComment += " Please upvote us today!";
+      // the URL ends where the Chinese starts, so the second copy still counts
+      posts.x += posts.x;
+      const quote = "半亩书店店主沈禾（内测期间免费使用 Pro）说：「以前月底要花一个晚上敲小票，现在进货的时候顺手拍一下。」";
+      expect(posts.linkedin).toContain(quote);
+      posts.linkedin = posts.linkedin.replace(quote, "半亩书店店主沈禾说：「现在月底不用熬夜了。」");
+    });
+    const ran = runIn(dir, ["run", "check"]);
+    expect(ran.code, ran.out).toBe(0);
+    expect(ran.out).toContain("有 21 处要看一下。");
+    const check = fs.readFileSync(path.join(dir, "check-report.md"), "utf8");
+    for (const line of [
+      "- 新闻稿第一行是「即时发布」，媒体资料里是「禁发至 2026年12月1日 9:00（中国标准时间）」",
+      "- 新闻稿写了 12月2日，发布日期是 2026年12月1日：核对一下",
+      "- 新闻稿写了周三，发布日是周二",
+      "- 引语后面没写季白的职位（资料：店小算创始人）",
+      "- 主题装成回信或转发：CAN-SPAM 不允许误导人的主题",
+      "- 有 2 个按钮：一封信只请人做一件事",
+      "- 页脚没写地址「上海市示例区样板路 100 号」",
+      "- Product Hunt 只收英文：tagline 里有汉字",
+      "- X 加权 350，超过 280",
+      "- Product Hunt：「upvote」",
+      "- 邮件的网址 https://blog.example.com：资料里没有，不要编网址",
+      "- 常见问题的数字 99：资料里没有，核实后再发",
+      "- LinkedIn 里沈禾的话和资料对不上，客户的话要一字不改：「现在月底不用熬夜了。」",
+      "- LinkedIn 引用了沈禾，但没写明关系（资料：半亩书店店主，内测期间免费使用 Pro）",
+      "- 常见问题：「最佳」",
+      // terms the facts rule out are listed once, not again as needs-proof or urgency
+      "### 资料里说不要写的话\n\n- 新闻稿：「首款」、「限时」\n",
+      "- 常见问题：TODO",
+      "| 要有证据的说法 | FTC 广告证据政策；《广告法》第九条 | 通过 |",
+      "| 紧迫感用语 | UCPD 附件一第 7 项；FTC 暗黑模式报告 | 通过 |",
+    ]) {
+      expect(check).toContain(line);
+    }
+  });
+
+  it("runs the English sample and words the planted problems in English", () => {
+    const dir = path.join(root, "en");
+    init(dir, ["language=en", "product=ShopTally Snap", "audience=owners of small shops", "goal=leave an email to get the download link", "launchDate=2026-12-01", "embargo=true"]);
+    const mock = { FLOWGIT_LLM_MOCK_DIR: path.join(dir, "demo-replies", "en") };
+    const ran = runIn(dir, ["run", "all"], mock);
+    expect(ran.code, ran.out).toBe(0);
+    expect(ran.out).toContain("Wrote launch-plan.md and fact-sheet.md: Tier 2, 11 timeline rows. Public launch Dec. 1, 2026, 9 a.m. GMT+8; Product Hunt Dec. 1, 2026, 4:01 p.m. GMT+8.");
+    expect(fs.readFileSync(path.join(dir, "press-release.md"), "utf8").split(/\r?\n/)[0]).toBe("EMBARGOED UNTIL Dec. 1, 2026, 9 a.m. GMT+8");
+    expect(fs.readFileSync(path.join(dir, "site", "index.html"), "utf8")).toContain("<h1>Snap a receipt and it&#39;s booked</h1>");
+    expect(ran.out).toContain("Wrote launch-kit.md: X weighted 223/280, LinkedIn 1057/3000, Product Hunt tagline 53/60.");
+    expect(ran.out).toContain("4 things to look at.");
+
+    plant(path.join(dir, "press-release.md"), [
+      ["EMBARGOED UNTIL Dec. 1, 2026, 9 a.m. GMT+8\n", "FOR IMMEDIATE RELEASE\n"],
+      ["today launched ShopTally Snap.", "today launched ShopTally Snap, the world's first receipt reader for shops, on Wednesday."],
+      ['" said Ji Bai, founder of ShopTally.', '" said Ji Bai.'],
+    ]);
+    plant(path.join(dir, "email.md"), [
+      ["Subject: Snap", "Subject: RE: Snap"],
+      ["From: ShopTally, 100 Sample Road, Shanghai, China", "From: ShopTally"],
+    ]);
+    plant(path.join(dir, "faq.md"), [["Yes. It reads receipts in Chinese and English.", "Yes, with 99% accuracy: the best receipt reader in Chinese and English. Act now. TODO"]]);
+    editPosts(dir, (posts) => {
+      posts.x = `${posts.x} ${posts.x}`;
+      const said = 'Shen He, owner of Half Acre Books, who had free Pro during the beta, told us: "Month end used to cost me an evening of typing up receipts. Now I snap them when the delivery comes."';
+      expect(posts.linkedin).toContain(said);
+      posts.linkedin = posts.linkedin.replace(said, 'Shen He, owner of Half Acre Books, told us: "Month end is easy now."');
+    });
+    const checked = runIn(dir, ["run", "check"]);
+    expect(checked.code, checked.out).toBe(0);
+    expect(checked.out).toContain("17 things to look at.");
+    const check = fs.readFileSync(path.join(dir, "check-report.md"), "utf8");
+    for (const line of [
+      '- The press release starts with "FOR IMMEDIATE RELEASE"; the fact sheet says "EMBARGOED UNTIL Dec. 1, 2026, 9 a.m. GMT+8"',
+      "- Press release names a Wednesday; launch day is a Tuesday",
+      "- The quote does not give Ji Bai's title (the facts: founder of ShopTally)",
+      "- The subject poses as a reply or forward; CAN-SPAM bans misleading subject lines",
+      '- The footer does not give the postal address, "100 Sample Road, Shanghai, China"',
+      "- X post: 447 on the weighted count, over 280",
+      "- FAQ: 99 not in the facts; verify before it goes out",
+      `- LinkedIn: Shen He's words differ from the facts; quote customers word for word: "Month end is easy now."`,
+      "- LinkedIn quotes Shen He without saying how they are tied to you (the facts: owner of Half Acre Books, free Pro during the beta)",
+      '- FAQ: "the best"',
+      '- FAQ: "act now"',
+      '- Press release: "world\'s first"',
+      "- FAQ: TODO",
+    ]) {
+      expect(check).toContain(line);
+    }
+  });
+});
+
+describe("micro-course template", () => {
+  let root: string;
+  const KEY = "fg-test-key-7f3a";
+
+  function runIn(dir: string, args: string[], env: Record<string, string> = {}) {
+    const r = spawnSync(process.execPath, [cli, "-C", dir, ...args], {
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        NO_COLOR: "1",
+        FLOWGIT_HOME: path.join(root, "home"),
+        FLOWGIT_TTS_API_KEY: "",
+        FLOWGIT_TTS_BASE_URL: "",
+        FLOWGIT_TTS_MODEL: "",
+        FLOWGIT_TTS_VOICE: "",
+        ...env,
+      },
+    });
+    return { code: r.status, out: `${r.stdout}${r.stderr}` };
+  }
+
+  function init(dir: string, inputs: string[]) {
+    const r = spawnSync(process.execPath, [cli, "init", dir, "-t", "micro-course"], { encoding: "utf8" });
+    expect(r.status, `${r.stdout}${r.stderr}`).toBe(0);
+    const set = runIn(dir, ["inputs", "set", ...inputs]);
+    expect(set.code, set.out).toBe(0);
+  }
+
+  /** Runs the stages one at a time, the way `run all` would, stopping before the given one; returns what each printed. */
+  function runUntil(dir: string, stop: string, env: Record<string, string> = {}) {
+    const said: Record<string, string> = {};
+    for (const stage of ["brief", "plan", "script", "deck", "precheck", "voice", "record", "captions", "render", "check"]) {
+      if (stage === stop) break;
+      const r = runIn(dir, ["run", stage], env);
+      expect(r.code, `${stage}: ${r.out}`).toBe(0);
+      said[stage] = r.out;
+    }
+    return said;
+  }
+
+  const read = (dir: string, file: string) => fs.readFileSync(path.join(dir, file), "utf8");
+  const readJson = (dir: string, file: string) => JSON.parse(read(dir, file));
+  /** Each caption's text lines, from an SRT file. */
+  const cueLines = (srt: string) =>
+    srt
+      .trim()
+      .split(/\n\s*\n/)
+      .map((block) => block.split("\n").slice(2));
+
+  function ffmpeg(args: string[]) {
+    const r = spawnSync("ffmpeg", ["-hide_banner", "-loglevel", "error", "-y", ...args], { encoding: "utf8" });
+    expect(r.status, r.stderr).toBe(0);
+  }
+
+  function probe(file: string) {
+    const r = spawnSync("ffprobe", ["-v", "error", "-show_entries", "stream=codec_type,codec_name,width,height,channels,sample_rate:format=duration", "-of", "json", file], { encoding: "utf8" });
+    expect(r.status, r.stderr).toBe(0);
+    return JSON.parse(r.stdout) as { streams: Record<string, string | number>[]; format: { duration: string } };
+  }
+
+  beforeAll(() => {
+    if (!fs.existsSync(cli)) throw new Error("Build the CLI first: pnpm -r run build");
+    root = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-micro-course-"));
+  });
+
+  afterAll(() => {
+    if (root) fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  it("runs the Chinese sample: slides, a teleprompter script and a quiz, a clean pre-record check, captions and one video per segment", () => {
+    const dir = path.join(root, "zh");
+    init(dir, ["topic=10 分钟做出你的第一张记账表"]);
+    const ran = runIn(dir, ["run", "all"], { FLOWGIT_LLM_MOCK_DIR: path.join(dir, "demo-replies", "zh") });
+    expect(ran.code, ran.out).toBe(hasFfmpeg ? 0 : 1);
+    expect(ran.out).toContain("写好了 deck/index.html（13 张幻灯片）、teleprompter.md（约 6 分 14 秒）和 quiz.md（4 道题）。");
+    expect(ran.out).toContain("检查通过，见 precheck-report.md。");
+
+    const deck = read(dir, "deck/index.html");
+    expect(deck.match(/<section class="slide kind-/g)).toHaveLength(13);
+    expect(deck.match(/<section class="slide kind-question/g)).toHaveLength(3);
+    const teleprompter = read(dir, "teleprompter.md");
+    expect(teleprompter).toContain("## s1 · 第 1 段：为什么记账 App 坚持不下去（约 1 分 53 秒，计划 2 分钟）");
+    expect(teleprompter).toContain("### 【s1-2】记账难坚持，是因为每花一笔都要记一笔\n\n> 画面：记账 App 的日历截图：只有前三天记了账，后面都是空的\n> 屏幕上的字：每花一笔，记一笔");
+    const quiz = read(dir, "quiz.md");
+    expect(quiz).toContain("## 1. G2 要算出「吃饭」一共花了多少，哪个公式对？\n\n- A. =SUMIF(C:C, F2, B:B) ✓\n- B. =SUMIF(B:B, F2, C:C)\n- C. =SUM(B:B)");
+    expect(quiz).toContain("（考第 3 段）");
+    expect(read(dir, "voice/README.md")).toContain("输入 voice 是 record");
+
+    // Chinese captions: one line of up to 16 characters, never ending on a comma or full stop
+    for (const n of ["01-s1", "02-s2", "03-s3"]) {
+      const cues = cueLines(read(dir, `captions/${n}.srt`));
+      expect(cues.length).toBeGreaterThan(20);
+      for (const lines of cues) {
+        expect(lines).toHaveLength(1);
+        expect([...lines[0]].length, lines[0]).toBeLessThanOrEqual(16);
+        expect(lines[0]).not.toMatch(/[，。、；：]$/);
+      }
+      expect(read(dir, `captions/${n}.vtt`).startsWith("WEBVTT\n\n00:00:00.000 --> ")).toBe(true);
+    }
+    const timeline = readJson(dir, "timeline.json");
+    expect(timeline.segments.map((s: { id: string; audio: { source: string }; picture: { source: string }; timedFrom: string }) => [s.id, s.audio.source, s.picture.source, s.timedFrom])).toEqual([
+      ["s1", "none", "slides", "narration"],
+      ["s2", "none", "slides", "narration"],
+      ["s3", "none", "slides", "narration"],
+    ]);
+    for (const seg of timeline.segments) expect(seg.slides.at(-1).end).toBe(seg.seconds);
+
+    if (!hasFfmpeg) return;
+    for (const [i, seg] of timeline.segments.entries()) {
+      const info = probe(path.join(dir, "video", `0${i + 1}-${seg.id}.mp4`));
+      expect(info.streams).toEqual([
+        expect.objectContaining({ codec_type: "video", codec_name: "h264", width: 1920, height: 1080 }),
+        expect.objectContaining({ codec_type: "audio", codec_name: "aac", channels: 2, sample_rate: "48000" }),
+      ]);
+      expect(Math.abs(Number(info.format.duration) - seg.seconds)).toBeLessThan(0.1);
+    }
+    expect(ran.out).toContain("有 6 处要看一下，见 check-report.md。");
+    const check = read(dir, "check-report.md");
+    expect(check).toContain("- s1：没有讲解，是无声的幻灯片视频。录好 recordings/s1.m4a（或录屏 s1.mp4）再重跑。");
+    expect(check).toContain("- s2：4 张幻灯片写了要放的画面，但 images/ 里没有图，视频里只有标题和关键词：s2-1、s2-2、s2-3、s2-4。");
+    expect(check).toContain("## 字幕（WCAG 2.2 成功标准 1.2.2；Netflix 字幕规范）\n没有。");
+    expect(check).toContain("- [ ] 上 Udemy 的话，在课程描述里写明用了 AI：这个流程用模型起草了讲稿和测验。");
+    expect(check).not.toContain("国内平台");
+  }, 180_000);
+
+  it.skipIf(!hasFfmpeg)("uses your recording, your screen recording and your captions, and sets the loudness", () => {
+    const dir = path.join(root, "zh");
+    // a quiet voice-over for s1, a screen recording with sound for s2, and a silent screen recording with captions for s3
+    ffmpeg(["-f", "lavfi", "-i", "sine=frequency=220:duration=8", "-af", "volume=-30dB", "-c:a", "aac", path.join(dir, "recordings", "s1.m4a")]);
+    ffmpeg(["-f", "lavfi", "-i", "testsrc2=size=1280x720:rate=30:duration=6", "-f", "lavfi", "-i", "sine=frequency=330:duration=6", "-shortest", "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p", "-c:a", "aac", path.join(dir, "recordings", "s2.mp4")]);
+    ffmpeg(["-f", "lavfi", "-i", "testsrc2=size=1920x1080:rate=30:duration=5", "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p", path.join(dir, "recordings", "s3.mp4")]);
+    fs.writeFileSync(path.join(dir, "recordings", "s3.srt"), "1\n00:00:00,000 --> 00:00:00,500\n先暂停视频\n\n2\n00:00:00,500 --> 00:00:02,000\n这三格金额里，哪一格算合计时会被漏掉呢？\n");
+    const ran = runIn(dir, ["run", "all"], { FLOWGIT_LLM_MOCK_DIR: path.join(dir, "demo-replies", "zh") });
+    expect(ran.code, ran.out).toBe(0);
+    expect(ran.out).toContain("保留了你的手动修改");
+    expect(ran.out).toMatch(/s1：8 秒，你的录音，画面用幻灯片，字幕 \d+ 条（按讲稿切的）/);
+    expect(ran.out).toMatch(/s2：6 秒，你的录音，画面用录屏，字幕 \d+ 条（按讲稿切的）/);
+    expect(ran.out).toContain("s3：5 秒，没有声音，画面用录屏，字幕 2 条（你的）");
+    const timeline = readJson(dir, "timeline.json");
+    expect(timeline.segments.map((s: { audio: { file: string | null }; timedFrom: string }) => [s.audio.file, s.timedFrom])).toEqual([
+      ["recordings/s1.m4a", "media"],
+      ["recordings/s2.mp4", "media"],
+      [null, "media"],
+    ]);
+    const screen = probe(path.join(dir, "video", "02-s2.mp4"));
+    expect(screen.streams[0]).toMatchObject({ codec_name: "h264", width: 1920, height: 1080 });
+    expect(Math.abs(Number(screen.format.duration) - 6)).toBeLessThan(0.1);
+    const manifest = readJson(dir, "video/manifest.json");
+    // the quiet recording is lifted to about -16 LUFS
+    expect(manifest.segments[0].loudnessBefore).toBeLessThan(-30);
+    const check = read(dir, "check-report.md");
+    expect(check).toMatch(/\| video\/01-s1\.mp4 \| 0:08 \| 1920×1080 \| 录音，-1[56](?:\.\d)? LUFS \/ -?\d+(?:\.\d)? dBTP \| 幻灯片 \| captions\/01-s1\.srt \|/);
+    expect(check).toContain("- s1：字幕是按讲稿切的，时间是估的，和你实际说的话不会一字不差。用转写工具导出字幕存成 recordings/s1.srt，再从「字幕和时间线」重跑。");
+    expect(check).toContain("- s3：没有讲解，录屏里没有声音。把讲解录成 recordings/s3.m4a（或重新录一段带声音的录屏）再重跑。");
+    expect(check).toContain("- s3：1 条字幕有一行超过 16 个字（第 2 条）。");
+    expect(check).toContain("- s3：1 条字幕显示不到 0.83 秒（第 1 条）。");
+    expect(check).not.toContain("- s2：4 张幻灯片写了要放的画面");
+  }, 120_000);
+
+  it("finds the problems planted in the plan and the script", () => {
+    const dir = path.join(root, "zh");
+    const plan = readJson(dir, "plan.json");
+    plan.objective.verb = "理解";
+    plan.segments[2].minutes = 8;
+    plan.quiz[1].options[2] = "以上都对";
+    plan.quiz[2].segment = "s9";
+    fs.writeFileSync(path.join(dir, "plan.json"), `${JSON.stringify(plan, null, 2)}\n`);
+    const script = readJson(dir, "script.json");
+    const s2 = script.segments[1].slides;
+    s2[s2.length - 1].kind = "teach";
+    s2[0].headline = "四列";
+    s2[1].onScreen = ["吃饭", "交通", "购物", "娱乐"];
+    script.segments[0].slides[1].narration += "调查显示 90% 的人坚持不了一个月。跟着做，保证你月底存下钱。坚持记账就能存下钱。TODO";
+    fs.writeFileSync(path.join(dir, "script.json"), `${JSON.stringify(script, null, 2)}\n`);
+    const ran = runIn(dir, ["run", "precheck"]);
+    expect(ran.code, ran.out).toBe(0);
+    const report = read(dir, "precheck-report.md");
+    for (const line of [
+      "- 目标的动词「理解」看不见、没法检验。",
+      "- 教学设计里各段的分钟数加起来是 12，目标是 6。",
+      "- s3「让表格自己算分类合计」计划 8 分钟，超过 6 分钟。",
+      "- s2「四列就够，分类先用 5 个」讲完后没有小问题。",
+      "- s2-1 的标题「四列」像主题词，不像一句话",
+      "- s2-2 屏幕上有 4 处字，最多 3 处",
+      "- 第 2 题用了「以上都对」",
+      "- 第 3 题考的段「s9」不在讲稿里。",
+      "- 「90%」",
+      "- 「保证」",
+      "- 「坚持记账就能存下钱」",
+      "- 「TODO」",
+    ]) {
+      expect(report, line).toContain(line);
+    }
+  });
+
+  it("cuts Chinese captions between words and keeps formulas and numbers whole", () => {
+    const dir = path.join(root, "zh-captions");
+    init(dir, ["topic=10 分钟做出你的第一张记账表"]);
+    runUntil(dir, "captions", { FLOWGIT_LLM_MOCK_DIR: path.join(dir, "demo-replies", "zh") });
+    const script = readJson(dir, "script.json");
+    script.segments[0].slides[1].narration =
+      "架子搭好，来写公式。在 G2 这一格输入 =SUMIF(C:C, F2, B:B)。金额写成 1,000 元，10:30 记一笔。我就带你在十分钟里做出一张能按分类自动汇总支出的记账表。最后一步，把这周你记得的 5 笔花费填进表格，数不用很准。";
+    fs.writeFileSync(path.join(dir, "script.json"), `${JSON.stringify(script, null, 2)}\n`);
+    const ran = runIn(dir, ["run", "captions"]);
+    expect(ran.code, ran.out).toBe(0);
+
+    const srt = read(dir, "captions/01-s1.srt");
+    const lines = cueLines(srt).flat();
+    // the formula is one caption with its punctuation, the only line over 16 characters
+    expect(lines).toContain("=SUMIF(C:C, F2, B:B)");
+    expect(lines.filter((l) => [...l].length > 16)).toEqual(["=SUMIF(C:C, F2, B:B)"]);
+    expect(lines.some((l) => l.includes("1,000 元"))).toBe(true);
+    expect(lines.some((l) => l.includes("10:30"))).toBe(true);
+    expect(srt).not.toMatch(/C C|1 000|10 30/);
+    // words stay whole and a number stays with its measure word
+    expect(lines.some((l) => /按分$/.test(l))).toBe(false);
+    expect(lines.some((l) => l.startsWith("5 笔花费"))).toBe(true);
+    expect(lines.some((l) => / 5$/.test(l))).toBe(false);
+    // the formula stays up long enough to read at 9 characters a second
+    const block = srt.split(/\n\s*\n/).find((b) => b.includes("=SUMIF(C:C, F2, B:B)"))!;
+    const [a, b] = block.split("\n")[1].split(" --> ").map((s) => {
+      const [h, m, rest] = s.split(":");
+      return Number(h) * 3600 + Number(m) * 60 + Number(rest.replace(",", "."));
+    });
+    expect(b - a).toBeGreaterThanOrEqual(20 / 9 - 0.0005);
+  });
+
+  it.skipIf(!hasFfmpeg)("says and shows an English AI voice, keeps the key out of every file, and won't follow a redirect to another site", async () => {
+    const dir = path.join(root, "en");
+    init(dir, ["topic=Make your first budget spreadsheet in 10 minutes", "audience=office workers new to budgeting", "language=en", "voice=ai"]);
+    const mock = { FLOWGIT_LLM_MOCK_DIR: path.join(dir, "demo-replies", "en") };
+    const said = runUntil(dir, "voice", mock);
+    expect(said.deck).toContain("Wrote deck/index.html (13 slides), teleprompter.md");
+    expect(said.precheck).toContain("All checks passed; see precheck-report.md.");
+
+    // no key: a note, and the stage still succeeds
+    const noKey = runIn(dir, ["run", "voice"]);
+    expect(noKey.code, noKey.out).toBe(0);
+    expect(read(dir, "voice/README.md")).toContain("FLOWGIT_TTS_API_KEY is not set");
+
+    // An OpenAI-compatible speech endpoint in its own process (spawnSync would block one in this one).
+    const log = path.join(root, "tts.jsonl");
+    const serverFile = path.join(root, "tts-server.mjs");
+    fs.writeFileSync(
+      serverFile,
+      `import http from "node:http";
+import fs from "node:fs";
+import { spawnSync } from "node:child_process";
+const [key, log, tmp] = process.argv.slice(2);
+const server = http.createServer((req, res) => {
+  let body = "";
+  req.on("data", (c) => (body += c));
+  req.on("end", () => {
+    const port = server.address().port;
+    if (req.url === "/away/audio/speech") return res.writeHead(307, { location: "http://localhost:" + port + "/v1/audio/speech" }).end();
+    if (req.url === "/echo/audio/speech") return res.writeHead(401).end("rejected " + req.headers.authorization);
+    if (req.url !== "/v1/audio/speech" || req.headers.authorization !== "Bearer " + key) return res.writeHead(401).end("no");
+    const { model, voice, input } = JSON.parse(body);
+    fs.appendFileSync(log, JSON.stringify({ model, voice, input }) + "\\n");
+    const file = tmp + "/" + Date.now() + Math.random() + ".mp3";
+    spawnSync("ffmpeg", ["-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i", "sine=frequency=300:duration=" + (input.length / 15).toFixed(2), "-af", "volume=-24dB", file]);
+    res.writeHead(200, { "content-type": "audio/mpeg" }).end(fs.readFileSync(file));
+  });
+});
+server.listen(0, "127.0.0.1", () => console.log(server.address().port));
+`,
+    );
+    const server = spawn(process.execPath, [serverFile, KEY, log, root], { stdio: ["ignore", "pipe", "inherit"] });
+    try {
+      const port = await new Promise<string>((resolve, reject) => {
+        server.stdout.once("data", (d) => resolve(String(d).trim()));
+        server.once("exit", (code) => reject(new Error(`the speech server stopped (${code})`)));
+      });
+      const base = `http://127.0.0.1:${port}`;
+
+      const away = runIn(dir, ["run", "voice"], { FLOWGIT_TTS_API_KEY: KEY, FLOWGIT_TTS_BASE_URL: `${base}/away` });
+      expect(away.code).toBe(1);
+      expect(away.out).toContain(`text-to-speech redirected to another origin, http://localhost:${port}; it was not followed so the key stays put`);
+      const echo = runIn(dir, ["run", "voice"], { FLOWGIT_TTS_API_KEY: KEY, FLOWGIT_TTS_BASE_URL: `${base}/echo` });
+      expect(echo.code).toBe(1);
+      expect(echo.out).toContain("401 rejected Bearer ***");
+      expect(echo.out).toContain("The key was rejected; check FLOWGIT_TTS_API_KEY");
+      expect(echo.out).not.toContain(KEY);
+
+      const voiced = runIn(dir, ["run", "voice"], { FLOWGIT_TTS_API_KEY: KEY, FLOWGIT_TTS_BASE_URL: `${base}/v1` });
+      expect(voiced.code, voiced.out).toBe(0);
+      expect(voiced.out).toContain('Each opens with "The voice in this video is AI-generated."');
+    } finally {
+      server.kill();
+    }
+    const requests = fs
+      .readFileSync(log, "utf8")
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line));
+    expect(requests).toHaveLength(3);
+    for (const r of requests) {
+      expect(r).toMatchObject({ model: "gpt-4o-mini-tts", voice: "alloy" });
+      expect(r.input.startsWith("The voice in this video is AI-generated.\n\n")).toBe(true);
+    }
+    expect(readJson(dir, "voice/voice.json").segments).toEqual([
+      { id: "s1", file: "s1.mp3" },
+      { id: "s2", file: "s2.mp3" },
+      { id: "s3", file: "s3.mp3" },
+    ]);
+
+    runIn(dir, ["run", "record"]);
+    const captions = runIn(dir, ["run", "captions"]);
+    expect(captions.code, captions.out).toBe(0);
+    // English captions: up to two lines of 42 characters; the AI notice comes first
+    const srt = read(dir, "captions/01-s1.srt");
+    expect(srt.startsWith("1\n00:00:00,000 --> ")).toBe(true);
+    expect(cueLines(srt)[0]).toEqual(["The voice in this video is AI-generated."]);
+    for (const n of ["01-s1", "02-s2", "03-s3"]) {
+      for (const lines of cueLines(read(dir, `captions/${n}.srt`))) {
+        expect(lines.length).toBeLessThanOrEqual(2);
+        for (const line of lines) {
+          expect(line.length, line).toBeLessThanOrEqual(42);
+          expect(line, line).not.toMatch(/\b(?:a|an|the|your)$/i);
+        }
+      }
+    }
+
+    // English captions keep to 20 characters a second and stay up at least 5/6 of a second
+    const seconds = (stamp: string) => {
+      const [h, m, rest] = stamp.trim().split(":");
+      return Number(h) * 3600 + Number(m) * 60 + Number(rest.replace(",", "."));
+    };
+    const blocks = read(dir, "captions/01-s1.srt").trim().split(/\n\s*\n/);
+    for (const block of blocks) {
+      const [, times, ...lines] = block.split("\n");
+      const [start, end] = times.split("-->").map(seconds);
+      expect(end - start, block).toBeGreaterThanOrEqual(0.833 - 0.0005);
+      expect(lines.join(" ").length / (end - start), block).toBeLessThanOrEqual(20);
+    }
+
+    // timeline.json and the captions can be edited by hand: keep the opening slide to render a short video
+    const timeline = readJson(dir, "timeline.json");
+    const first = timeline.segments[0];
+    expect(first).toMatchObject({ audio: { source: "ai", file: "voice/s1.mp3" }, picture: { source: "slides" }, timedFrom: "media" });
+    first.slides = first.slides.slice(0, 1);
+    first.seconds = first.slides[0].end;
+    timeline.segments = [first];
+    fs.writeFileSync(path.join(dir, "timeline.json"), `${JSON.stringify(timeline, null, 2)}\n`);
+    const opening = blocks.filter((block) => seconds(block.split("\n")[1].split("-->")[1]) <= first.seconds + 0.001);
+    expect(opening.length).toBeGreaterThan(3);
+    fs.writeFileSync(path.join(dir, "captions", "01-s1.srt"), `${opening.join("\n\n")}\n`);
+    const rendered = runIn(dir, ["run", "render"]);
+    expect(rendered.code, rendered.out).toBe(0);
+    expect(rendered.out).toContain('labeled "AI-generated voice"');
+    const checked = runIn(dir, ["run", "check"]);
+    expect(checked.code, checked.out).toBe(0);
+    const check = read(dir, "check-report.md");
+    expect(check).toMatch(/\| video\/01-s1\.mp4 \| \d:\d\d \| 1920×1080 \| AI voice, -1[56](?:\.\d)? LUFS \/ -?\d+(?:\.\d)? dBTP \| slides \| captions\/01-s1\.srt \|/);
+    expect(check).toContain("## Captions (WCAG 2.2 SC 1.2.2; Netflix timed text guides)\nNone.");
+    expect(check).toContain("## AI voice labels (China's AI content labeling measures, art. 4)\nNone.");
+    expect(check).toContain("- [ ] On Udemy, say in the course description that AI was used: this flow drafted the script and the quiz with a model, and the voice is AI.");
+    expect(check).toContain("- [ ] When publishing on a platform in China, declare the AI content through the platform's labeling feature (Labeling Measures art. 10).");
+
+    // the key never lands in a file
+    const files = fs.readdirSync(dir, { recursive: true, withFileTypes: true }).filter((e) => e.isFile());
+    for (const f of files) expect(fs.readFileSync(path.join(f.parentPath, f.name)).includes(KEY), f.name).toBe(false);
+  }, 180_000);
 });
 
 describe("flowgit share", () => {

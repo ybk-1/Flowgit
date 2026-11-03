@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Product Hunt 和社交帖子 / Product Hunt and social posts",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "productHunt",
+    "x",
+    "linkedin"
+  ],
+  "properties": {
+    "productHunt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "tagline",
+        "description",
+        "firstComment",
+        "translation"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tagline": {
+          "type": "string",
+          "minLength": 1
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "firstComment": {
+          "type": "string",
+          "minLength": 1
+        },
+        "translation": {
+          "type": "string"
+        }
+      }
+    },
+    "x": {
+      "type": "string",
+      "minLength": 1
+    },
+    "linkedin": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

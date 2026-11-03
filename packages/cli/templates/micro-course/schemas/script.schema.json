@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "讲稿和幻灯片 / Script and slides",
+  "type": "object",
+  "required": ["segments"],
+  "additionalProperties": false,
+  "properties": {
+    "segments": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "slides"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^s[1-9][0-9]*$",
+            "description": "照抄教学设计里的段 id / The segment id from the plan"
+          },
+          "slides": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": ["kind", "headline", "onScreen", "visual", "narration"],
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "enum": ["intro", "teach", "question", "recap"],
+                  "description": "intro 开场，teach 讲解，question 段后小问题，recap 小结和练习 / intro, teach, the question after the segment, or recap and practice"
+                },
+                "headline": { "type": "string", "minLength": 1, "description": "一句完整的话 / A full sentence" },
+                "onScreen": {
+                  "type": "array",
+                  "items": { "type": "string", "minLength": 1 },
+                  "description": "屏幕上的短词，最多三个 / Short phrases on screen, three at most"
+                },
+                "visual": { "type": "string", "description": "证明标题的画面 / The visual that proves the headline" },
+                "narration": { "type": "string", "minLength": 1, "description": "这张幻灯片上说的话 / What is said over this slide" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

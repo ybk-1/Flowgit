@@ -122,4 +122,4 @@ fs.writeFileSync(reportPath, `${report.filter((l, i, a) => !(l === "" && a[i - 1
 console.log(report.join("\n"));
 const issues = sections.reduce((n, [, xs]) => n + xs.length, 0) + (sampleMissing ? 1 : 0) + (questions.length && behavioral * 2 < questions.length ? 1 : 0);
 console.log(t(`已写入 ${scorecardPath}。`, `Wrote ${scorecardPath}.`));
-console.log(issues ? t(`有 ${issues} 处要看一下，见 ${reportPath}。`, `${issues} things to look at; see ${reportPath}.`) : t("检查通过。", "All checks passed."));
+console.log(issues ? t(`有 ${issues} 处要看一下，见 ${reportPath}。`, `${issues} ${issues === 1 ? "thing" : "things"} to look at; see ${reportPath}.`) : t("检查通过。", "All checks passed."));

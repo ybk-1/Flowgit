@@ -44,6 +44,10 @@ flowgit log                       # 整个流程的历史和 token 合计 / the 
 | `social-posts` | 多平台帖子：角度 → 挑选 → 按平台写帖 → 检查 → 导出 | Social posts: angles → pick → one post per platform → check → export |
 | `data-report` | 数据报告：表格 → 列画像 → 图表规格 → 手写 SVG → 结论在前的分析 → 报告和数字核对 | Data report: table → column profile → chart spec → hand-drawn SVG → answer-first analysis → report and number check |
 | `meeting-notes` | 会议纪要：转录 → 整理 → 纪要 → 待办 → 检查 → 会后邮件 | Meeting notes: transcript → clean → minutes → actions → check → follow-up |
+| `podcast` | 播客单集：资料 → 策划 → 台本 → 录前准备 → 录前检查 → 录音和转录 → 整理文字稿 → 节目简介 → 发布检查 | Podcast episode: notes → plan → script → guest brief → pre-record check → recording and transcript → transcript cleanup → show notes → publish check |
+| `picture-book` | 绘本 / 漫画：创作说明 → 版式 → 故事 → 分页 → 文稿和插画说明 → 画前检查 → 插图 → 成书预览 → 印刷检查 | Picture book or comic: brief → layout → story → pagination → manuscript and art brief → pre-art check → art → book preview → print check |
+| `product-launch` | 新品发布物料包：产品资料 → 定位和信息 → 发布计划和媒体资料 → 新闻稿 → 发布邮件 → Product Hunt 和帖子 → 常见问题 → 落地页简报 → 落地页 → 汇总 → 检查 | Product launch kit: facts → messaging → launch plan and fact sheet → press release → email → Product Hunt and posts → FAQ → landing brief → landing page → kit → check |
+| `micro-course` | 知识付费微课视频（`online-course` 的视频版）：课程资料 → 教学设计 → 讲稿和幻灯片 → 幻灯片、提词稿和测验 → 录前检查 → AI 配音 → 录制 → 字幕和时间线 → 生成视频 → 上架前检查 | Micro-course video (the video version of `online-course`): brief → teaching design → script and slides → deck, teleprompter and quiz → pre-record check → AI voice → recording → captions and timeline → video → pre-publish check |
 
 ```bash
 flowgit templates                 # 列出模板和它们的阶段 / list templates and their stages

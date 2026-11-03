@@ -27,6 +27,9 @@ Write the main-image copy and the detail page. Reply with Markdown only.
 画面：……
 ```
 
+是 en 时，标题和标签也写英文：`## Main images`、`1. **Headline** — Visual: …`、`## Detail page`、`### Screen 1: …`、`Visual: …`，不要出现“第 1 屏”“画面”“文案”这类中文标签。
+If the language is en, write the headings and labels in English too: `## Main images`, `1. **Headline** — Visual: …`, `## Detail page`, `### Screen 1: …`, `Visual: …`, with no Chinese labels such as "第 1 屏", "画面" or "文案".
+
 主图顺序 / Main images, in order:
 
 1. 最重要的好处 + 使用场景（买家一眼看懂“这对我有什么用”）。
@@ -53,3 +56,6 @@ Hero benefit and scene → the buyer's pain point → one selling point per scre
 - No disease-treatment or prevention claims and no medical wording for ordinary goods.
 - No "was" prices, strike-through prices or "cheaper than X" unless the facts give a real basis.
 - When comparing, do not name or disparage other brands. Leave no `[...]` or TODO.
+
+交之前再看一遍每个数字：容量、电量、时长、重量、件数，都要能在商品资料里找到原样的数；找不到就删掉这句，不要估一个。输出语言是 {{inputs.language}}：是 en 时全文写英文，即使商品资料是中文。
+Before replying, check every number once more (capacity, battery, time, weight, counts): each must appear as is in the product facts; if it does not, delete that sentence rather than estimating one. The output language is {{inputs.language}}: if it is en, everything is English, even when the product facts are in Chinese.

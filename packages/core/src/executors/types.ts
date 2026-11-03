@@ -29,6 +29,11 @@ export interface LlmRequest {
   effort?: Effort;
   /** True when this call asks the model to repair a JSON output that failed its schema. */
   repair?: boolean;
+  /**
+   * Earlier turns of the conversation, oldest first, sent before `prompt`. A schema repair sends the
+   * original prompt and the model's full reply here, so the model keeps its instructions and language.
+   */
+  history?: { role: "user" | "assistant"; content: string }[];
 }
 
 export interface LlmResponse {

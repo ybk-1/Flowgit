@@ -82,4 +82,4 @@ const out = outputs[0]?.path ?? "check-report.md";
 fs.writeFileSync(out, `${lines.join("\n")}\n`);
 console.log(lines.join("\n"));
 const issues = (total === target ? 0 : 1) + sections.reduce((n, [, items]) => n + items.length, 0) + (priceMissing ? 1 : 0);
-console.log(issues ? t(`有 ${issues} 处要看一下，见 ${out}。`, `${issues} things to look at; see ${out}.`) : t("检查通过。", "All checks passed."));
+console.log(issues ? t(`有 ${issues} 处要看一下，见 ${out}。`, `${issues} ${issues === 1 ? "thing" : "things"} to look at; see ${out}.`) : t("检查通过。", "All checks passed."));

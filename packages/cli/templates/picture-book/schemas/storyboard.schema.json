@@ -1,0 +1,129 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Pagination / 分页",
+  "type": "object",
+  "required": [
+    "format",
+    "cover",
+    "dedication",
+    "units"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "format": {
+      "enum": [
+        "picture-book",
+        "comic"
+      ]
+    },
+    "cover": {
+      "type": "object",
+      "required": [
+        "art",
+        "alt"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "art": {
+          "type": "string",
+          "minLength": 1
+        },
+        "alt": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "dedication": {
+      "type": "string"
+    },
+    "units": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "pages",
+          "text",
+          "art",
+          "alt",
+          "turn"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "pages": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 2,
+            "items": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "text": {
+            "type": "string"
+          },
+          "art": {
+            "type": "string",
+            "minLength": 1
+          },
+          "alt": {
+            "type": "string",
+            "minLength": 1
+          },
+          "turn": {
+            "type": "string"
+          },
+          "panels": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "art",
+                "lines"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "art": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "lines": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "kind",
+                      "who",
+                      "text"
+                    ],
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "enum": [
+                          "speech",
+                          "thought",
+                          "whisper",
+                          "shout",
+                          "caption",
+                          "sfx"
+                        ]
+                      },
+                      "who": {
+                        "type": "string"
+                      },
+                      "text": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

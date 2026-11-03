@@ -27,13 +27,13 @@ Write the market and competition analysis from the company facts. Reply with JSO
 
 方法 / Method:
 
-- 市场规模用自下而上的算法：目标客户数 × 每个客户每年付的钱，`sam.value` 就是这个乘积。客户数和价格都写出处；资料里没有的，`source` 写“估算，需要核实”，不要编一个权威来源。`tam` 只做背景，可以不估。
+- 市场规模用自下而上的算法：目标客户数 × 每个客户每年付的钱，`sam.value` 就是这个乘积。`price.value` 一定是一年的钱：资料给的是月费，就乘以 12 再填（每月 100 元填 1200），`per` 里写清换算。客户数和价格都写出处；资料里没有的，`source` 写“估算，需要核实”，不要编一个权威来源。`tam` 只做背景，可以不估。
 - `purpose` 是一句陈述句，说清做什么，不罗列功能。
 - `whyNow` 写具体的变化（技术、政策、习惯、成本），不写“市场空间巨大”。
 - 竞争对手要有直接的，也要有间接的（客户现在凑合用的办法，比如 Excel、纸本、外包）。
 - 只用资料里的事实，不编数据。
 
-- Size the market bottom-up: target customers × what each pays per year; `sam.value` is that product. Source both numbers; when the facts do not give one, write "estimate, needs checking" as the `source` rather than inventing an authority. `tam` is context only and may be 0.
+- Size the market bottom-up: target customers × what each pays per year; `sam.value` is that product. `price.value` is always a yearly amount: when the facts give a monthly fee, multiply by 12 (100 a month is 1200) and show the conversion in `per`. Source both numbers; when the facts do not give one, write "estimate, needs checking" as the `source` rather than inventing an authority. `tam` is context only and may be 0.
 - `purpose` is one declarative sentence about what you do, not a list of features.
 - `whyNow` lists concrete changes (technology, regulation, habits, cost), not "the market is huge".
 - Include direct competitors and indirect ones (how customers make do today: spreadsheets, paper, outsourcing).

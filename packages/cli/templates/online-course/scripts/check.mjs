@@ -54,12 +54,18 @@ for (const p of parts) {
   // Only flag scripts that run long: a short script is fine when the screen shows a demo while you work.
   if (ratio > 1.5) trialNotes.push(t(`「${p.split("\n")[0].replace(/^##\s+/, "")}」写了约 ${spoken} 字，按每分钟 ${perMinute} 字要讲 ${Math.round(spoken / perMinute)} 分钟，比标的 ${minutes} 分钟长很多。`, `"${p.split("\n")[0].replace(/^##\s+/, "")}" has about ${spoken} words, about ${Math.round(spoken / perMinute)} minutes at ${perMinute} a minute, well over the stated ${minutes}.`));
 }
-if (firstSegments.length && parts.filter((p) => /[（(]\s*\d/.test(p.split("\n")[0])).length !== firstSegments.length) trialNotes.push(t(`大纲第 1 节有 ${firstSegments.length} 段，逐字稿里带时长的段落数对不上。`, `The syllabus gives lesson 1 ${firstSegments.length} segments; the script's timed sections don't match.`));
+// Practice and recap may carry a time too; only the teaching segments have to match the syllabus.
+const timedSegments = parts.filter((p) => {
+  const heading = p.split("\n")[0];
+  return /[（(]\s*\d/.test(heading) && !/练习|小结|总结|practice|recap|summary/i.test(heading);
+});
+if (firstSegments.length && timedSegments.length !== firstSegments.length) trialNotes.push(t(`大纲第 1 节有 ${firstSegments.length} 段，逐字稿里带时长的段落数对不上。`, `The syllabus gives lesson 1 ${firstSegments.length} segments; the script's timed sections don't match.`));
 
 // The course page.
 const lower = page.toLowerCase();
-// A word counts unless it is negated just before ("不保证", "no guarantee", "we don't promise").
-const negated = (text, at) => /(?:不|没有|没|无|绝不|并非)\s*$/.test(text.slice(Math.max(0, at - 3), at)) || /\b(?:no|not|never|don't|doesn't|won't|cannot|can't|without)\s+(?:\w+\s+)?$/i.test(text.slice(Math.max(0, at - 24), at));
+// A word counts unless it is negated just before ("不保证", "不对结果作任何保证", "no guarantee", "we don't promise").
+const negated = (text, at) =>
+  /(?:不|没有|没|无|绝不|并非|无法|不能)(?:对[^，。；！？,.;!?\n]{1,8})?(?:作|做|提供|给)?出?(?:任何)?\s*$/.test(text.slice(Math.max(0, at - 16), at)) || /\b(?:no|not|never|don't|doesn't|won't|cannot|can't|without)\s+(?:\w+\s+)?$/i.test(text.slice(Math.max(0, at - 24), at));
 const hits = (words) =>
   words.filter((w) => {
     const word = w.toLowerCase();
@@ -107,4 +113,4 @@ const out = outputs[0]?.path ?? "check-report.md";
 fs.writeFileSync(out, `${report.filter((l, i, a) => !(l === "" && a[i - 1] === "")).join("\n")}\n`);
 console.log(report.join("\n"));
 const issues = sections.reduce((n, [, xs]) => n + xs.length, 0) + (higher * 2 < outcomes.length ? 1 : 0) + (wantLessons && lessons.length !== wantLessons ? 1 : 0);
-console.log(issues ? t(`有 ${issues} 处要看一下，见 ${out}。`, `${issues} things to look at; see ${out}.`) : t("检查通过。", "All checks passed."));
+console.log(issues ? t(`有 ${issues} 处要看一下，见 ${out}。`, `${issues} ${issues === 1 ? "thing" : "things"} to look at; see ${out}.`) : t("检查通过。", "All checks passed."));

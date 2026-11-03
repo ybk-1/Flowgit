@@ -1,0 +1,76 @@
+{
+  "title": "Millie's Yellow Hat",
+  "logline": "When a big wind blows away Millie's favourite yellow hat, she chases it, but every time it lands, it becomes someone else's.",
+  "theme": "Something you hate to lose can fill you up when you choose to give it away.",
+  "characters": [
+    {
+      "name": "Millie",
+      "role": "main",
+      "look": "A four-year-old girl with a short black bob and a fringe; a yellow hat with a small white daisy pinned to it; a blue and white striped top and red rain boots.",
+      "want": "To get her yellow hat back."
+    },
+    {
+      "name": "Beans",
+      "role": "friend",
+      "look": "Millie's little brown dog, one ear white, always at her heels.",
+      "want": ""
+    },
+    {
+      "name": "the mouse",
+      "role": "other",
+      "look": "A small grey mouse with round ears and a long thin tail.",
+      "want": "A boat."
+    },
+    {
+      "name": "the frog",
+      "role": "other",
+      "look": "A small green frog with a pale yellow belly and big round shiny eyes.",
+      "want": "To stay out of the rain."
+    },
+    {
+      "name": "the little blue bird",
+      "role": "other",
+      "look": "A bird the size of a hand, sky blue on the back, white underneath, a black tip to its tail.",
+      "want": "A nest for its babies."
+    }
+  ],
+  "setting": "A windy spring afternoon, on the path from Millie's front door to the park, with a puddle, a meadow and a big tree.",
+  "refrain": "Whoosh! The wind blew, and off went the hat!",
+  "beats": [
+    {
+      "beat": "opening",
+      "what": "Millie wears her yellow hat wherever she goes, with Beans at her heels."
+    },
+    {
+      "beat": "problem",
+      "what": "A big wind blows the yellow hat away."
+    },
+    {
+      "beat": "try",
+      "what": "The hat lands in a puddle and a mouse sails it as a boat; Millie says it's her hat, and the wind blows it away again."
+    },
+    {
+      "beat": "try",
+      "what": "It starts to rain; the hat lands in the grass and a frog shelters under it; before Millie can take it, the wind blows it away again."
+    },
+    {
+      "beat": "try",
+      "what": "The hat catches on a branch; Millie stands on tiptoe and can't reach, and Beans jumps and can't reach either."
+    },
+    {
+      "beat": "turn",
+      "what": "A little blue bird carries twig after twig into the hat, and Millie watches it build a nest."
+    },
+    {
+      "beat": "resolution",
+      "what": "Millie thinks for a long time and decides, on her own, to let the bird keep the hat."
+    },
+    {
+      "beat": "ending",
+      "what": "Winter passes, spring comes, and three baby birds peek out of the yellow hat."
+    }
+  ],
+  "solvedBy": "Millie",
+  "ending": "A wordless last page: in the spring tree, three baby birds peek out of the yellow-hat nest, the daisy still on the brim, while Millie and Beans look up from below.",
+  "style": "Watercolour in soft colours: the yellow hat is the brightest thing on every page; pale spring greens, grey-blue for the rain; plenty of white space and loose lines."
+}

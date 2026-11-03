@@ -1,0 +1,99 @@
+{
+  "format": "flowgit",
+  "version": "0.1",
+  "id": "landing-page",
+  "name": "落地页",
+  "description": "从一份简报做出单页网站：简报（人）→ 结构 → 文案 → 照片（可空）→ 生成网页 → 检查。按转化率研究、WCAG 2.2 和各地的隐私与广告规则来写和检查：一页一个目标，表单只收需要的，并写明谁收、做什么用、存多久、怎么撤回。缺图用色块，页面不访问网络。 / Build a one-page site from a brief: brief (person) → structure → copy → photos (optional) → build → check. Written and checked against conversion research, WCAG 2.2, and privacy and advertising rules in several regions: one page, one goal, a form that asks only for what it needs and says who collects it, what for, how long and how to withdraw. A missing image becomes a color block, and the page loads nothing from the network.",
+  "language": "zh",
+  "author": { "name": "Flowgit" },
+  "license": "Apache-2.0",
+  "tags": ["web", "landing-page", "starter"],
+  "inputs": {
+    "language": {
+      "type": "string",
+      "enum": ["zh", "en"],
+      "default": "zh",
+      "description": "输出语言：zh 中文，en English。决定结构、文案、页面上的固定文字和检查报告 / Output language: zh or en. Sets the structure, copy, fixed page text and the check report"
+    },
+    "product": {
+      "type": "string",
+      "description": "产品名称，例如：箱栖 / Product name, e.g. BoxNest",
+      "required": true
+    },
+    "audience": {
+      "type": "string",
+      "description": "访问者是谁，例如：养猫的人 / Who the visitor is, e.g. people who live with a cat",
+      "required": true
+    },
+    "goal": {
+      "type": "string",
+      "description": "希望访问者做什么，例如：留下邮箱 / What the visitor should do, e.g. leave an email",
+      "required": true
+    }
+,
+    "privacyUrl": {
+      "type": "string",
+      "default": "",
+      "description": "隐私政策的网址，可以不填。填了会在表单下的收集说明后面加上链接 / Privacy policy URL, optional. When set, the notice under the form links to it"
+    }
+  },
+  "stages": [
+    {
+      "id": "brief",
+      "name": "简报",
+      "description": "写下卖点、访问者从哪里来、语气、必须出现的事实、证据（真实的用户原话）、表单和隐私（收什么、谁收、做什么用、存多久、怎么撤回），以及不要说的话。模板里有一份虚构的箱栖简报。 / Write the selling points, where visitors come from, tone, facts that must appear, proof (real customer quotes), form and privacy (what you collect, who collects it, what for, how long, how to withdraw), and things not to say. The template ships a fictional BoxNest brief.",
+      "executor": {
+        "type": "human",
+        "instructions": "编辑 brief.md：卖点、访问者从哪里来、语气、必须写上的事实、证据、表单和隐私、不要说的话。示例是虚构的「箱栖」，用之前换成你的产品。 / Edit brief.md: selling points, where visitors come from, tone, must-have facts, proof, form and privacy, and things not to say. The sample is the fictional product BoxNest; replace it before you use it."
+      },
+      "outputs": [{ "type": "text/markdown", "path": "brief.md" }]
+    },
+    {
+      "id": "structure",
+      "name": "结构",
+      "description": "把页面分成区块，每个区块有用途、要点、建议的图片文件名和替代文本，并定下表单只收哪些字段。只有简报里有真实用户原话时才放推荐语。 / Split the page into blocks, each with a purpose, key points, a suggested image file name and its text alternative, and decide which fields the form asks for. A testimonial block only when the brief has a real customer quote.",
+      "inputs": ["brief"],
+      "executor": { "type": "llm", "prompt": "prompts/structure.md", "effort": "medium" },
+      "outputs": [{ "type": "application/json", "path": "structure.json" }]
+    },
+    {
+      "id": "copy",
+      "name": "文案",
+      "description": "为每个区块写标题、正文和按钮文字，和 structure.json 一一对应；行动区块还有表单下的收集说明。只用简报里的事实，不制造紧迫感，不编评价。 / Write each block's heading, body and button text, one to one with structure.json, plus the notice under the form in the action block. Only facts from the brief, no false urgency, no invented reviews.",
+      "inputs": ["brief", "structure"],
+      "executor": { "type": "llm", "prompt": "prompts/copy.md", "effort": "medium" },
+      "outputs": [{ "type": "application/json", "path": "copy.json" }]
+    },
+    {
+      "id": "photos",
+      "name": "照片",
+      "description": "按结构里的 image 放图片。缺的图会变成带说明的色块，空文件夹也可以。 / Add images named from each block's image field. A missing image becomes a color block with a caption, so an empty folder works.",
+      "inputs": ["structure"],
+      "executor": {
+        "type": "human",
+        "instructions": "把图片放进 images/，文件名用 structure.json 里每个区块的 image，例如 hero.jpg。没有图片就留着空的 images/，生成时会用色块加说明。 / Put images in images/, named after each block's image field in structure.json, e.g. hero.jpg. Leave images/ empty if you have none; the build uses a color block and a caption."
+      },
+      "outputs": [{ "type": "dir", "path": "images/" }]
+    },
+    {
+      "id": "build",
+      "name": "生成",
+      "description": "写成 site/index.html 和 site/style.css，并把用到的图片复制到 site/images/。表单字段有标签、类型和自动填充，收集说明用 aria-describedby 连到字段；图片带宽高；手机宽度、深色模式，文字都会转义，不引用网络。 / Write site/index.html and site/style.css, and copy used images into site/images/. Form fields get a label, a type and autocomplete, and the notice is tied to them with aria-describedby; images carry width and height; phone width, dark mode, escaped text, and no network requests.",
+      "inputs": ["structure", "copy", "photos"],
+      "executor": { "type": "script", "run": "node scripts/build.mjs" },
+      "outputs": [
+        { "type": "text/html", "path": "site/index.html" },
+        { "type": "text/css", "path": "site/style.css" },
+        { "type": "dir", "path": "site/images/" }
+      ]
+    },
+    {
+      "id": "check",
+      "name": "检查",
+      "description": "分两档检查。必须修（会失败）：替代文本、空链接、标题跳级、过长、缺区块、页面语言和标题、表单标签、自动填充、预先勾选的框、收集说明、占位文字、颜色对比度。上线前确认（只提醒）：隐私政策链接、缺的图片、字段数、含糊的按钮文字、分散注意力的链接、紧迫感、绝对化用语、简报不让说的话、推荐语原话、简报里没有的数字、搜索摘要、图片宽高、页面大小。 / Two tiers. Must fix (fails the stage): alt text, empty links, skipped headings, long blocks, missing blocks, page language and title, form labels, autocomplete, pre-ticked boxes, the notice at collection, placeholders, color contrast. Confirm before going live (warnings): privacy policy link, missing images, number of fields, vague button text, distracting links, urgency, absolute claims, words the brief rules out, testimonial quotes, numbers not in the brief, the search snippet, image sizes and page weight.",
+      "inputs": ["brief", "copy", "build"],
+      "executor": { "type": "script", "run": "node scripts/check.mjs" },
+      "outputs": [{ "type": "text/markdown", "path": "check-report.md" }]
+    }
+  ]
+}

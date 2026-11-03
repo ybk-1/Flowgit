@@ -60,6 +60,8 @@ const som = num(market.som?.value);
 const tam = num(market.tam?.value);
 const marketNotes = [];
 if (!customers || !price) marketNotes.push(t("市场规模缺客户数或客单价，没法自下而上地算。", "The market size lacks a customer count or a price, so it is not bottom-up."));
+else if (!close(customers * price, sam) && close(customers * price * 12, sam))
+  marketNotes.push(t(`客户数 × 客单价 × 12 才等于市场规模 ${fmt(sam)}：客单价 ${fmt(price)} 像是月费。price.value 要填一年的钱（${fmt(price * 12)}）。`, `Only customers × price × 12 gives the stated ${fmt(sam)}: the price ${fmt(price)} looks monthly. price.value should be the yearly amount (${fmt(price * 12)}).`));
 else if (!close(customers * price, sam)) marketNotes.push(t(`客户数 ${fmt(customers)} × 客单价 ${fmt(price)} = ${fmt(customers * price)}，和写的市场规模 ${fmt(sam)} 对不上。`, `${fmt(customers)} customers × ${fmt(price)} = ${fmt(customers * price)}, not the stated ${fmt(sam)}.`));
 if (som && sam && som > sam) marketNotes.push(t("能拿到的份额（SOM）比可服务市场（SAM）还大。", "The obtainable share (SOM) is larger than the serviceable market (SAM)."));
 if (tam && sam && tam < sam) marketNotes.push(t("总市场（TAM）比可服务市场（SAM）小。", "The total market (TAM) is smaller than the serviceable market (SAM)."));
@@ -170,4 +172,4 @@ const out = outputs[0]?.path ?? "check-report.md";
 fs.writeFileSync(out, `${lines.join("\n")}\n`);
 console.log(lines.join("\n"));
 const issues = sections.reduce((n, [, items]) => n + items.length, 0) + (whyNowLate ? 1 : 0);
-console.log(issues ? t(`有 ${issues} 处要看一下，见 ${out}。`, `${issues} things to look at; see ${out}.`) : t("检查通过。", "All checks passed."));
+console.log(issues ? t(`有 ${issues} 处要看一下，见 ${out}。`, `${issues} ${issues === 1 ? "thing" : "things"} to look at; see ${out}.`) : t("检查通过。", "All checks passed."));

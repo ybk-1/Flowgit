@@ -127,4 +127,4 @@ console.log(check);
 const issues =
   (total === target ? 0 : 1) + (higherOrder ? 0 : 1) + (hasBoard ? 0 : 1) + (hasHomework ? 0 : 1) + (homeworkNote.startsWith("⚠️") ? 1 : 0) +
   vagueObjectives.length + notTaught.length + noTask.length + unusedTasks.length + notPracticed.length;
-console.log(issues ? t(`有 ${issues} 处要看一下，见 check-report.md。`, `${issues} things to look at; see check-report.md.`) : t("检查通过。", "All checks passed."));
+console.log(issues ? t(`有 ${issues} 处要看一下，见 check-report.md。`, `${issues} ${issues === 1 ? "thing" : "things"} to look at; see check-report.md.`) : t("检查通过。", "All checks passed."));

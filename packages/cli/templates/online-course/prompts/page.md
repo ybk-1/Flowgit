@@ -25,3 +25,6 @@ Structure: `# Course name`; one line on what learners will get done; `## Who it 
 - Promise no results, exam passes, admissions, jobs or income ("guaranteed pass", "learn it in 3 days", "earn 10k a month"). Education and training ads may not make such promises or use learners' names or images as endorsements (China's Advertising Law, art. 24).
 - Invent no testimonials, learner counts or ratings; show no "original price" that was never really charged.
 - No anxiety marketing ("learn this or be left behind") and no unfounded urgency ("only N seats left").
+
+输出语言是 {{inputs.language}}。是 en 时，介绍页的每一句全部写英文，即使主题、学员描述或上面的示例是中文；是 zh 时写中文。
+The output language is {{inputs.language}}. If it is en, every line of the course page is in English, even when the topic, the learner description or the examples above are in Chinese; if it is zh, Chinese.

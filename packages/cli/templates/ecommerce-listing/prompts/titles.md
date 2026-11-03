@@ -16,9 +16,9 @@ Write 3 candidate product titles from the points and keywords. Reply with JSON o
 { "titles": [ { "text": "标题", "length": 0, "angle": "这个标题主打什么" } ], "highlights": "亚马逊才写：放不进标题的次要信息" }
 ```
 
-写完每个标题先数长度，填进 `length`，超过上限就删掉次要的词再写一遍。亚马逊的上限很紧（75 个字符，含空格），一个标题只放品牌、商品类型和两三个最关键的属性，其余放进 `highlights`（亚马逊的 Item Highlights，最多 125 个字符）。
+写完每个标题先数长度，填进 `length`，超过上限就删掉次要的词再写一遍，直到不超过为止。超过上限的标题不能交：不要在 `angle` 里写“超了”，要真的删短。英文标题放在中文平台上时，60 个字符大约只有 8 到 10 个英文词。亚马逊的上限很紧（75 个字符，含空格），一个标题只放品牌、商品类型和两三个最关键的属性，其余放进 `highlights`（亚马逊的 Item Highlights，最多 125 个字符）。
 
-Count each title and put the count in `length`; if it is over the limit, cut the minor words and rewrite. Amazon's limit is tight (75 characters including spaces): brand, product type and two or three key attributes only, the rest in `highlights` (Amazon's Item Highlights, at most 125 characters).
+Count each title and put the count in `length`; if it is over the limit, cut the minor words and rewrite until it fits. A title over the limit must not be handed in: do not note in `angle` that it is too long, shorten it. On a Chinese platform, 60 characters is only about 8 to 10 English words. Amazon's limit is tight (75 characters including spaces): brand, product type and two or three key attributes only, the rest in `highlights` (Amazon's Item Highlights, at most 125 characters).
 
 规则 / Rules:
 
@@ -28,3 +28,6 @@ Count each title and put the count in `length`; if it is over the limit, cut the
 - Chinese platforms: brand (only if the facts name one) + core term + attributes + selling point, most important words first. Together the 3 titles use every keyword, spelled exactly as given.
 - Amazon: brand + product type + key attributes (size, capacity, color, count), title case, never all caps, no promotional phrases such as "free shipping", "best seller" or "sale", no symbols such as !, $ or ?.
 - No word more than twice in one title, no stacked synonyms, no other brands' names, no absolute claims.
+
+交之前再数一遍：每个 `length` 都不超过上限，并且等于 `text` 的实际长度（汉字算 2 个，字母、数字、空格各算 1 个）。输出语言是 {{inputs.language}}：是 en 时标题和 `angle` 都写英文。
+Before replying, count again: every `length` is within the limit and equals the real length of `text` (a Chinese character counts 2; a letter, digit or space counts 1). The output language is {{inputs.language}}: if it is en, the titles and `angle` are English.

@@ -33,3 +33,6 @@ Write the syllabus, {{inputs.lessons}} lessons. Reply with JSON only.
 - Cut video into segments of six minutes or less (learners watch nearly all of a video under six minutes and less the longer it runs). Two to four segments a lesson.
 - Every lesson has a `practice`: a small task on the learner's own data or a real situation, not "review this lesson".
 - Lesson 1 is the free trial: the learner should get one small thing done in it.
+
+输出语言是 {{inputs.language}}。是 en 时，JSON 里每一个字符串全部写英文，即使主题、学员描述或上面的示例是中文；是 zh 时写中文。
+The output language is {{inputs.language}}. If it is en, every string in the JSON is in English, even when the topic, the learner description or the examples above are in Chinese; if it is zh, Chinese.

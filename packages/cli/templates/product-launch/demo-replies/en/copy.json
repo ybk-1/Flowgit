@@ -1,0 +1,30 @@
+{
+  "blocks": {
+    "hero": {
+      "heading": "Snap a receipt and it's booked",
+      "body": "ShopTally Snap is a new feature of the ShopTally app: take a photo of a paper receipt, and the amount, date and vendor go into your books, ready to edit. It comes with version 3.2, on iOS and Android. Leave your email and we'll send you the download link.",
+      "button": "Send me the download link"
+    },
+    "features": {
+      "heading": "Booked when the delivery comes",
+      "body": "Book it as it arrives: snap the receipt, and month end no longer costs an evening of typing.\n\nThe photos stay on your phone: receipts are read on the phone, and the photos are never uploaded.\n\nFix anything, any time: every entry can be edited, and the original photo stays with it.",
+      "button": ""
+    },
+    "testimonial": {
+      "heading": "What we heard in the beta",
+      "body": "\"Month end used to cost me an evening of typing up receipts. Now I snap them when the delivery comes.\"\n\n— Shen He, owner of Half Acre Books, free Pro during the beta",
+      "button": ""
+    },
+    "faq": {
+      "heading": "Three questions before you try it",
+      "body": "What does it cost? The first 30 receipts each month are free; beyond 30, ShopTally Pro costs 18 yuan a month.\n\nAre the photos uploaded? No. Receipts are read on the phone, and the photos are never uploaded.\n\nCan it read English receipts? Yes, it reads receipts in Chinese and English.",
+      "button": ""
+    },
+    "cta": {
+      "heading": "Leave your email for the download link",
+      "body": "Just your email. We send this one message and nothing else.",
+      "button": "Send me the download link",
+      "note": "ShopTally (hello@shoptally.example) collects your email only to send one message with the download link, and deletes it once that is sent. Reply \"unsubscribe\" at any time and we delete it right away."
+    }
+  }
+}

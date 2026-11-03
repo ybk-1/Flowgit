@@ -26,11 +26,11 @@ Write the live-stream script from the rundown. Reply with Markdown only.
 写法 / Craft:
 
 - 每段一个 `##`，开头写流程表里的 id（s1、s2…）。话术是主播能直接念的口语，短句，多用“你”。
-- 塑品不念参数：先说谁在什么场景用，再说参数带来的好处，边说边演示。
+- 塑品不念参数：先说谁在什么场景用，再说参数带来的好处，边说边演示。演示时只说资料里有的数：资料没写几秒榨好、能用几年，就不要说“十秒钟”“三十秒”，让观众自己看（“你们看，按一下就好了”）。
 - 互动要具体：让观众打一个字、选一个颜色、问一个问题，而不是“扣 1”刷屏。
 - 逼单段分三句话：对刚进来的人讲最核心的好处，对看了没下的人回答最大的顾虑（例如售后、不适合的情况），对已经下单的人讲怎么用好、怎么联系售后，减少退货。不要用恐吓或贬低观众的话。
 - Lines the host can read out as-is: short sentences, spoken to "you".
-- The demo turns specs into benefits for a person in a scene, shown live.
+- The demo turns specs into benefits for a person in a scene, shown live. Say only the numbers the facts give: if the facts do not say how many seconds it takes or how many years it lasts, do not say "ten seconds" or "thirty seconds"; let viewers watch ("look, one press and it's done").
 - Chat prompts are concrete (type one word, pick a color, ask one question), not spam.
 - The close has three parts: the core benefit for newcomers, the biggest doubt answered for viewers who have not bought (after-sales, what it is not for), and how to use it and reach support for buyers, to cut returns. No pressure or put-downs.
 
@@ -44,3 +44,13 @@ Write the live-stream script from the rundown. Reply with Markdown only.
 - The price segment states the price and offer; with no price given, say "check the cart for the price". No "was" price, "retail price" or "lowest anywhere" without a real basis.
 - No absolute claims and no disease-treatment claims for ordinary goods.
 - Say the usage limits from the facts out loud. Leave no `[...]` or TODO.
+
+交之前逐句再看一遍：
+- 每个数字（时长、秒数、容量、电量、杯数、价格、件数）都能在商品资料或价格里找到原样的数；找不到的整句删掉，不要估。
+- 价格只说直播间的价格和资料里写的优惠，不说“原价”“日常价”“零售价更高”“比外面便宜”，除非资料给了真实依据。
+- 输出语言是 {{inputs.language}}：是 en 时全部写英文，即使商品资料是中文。
+
+Before replying, read it once more, line by line:
+- Every number (time, seconds, capacity, battery, cups, price, counts) appears as is in the product facts or the price; delete any sentence whose number does not, rather than estimating.
+- Price lines state the live-room price and any offer in the facts only: no "was" price, "everyday price", "the retail price is higher" or "cheaper than outside" unless the facts give a real basis.
+- The output language is {{inputs.language}}: if it is en, everything is English, even when the product facts are in Chinese.
