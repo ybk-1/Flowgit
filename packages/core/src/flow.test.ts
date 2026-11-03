@@ -7,6 +7,7 @@ import {
   MissingInputsError,
   UpstreamNotReadyError,
   allDownstream,
+  currentRun,
   extractJson,
   listRuns,
   loadFlow,
@@ -19,6 +20,7 @@ import {
   restoreStage,
   runAll,
   runStage,
+  saveFlowInputs,
   stageStatus,
   topoOrder,
   validateFlow,
@@ -275,6 +277,42 @@ describe("running a flow", () => {
     fs.writeFileSync(path.join(dir, "storyboard.json"), "{}");
     expect(() => restoreStage(loaded, "storyboard", 9)).toThrow(/v9/);
     expect(listRuns(dir, "storyboard").map((r) => r.n)).toEqual([1, 2, 3, 4, 5, 6]);
+  });
+
+  it("says which version the files are, also after a restore", async () => {
+    writeProject();
+    // saved like `flowgit inputs set`, so the manual version restoreStage keeps has the same inputs
+    saveFlowInputs(dir, { topic: "cats" });
+    const loaded = loadFlow(dir);
+    const opts = { llm: mockLlm, inputs: { topic: "cats" } };
+    await runStage(loaded, "script", opts);
+    expect(stageStatus(loaded, "script", opts.inputs)).toMatchObject({ state: "ok", current: 1 });
+    // a stale stage with a single version doesn't hash its outputs to say so
+    expect(stageStatus(loaded, "script", { topic: "dogs" }).current).toBeUndefined();
+
+    await runStage(loaded, "script", opts);
+    expect(stageStatus(loaded, "script", opts.inputs)).toMatchObject({ state: "ok", current: 2, runs: 2 });
+
+    restoreStage(loaded, "script", 1);
+    const restored = stageStatus(loaded, "script", opts.inputs);
+    expect(restored).toMatchObject({ state: "ok", current: 1, runs: 2 });
+    expect(restored.latest?.n).toBe(2);
+    expect(currentRun(dir, loaded.flow.stages[0])?.n).toBe(1);
+
+    // a hand edit matches no version
+    fs.appendFileSync(path.join(dir, "script.md"), "\nmore");
+    const edited = stageStatus(loaded, "script", opts.inputs);
+    expect(edited.state).toBe("edited");
+    expect(edited.current).toBeUndefined();
+
+    // the hand edit is kept as v3, the files are v1 again, and a stale stage still says so
+    expect(restoreStage(loaded, "script", 1).kept?.n).toBe(3);
+    expect(stageStatus(loaded, "script", opts.inputs)).toMatchObject({ state: "ok", current: 1, runs: 3 });
+    expect(stageStatus(loaded, "script", { topic: "dogs" })).toMatchObject({ state: "stale", current: 1 });
+
+    // no outputs on disk: nothing to match
+    fs.rmSync(path.join(dir, "script.md"));
+    expect(stageStatus(loaded, "script", opts.inputs).current).toBeUndefined();
   });
 
   it("stops at a human stage, accepts --from, and runs scripts", async () => {

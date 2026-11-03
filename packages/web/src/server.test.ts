@@ -867,9 +867,11 @@ describe("history, diff, and restore on the board", () => {
       expect(restored.status, restored.body).toBe(200);
       expect(fs.readFileSync(path.join(work, "note.txt"), "utf8")).toBe(snap);
       const flow = JSON.parse((await httpGet(board.port, "/api/flow", authed())).body) as {
-        stages: Array<{ id: string; state: string }>;
+        stages: Array<{ id: string; state: string; current: number | null; latest: { n: number } | null }>;
       };
       expect(flow.stages.find((stage) => stage.id === "copy")?.state).toBe("stale");
+      // the board can tell which version the restored files are
+      expect(flow.stages.find((stage) => stage.id === "write")).toMatchObject({ current: 1, latest: { n: 2 } });
 
       const appJs = await httpGet(board.port, "/app.js");
       expect(appJs.status).toBe(200);

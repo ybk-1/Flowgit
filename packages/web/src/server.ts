@@ -147,6 +147,8 @@ export interface BoardStage {
   state: string;
   runs: number;
   latest: { n: number; time: string; status: string } | null;
+  /** The run the files on disk match, when known (StageStatus.current); after a restore it differs from latest. */
+  current: number | null;
   /** Human stage instructions, when the executor has them. */
   instructions?: string;
   outputs: BoardOutput[];
@@ -216,6 +218,7 @@ export function flowBoard(dir: string): FlowBoard {
       latest: status.latest
         ? { n: status.latest.n, time: status.latest.finishedAt, status: status.latest.status }
         : null,
+      current: status.current ?? null,
       ...(status.stage.executor.type === "human" && status.stage.executor.instructions
         ? { instructions: status.stage.executor.instructions }
         : {}),

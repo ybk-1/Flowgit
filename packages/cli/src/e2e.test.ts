@@ -471,6 +471,23 @@ describe("flowgit diff", () => {
     expect(bad.out).toContain("正整数");
     expect(bad.out).toContain("positive integer");
   });
+
+  it("says in status which version the files are after a restore", () => {
+    // v1 and v3 are the demo reply, v2 is the hand edit kept before the re-run
+    const restored = flowgitDiff(["restore", "storyboard", "2"]);
+    expect(restored.code, restored.out).toBe(0);
+    const board = flowgitDiff(["status"]);
+    expect(board.code, board.out).toBe(0);
+    expect(board.out).toMatch(/storyboard\s.*v2（回退 \/ restored） \/3/);
+    const json = JSON.parse(flowgitDiff(["status", "--json"]).out) as { stages: { id: string; latest: { n: number } | null; current: number | null }[] };
+    expect(json.stages.find((stage) => stage.id === "storyboard")).toMatchObject({ current: 2, latest: { n: 3 } });
+
+    // back on the newest version (v3, the same files as v1): the plain form again
+    expect(flowgitDiff(["restore", "storyboard", "3"]).code).toBe(0);
+    const plain = flowgitDiff(["status"]);
+    expect(plain.out).toMatch(/storyboard\s.*v3 \/3/);
+    expect(plain.out).not.toContain("restored");
+  });
 });
 
 describe("flowgit init from a directory or a Git URL", () => {

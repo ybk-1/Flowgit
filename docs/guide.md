@@ -376,9 +376,9 @@ flowgit restore draft 2          # 回到你手改的那一版 / back to your ha
 flowgit run all                  # 下游会重跑 / downstream re-runs
 ```
 
-回退之前，如果现在的 `report.md` 又被你改过、和哪个版本都不一样，Flowgit 会先把它存成一个版本。回退到的版本本来就存着，所以草稿不会显示"手动修改"，`run all` 只重跑下游的检查。
+回退之前，如果现在的 `report.md` 又被你改过、和哪个版本都不一样，Flowgit 会先把它存成一个版本。回退到的版本本来就存着，所以草稿不会显示"手动修改"，`run all` 只重跑下游的检查。`flowgit status` 的“版本”一栏会写成 `v2（回退 / restored） /3`：现在的文件是 v2，一共有 3 个版本。
 
-Before a restore, if `report.md` holds a new edit that matches no version, Flowgit saves it as a version first. The restored version is already saved, so the draft doesn't show as edited and `run all` re-runs only the downstream check.
+Before a restore, if `report.md` holds a new edit that matches no version, Flowgit saves it as a version first. The restored version is already saved, so the draft doesn't show as edited and `run all` re-runs only the downstream check. The runs column of `flowgit status` then reads `v2（回退 / restored） /3`: the files are v2, out of 3 versions.
 
 **也可以在浏览器里做。** `flowgit board` 打开本机看板（只监听 `127.0.0.1`）：每个阶段一张卡，顶部也可以换成流程图。可以看和改产物、填流程输入、运行、看历史、对比和回退，也可以新增和删除阶段，和上面的命令效果一样。
 

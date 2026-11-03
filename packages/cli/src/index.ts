@@ -963,6 +963,7 @@ program
                 state: s.state,
                 runs: s.runs,
                 latest: s.latest ? { n: s.latest.n, status: s.latest.status, finishedAt: s.latest.finishedAt } : null,
+                current: s.current ?? null,
                 missingUpstream: s.missingUpstream,
                 outputs: s.stage.outputs,
               })),
