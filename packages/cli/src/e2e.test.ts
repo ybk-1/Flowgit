@@ -95,7 +95,7 @@ describe("flowgit CLI with the short-video template", () => {
   it("checks input names and values before saving them", () => {
     const typo = flowgit(["inputs", "set", "topci=猫"]);
     expect(typo.code).toBe(1);
-    expect(typo.out).toContain("known inputs: topic, duration, style, audience, language");
+    expect(typo.out).toContain("known inputs: topic, duration, style, audience, language, platform");
     const bad = flowgit(["inputs", "set", "language=fr", "duration=abc"]);
     expect(bad.code).toBe(1);
     expect(bad.out).toContain('Input "language" must be one of "zh", "en", got "fr"');

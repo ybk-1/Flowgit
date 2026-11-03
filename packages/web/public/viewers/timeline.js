@@ -14,6 +14,7 @@ import { S, el, elt, t } from "../state.js";
 const MAX_UNDO = 50;
 const LABEL = 76;
 const MIN_DURATION = 0.5;
+const TRANSITIONS = ["cut", "fade", "slide", "zoom"];
 const FONT = '"Noto Sans CJK SC", "Noto Sans SC", "Source Han Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif';
 
 const IMAGE = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp"]);
@@ -205,6 +206,11 @@ export async function openTimeline({ output, stage, options, response, rel, read
     snapBtn.type = "button";
     snapBtn.className = "tl-snap";
     I18N.text(snapBtn, "timeline.snap");
+    const styleLabel = elt("label", "tl-style-label", "timeline.styleLabel");
+    const styleSel = document.createElement("select");
+    styleSel.className = "tl-style";
+    I18N.attr(styleSel, "aria-label", "timeline.styleLabel");
+    styleLabel.append(styleSel);
     const zoomLabel = elt("label", "tl-zoom-label", "timeline.zoom");
     const zoom = document.createElement("input");
     zoom.type = "range";
@@ -224,7 +230,7 @@ export async function openTimeline({ output, stage, options, response, rel, read
     const exportNote = elt("p", "tl-export-note", "timeline.exportStale");
     exportNote.hidden = true;
     const toolbar = el("div", "tl-top");
-    toolbar.append(reexport, undoBtn, redoBtn, playBtn, snapBtn, zoomLabel, timeEl, saveBtn);
+    toolbar.append(reexport, undoBtn, redoBtn, playBtn, snapBtn, styleLabel, zoomLabel, timeEl, saveBtn);
 
     const stageBox = el("div", "tl-stage");
     const frame = el("div", "tl-frame");
@@ -239,8 +245,29 @@ export async function openTimeline({ output, stage, options, response, rel, read
     motion.preload = "auto";
     const canvas = document.createElement("canvas");
     canvas.className = "tl-canvas";
-    frame.append(fill, still, motion, canvas);
-    stageBox.append(frame);
+    const under = el("div", "tl-under");
+    const underFill = el("div", "tl-fill");
+    const underStill = document.createElement("img");
+    underStill.className = "tl-still-out";
+    underStill.alt = "";
+    const underMotion = document.createElement("video");
+    underMotion.className = "tl-motion-out";
+    underMotion.muted = true;
+    underMotion.playsInline = true;
+    underMotion.preload = "auto";
+    const underCanvas = document.createElement("canvas");
+    underCanvas.className = "tl-canvas";
+    under.append(underFill, underStill, underMotion, underCanvas);
+    const over = el("div", "tl-over");
+    over.append(fill, still, motion, canvas);
+    const safeEl = el("div", "tl-safe");
+    safeEl.hidden = true;
+    const platformEl = el("p", "tl-platform");
+    platformEl.hidden = true;
+    const safeNote = elt("p", "tl-safe-note", "timeline.noSafe");
+    safeNote.hidden = true;
+    frame.append(under, over, safeEl);
+    stageBox.append(platformEl, frame, safeNote);
 
     const scroll = el("div", "tl-scroll");
     const sheet = el("div", "tl-sheet");
@@ -327,6 +354,10 @@ export async function openTimeline({ output, stage, options, response, rel, read
         undoBtn.disabled = Boolean(readOnly) || past.length === 0;
         redoBtn.disabled = Boolean(readOnly) || future.length === 0;
         saveBtn.disabled = Boolean(readOnly) || snap() === saved;
+        styleSel.disabled = Boolean(readOnly);
+        const preset = doc.captionPreset || style.preset || "";
+        if (preset && [...styleSel.options].some((opt) => opt.value === preset))
+            styleSel.value = preset;
         snapBtn.disabled = Boolean(readOnly) || !voiceDuration;
         I18N.attr(snapBtn, "title", voiceDuration ? "timeline.snap" : "timeline.noVoice");
         I18N.text(playBtn, playing ? "timeline.pause" : "timeline.play");
@@ -337,9 +368,57 @@ export async function openTimeline({ output, stage, options, response, rel, read
         zoom.value = String(Math.round(pxPerSec));
     }
 
+    function activeRules() {
+        const id = doc.captionPreset || style.preset;
+        if (style.presets && typeof style.presets === "object") {
+            const chosen = id && style.presets[id];
+            if (chosen && typeof chosen === "object")
+                return chosen;
+            const first = Object.values(style.presets).find((item) => item && typeof item === "object");
+            if (first)
+                return first;
+        }
+        if (style.caption && typeof style.caption === "object")
+            return style;
+        return FALLBACK_STYLE;
+    }
     function ruleOf(name) {
-        const rule = style[name];
+        const rule = activeRules()[name];
         return rule && typeof rule === "object" ? rule : FALLBACK_STYLE[name];
+    }
+    function presetIds() {
+        if (style.presets && typeof style.presets === "object" && Object.keys(style.presets).length)
+            return Object.keys(style.presets);
+        return ["classic"];
+    }
+    function gapSpec(index) {
+        const clip = doc.clips[index];
+        if (!clip || index >= doc.clips.length - 1)
+            return { type: "cut", duration: 0.4 };
+        const spec = clip.transition || doc.transition || { type: "fade", duration: 0.4 };
+        const type = TRANSITIONS.includes(spec.type) ? spec.type : spec.type === "none" ? "cut" : "fade";
+        const duration = Number(spec.duration ?? doc.transition?.duration ?? 0.4);
+        return { type, duration: Number.isFinite(duration) ? duration : 0.4 };
+    }
+    function transitionAt(time) {
+        for (let i = 1; i < doc.clips.length; i += 1) {
+            const spec = gapSpec(i - 1);
+            if (spec.type === "cut")
+                continue;
+            const start = Number(doc.clips[i].start) || 0;
+            const dur = Math.min(Math.max(spec.duration, 0), 1, Number(doc.clips[i - 1].duration) / 2, Number(doc.clips[i].duration) / 2);
+            if (dur < 0.04)
+                continue;
+            if (time >= start && time < start + dur) {
+                return {
+                    from: doc.clips[i - 1],
+                    duration: dur,
+                    progress: (time - start) / dur,
+                    type: spec.type,
+                };
+            }
+        }
+        return null;
     }
 
     function drawBlock(ctx, text, rule, frameW, frameH, videoW, alpha) {
@@ -381,16 +460,16 @@ export async function openTimeline({ output, stage, options, response, rel, read
         ctx.restore();
     }
 
-    function drawCanvas(clip, local) {
-        const rect = canvas.getBoundingClientRect();
+    function drawCanvas(clip, local, target = canvas) {
+        const rect = target.getBoundingClientRect();
         const dpr = window.devicePixelRatio || 1;
         const w = Math.max(1, Math.round(rect.width * dpr));
         const h = Math.max(1, Math.round(rect.height * dpr));
-        if (canvas.width !== w || canvas.height !== h) {
-            canvas.width = w;
-            canvas.height = h;
+        if (target.width !== w || target.height !== h) {
+            target.width = w;
+            target.height = h;
         }
-        const ctx = canvas.getContext("2d");
+        const ctx = target.getContext("2d");
         if (!ctx || rect.width < 2)
             return;
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -528,7 +607,7 @@ export async function openTimeline({ output, stage, options, response, rel, read
             }
         }
         syncVideo(clip, changed);
-        drawCanvas(clip, local);
+        drawCanvas(clip, local, canvas);
     }
 
     async function renderFrame() {
@@ -541,7 +620,67 @@ export async function openTimeline({ output, stage, options, response, rel, read
             return;
         syncTrack(voiceEl, playhead, false, Number(doc.voice?.volume ?? 1));
         syncTrack(musicEl, playhead, true, Number(doc.music?.volume ?? 0.6));
+        const trans = transitionAt(playhead);
+        if (trans) {
+            frame.classList.add("is-trans");
+            frame.dataset.trans = trans.type;
+            frame.style.setProperty("--p", String(Math.max(0, Math.min(1, trans.progress))));
+            await paintUnder(trans.from);
+            if (token !== frameToken || !root.isConnected)
+                return;
+        }
+        else {
+            frame.classList.remove("is-trans");
+            delete frame.dataset.trans;
+            frame.style.removeProperty("--p");
+        }
         placePlayhead();
+    }
+
+    let underKey = "";
+    async function paintUnder(clip) {
+        const source = clip?.source || { kind: "card" };
+        const key = `${source.kind}:${source.path || ""}:${clip?.id || ""}`;
+        const local = Math.max(0, Number(clip?.duration) || 0);
+        if (key !== underKey) {
+            underKey = key;
+            const image = source.kind === "image" && source.path;
+            const video = source.kind === "video" && source.path;
+            underStill.hidden = !image;
+            underMotion.hidden = !video;
+            under.classList.toggle("is-card", !image && !video);
+            if (image) {
+                const url = await mediaUrl(source.path);
+                if (underKey !== key)
+                    return;
+                underStill.src = url;
+                underFill.style.backgroundImage = url ? `url("${url}")` : "";
+                underMotion.removeAttribute("src");
+            }
+            else if (video) {
+                const url = await mediaUrl(source.path);
+                if (underKey !== key)
+                    return;
+                underFill.style.backgroundImage = "";
+                if (underMotion.dataset.src !== url) {
+                    underMotion.dataset.src = url;
+                    underMotion.src = url;
+                }
+                try {
+                    underMotion.currentTime = Math.max(0, local - 0.05);
+                }
+                catch {
+                    // metadata not in yet
+                }
+            }
+            else {
+                underFill.style.backgroundImage = "";
+                underStill.removeAttribute("src");
+                underMotion.removeAttribute("src");
+                underMotion.dataset.src = "";
+            }
+        }
+        drawCanvas(clip, local, underCanvas);
     }
 
     function placePlayhead() {
@@ -673,6 +812,18 @@ export async function openTimeline({ output, stage, options, response, rel, read
             cap.style.width = `${Math.max(20, clip.duration * pxPerSec)}px`;
             captions.append(cap);
         }
+        for (let i = 0; i < doc.clips.length - 1; i += 1) {
+            const spec = gapSpec(i);
+            const gap = document.createElement("button");
+            gap.type = "button";
+            gap.className = "tl-gap";
+            gap.dataset.index = String(i);
+            gap.dataset.type = spec.type;
+            I18N.text(gap, `timeline.trans.${spec.type}`);
+            I18N.attr(gap, "title", "timeline.gap");
+            gap.style.left = `${doc.clips[i + 1].start * pxPerSec}px`;
+            picture.append(gap);
+        }
         if (doc.voice?.path) {
             const lane = addRow("voice", "timeline.voice");
             lane.style.width = `${width}px`;
@@ -684,11 +835,73 @@ export async function openTimeline({ output, stage, options, response, rel, read
         if (doc.music?.path) {
             const lane = addRow("music", "timeline.music");
             lane.style.width = `${width}px`;
-            const bar = el("div", "tl-audio", baseName(doc.music.path));
+            const bar = el("div", "tl-audio");
             bar.style.width = `${Math.max(20, (doc.duration || 0) * pxPerSec)}px`;
+            const label = el("span", "tl-audio-name", baseName(doc.music.path));
+            const vol = document.createElement("input");
+            vol.type = "range";
+            vol.className = "tl-volume";
+            vol.min = "0";
+            vol.max = "2";
+            vol.step = "0.05";
+            vol.value = String(Number(doc.music?.volume ?? 0.6));
+            I18N.attr(vol, "aria-label", "timeline.volume");
+            vol.disabled = Boolean(readOnly);
+            let volumeBefore = "";
+            vol.addEventListener("pointerdown", (event) => {
+                event.stopPropagation();
+                volumeBefore = snap();
+            });
+            vol.addEventListener("input", () => {
+                if (!doc.music)
+                    return;
+                doc.music.volume = round3(Math.min(2, Math.max(0, Number(vol.value) || 0)));
+                void renderFrame();
+            });
+            vol.addEventListener("change", () => {
+                if (!volumeBefore || volumeBefore === snap())
+                    return;
+                past.push(volumeBefore);
+                if (past.length > MAX_UNDO)
+                    past.shift();
+                future = [];
+                volumeBefore = "";
+                syncChrome();
+            });
+            bar.append(label, vol);
             lane.append(bar);
         }
+        placeGuides();
         placePlayhead();
+    }
+
+    function placeGuides() {
+        const name = doc.platform?.name;
+        const zhName = name?.zh || name?.en || "";
+        const enName = name?.en || name?.zh || "";
+        if (zhName) {
+            platformEl.hidden = false;
+            if (zhName !== enName)
+                I18N.raw(platformEl, `${zhName} / ${enName}`);
+            else {
+                delete platformEl.dataset.i18n;
+                delete platformEl.dataset.i18nRaw;
+                platformEl.textContent = zhName;
+            }
+        }
+        else {
+            platformEl.hidden = true;
+        }
+        const area = doc.platform?.safeArea;
+        const hasArea = area && Number(area.width) > 0 && Number(area.height) > 0;
+        safeEl.hidden = !hasArea;
+        safeNote.hidden = !doc.platform || hasArea;
+        if (!hasArea)
+            return;
+        safeEl.style.top = `${((Number(area.top) || 0) / Number(area.height)) * 100}%`;
+        safeEl.style.right = `${((Number(area.right) || 0) / Number(area.width)) * 100}%`;
+        safeEl.style.bottom = `${((Number(area.bottom) || 0) / Number(area.height)) * 100}%`;
+        safeEl.style.left = `${((Number(area.left) || 0) / Number(area.width)) * 100}%`;
     }
 
     function fitZoom() {
@@ -937,6 +1150,22 @@ export async function openTimeline({ output, stage, options, response, rel, read
             scrubFrom(event);
             return;
         }
+        const gap = event.target.closest?.(".tl-gap");
+        if (gap) {
+            if (readOnly)
+                return;
+            event.preventDefault();
+            const index = Number(gap.dataset.index);
+            const spec = gapSpec(index);
+            const nextType = TRANSITIONS[(Math.max(0, TRANSITIONS.indexOf(spec.type)) + 1) % TRANSITIONS.length];
+            change(() => {
+                const clip = doc.clips[index];
+                if (!clip)
+                    return;
+                clip.transition = { type: nextType, duration: spec.duration > 0 ? spec.duration : 0.4 };
+            });
+            return;
+        }
         const clip = event.target.closest?.(".tl-clip");
         if (!clip || readOnly)
             return;
@@ -1030,6 +1259,28 @@ export async function openTimeline({ output, stage, options, response, rel, read
         syncChrome();
     }, { passive: false });
 
+    function fillStyles() {
+        styleSel.replaceChildren();
+        for (const id of presetIds()) {
+            const opt = document.createElement("option");
+            opt.value = id;
+            I18N.text(opt, `timeline.styleName.${id}`);
+            styleSel.append(opt);
+        }
+        const current = doc.captionPreset || style.preset || presetIds()[0] || "";
+        if ([...styleSel.options].some((opt) => opt.value === current))
+            styleSel.value = current;
+    }
+    fillStyles();
+    styleSel.addEventListener("change", () => {
+        if (readOnly)
+            return;
+        change(() => {
+            doc.captionPreset = styleSel.value;
+            if (style.presets)
+                doc.captionStyle = style;
+        });
+    });
     zoom.addEventListener("input", () => {
         pxPerSec = Number(zoom.value) || pxPerSec;
         layout();

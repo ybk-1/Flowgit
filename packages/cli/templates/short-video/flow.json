@@ -34,6 +34,12 @@
       "enum": ["zh", "en"],
       "default": "zh",
       "description": "输出语言：zh 中文，en English。决定脚本、分镜、字幕和剪辑/导出日志的语言 / Output language: zh or en. Sets the language of the script, storyboard, captions and the edit/export logs"
+    },
+    "platform": {
+      "type": "string",
+      "enum": ["douyin", "channels", "xiaohongshu", "bilibili", "youtube-shorts", "tiktok"],
+      "default": "douyin",
+      "description": "导出预设：douyin 抖音，channels 视频号，xiaohongshu 小红书，bilibili 哔哩哔哩，youtube-shorts YouTube Shorts，tiktok TikTok。尺寸、时长上限和安全区只写有官方出处的数字，见 scripts/platforms.json / Export preset. Size, length limit and safe area are filled only from official sources; see scripts/platforms.json"
     }
   },
   "stages": [
@@ -67,7 +73,7 @@
       "inputs": ["storyboard"],
       "executor": {
         "type": "human",
-        "instructions": "把图片或视频放进 assets/，文件名对应 storyboard.json 里每个镜头的 asset 字段。缺的镜头导出时会用文字卡代替，所以也可以先放一个空的 assets/ 文件夹（mkdir assets）。可选：自己录的配音命名为 voice.mp3（优先于自动合成的 voice/voice.mp3），背景音乐命名为 music.mp3，也放进 assets/。 / Put images or videos in assets/, named after each shot's asset field in storyboard.json. Missing shots become text cards on export, so an empty assets/ folder (mkdir assets) also works. Optional: a voiceover you recorded as voice.mp3 (it wins over the generated voice/voice.mp3) and background music as music.mp3, also in assets/."
+        "instructions": "把图片或视频放进 assets/，文件名对应 storyboard.json 里每个镜头的 asset 字段。缺的镜头导出时会用文字卡代替，所以也可以先放一个空的 assets/ 文件夹（mkdir assets）。可选：自己录的配音命名为 voice.mp3（优先于自动合成的 voice/voice.mp3），背景音乐命名为 music.mp3 或 bgm.mp3，也放进 assets/。导出尺寸和时长上限跟着流程输入 platform，预设在 scripts/platforms.json。 / Put images or videos in assets/, named after each shot's asset field in storyboard.json. Missing shots become text cards on export, so an empty assets/ folder (mkdir assets) also works. Optional: a voiceover you recorded as voice.mp3 (it wins over the generated voice/voice.mp3) and background music as music.mp3 or bgm.mp3, also in assets/. Export size and the length limit follow the platform input; presets are in scripts/platforms.json."
       },
       "outputs": [{ "type": "dir", "path": "assets/" }]
     },

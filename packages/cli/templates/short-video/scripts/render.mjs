@@ -9,12 +9,42 @@ import os from "node:os";
 import path from "node:path";
 
 const dir = process.env.FLOWGIT_PROJECT_DIR ?? process.cwd();
-const lang = JSON.parse(process.env.FLOWGIT_FLOW_INPUTS ?? "{}").language === "en" ? "en" : "zh";
+const flowInputs = JSON.parse(process.env.FLOWGIT_FLOW_INPUTS ?? "{}");
+const lang = flowInputs.language === "en" ? "en" : "zh";
 const say = (zh, en) => (lang === "en" ? en : zh);
 const timeline = JSON.parse(fs.readFileSync(path.join(dir, "timeline.json"), "utf8"));
-const W = timeline.width ?? 1080;
-const H = timeline.height ?? 1920;
-const FPS = timeline.fps ?? 30;
+
+function loadPlatforms() {
+  const file = path.join(dir, "scripts", "platforms.json");
+  if (!fs.existsSync(file)) return {};
+  try {
+    const parsed = JSON.parse(fs.readFileSync(file, "utf8"));
+    return parsed.platforms && typeof parsed.platforms === "object" ? parsed.platforms : {};
+  } catch {
+    return {};
+  }
+}
+
+function selectedPlatform() {
+  const id = typeof flowInputs.platform === "string" ? flowInputs.platform : "";
+  if (!id) return undefined;
+  const spec = loadPlatforms()[id];
+  if (!spec || typeof spec !== "object") {
+    console.warn(say(`没有平台预设 ${id}，按时间线的尺寸导出`, `no platform preset ${id}; exporting at the timeline size`));
+    return undefined;
+  }
+  return { id, ...spec };
+}
+
+const platform = selectedPlatform();
+let W = timeline.width ?? 1080;
+let H = timeline.height ?? 1920;
+let FPS = timeline.fps ?? 30;
+if (Number(platform?.width) > 0 && Number(platform?.height) > 0) {
+  W = Number(platform.width);
+  H = Number(platform.height);
+}
+if (Number(platform?.fps) > 0) FPS = Number(platform.fps);
 
 const ff = spawnSync("ffmpeg", ["-version"], { encoding: "utf8" });
 if (ff.status !== 0) {
@@ -68,15 +98,32 @@ const CAPTION_STYLE_DEFAULT = {
   },
 };
 
-function loadCaptionStyle() {
-  const file = path.join(dir, "scripts", "caption-style.json");
-  if (!fs.existsSync(file)) return CAPTION_STYLE_DEFAULT;
-  try {
-    const parsed = JSON.parse(fs.readFileSync(file, "utf8"));
-    return parsed && typeof parsed === "object" ? parsed : CAPTION_STYLE_DEFAULT;
-  } catch {
-    return CAPTION_STYLE_DEFAULT;
+/** presets[id], or a flat { caption, title, card } file from before presets existed. */
+function resolveCaptionStyle(doc, presetId) {
+  if (!doc || typeof doc !== "object") return undefined;
+  if (doc.presets && typeof doc.presets === "object") {
+    const id = presetId || doc.preset;
+    const chosen = id && doc.presets[id];
+    if (chosen && typeof chosen === "object") return chosen;
+    const first = Object.values(doc.presets).find((item) => item && typeof item === "object");
+    if (first) return first;
   }
+  if (doc.caption && typeof doc.caption === "object") return doc;
+  return undefined;
+}
+
+function loadCaptionStyle() {
+  let fromFile;
+  const file = path.join(dir, "scripts", "caption-style.json");
+  if (fs.existsSync(file)) {
+    try {
+      fromFile = JSON.parse(fs.readFileSync(file, "utf8"));
+    } catch {
+      fromFile = undefined;
+    }
+  }
+  const presetId = timeline.captionPreset || fromFile?.preset;
+  return resolveCaptionStyle(fromFile, presetId) || resolveCaptionStyle(timeline.captionStyle, presetId) || CAPTION_STYLE_DEFAULT;
 }
 
 const captionStyle = loadCaptionStyle();
@@ -200,14 +247,48 @@ if (!clips.length) {
   console.error(say("timeline.json 里没有镜头", "timeline.json has no clips"));
   process.exit(1);
 }
-const durations = clips.map((clip) => Math.max(0.5, Number(clip.duration) || 3));
+let durations = clips.map((clip) => Math.max(0.5, Number(clip.duration) || 3));
+
+// Shorten from the end so the file stays inside the platform's published length limit.
+if (platform && Number(platform.maxDuration) > 0) {
+  const exclusive = platform.maxDurationExclusive === true;
+  const limit = exclusive ? Math.max(0.2, Number(platform.maxDuration) - 1 / FPS) : Number(platform.maxDuration);
+  let totalNow = durations.reduce((a, b) => a + b, 0);
+  if (totalNow > limit + 1e-3) {
+    console.warn(
+      say(
+        `这条视频有 ${totalNow.toFixed(1)} 秒，超过 ${platform.id} 的时长上限 ${platform.maxDuration} 秒，导出时从结尾截短`,
+        `this video is ${totalNow.toFixed(1)}s, over ${platform.id}'s length limit of ${platform.maxDuration}s, so the export is shortened from the end`,
+      ),
+    );
+    let over = totalNow - limit;
+    for (let i = durations.length - 1; i >= 0 && over > 0.001; i -= 1) {
+      const floor = Math.min(0.5, limit / durations.length);
+      const cut = Math.min(over, durations[i] - floor);
+      if (cut > 0) {
+        durations[i] = Number((durations[i] - cut).toFixed(3));
+        over -= cut;
+      }
+    }
+  }
+}
+
 const total = durations.reduce((a, b) => a + b, 0);
 
-// Transition between clips. timeline.transition = { "type": "fade" | "none", "duration": seconds }.
-// Each clip but the last is rendered T seconds longer and overlaps the next one, so the
-// video keeps the timeline's total length.
-const wantFade = (timeline.transition?.type ?? "fade") !== "none";
-const T = wantFade && HAS_XFADE && clips.length > 1 ? Math.min(Math.max(Number(timeline.transition?.duration ?? 0.4) || 0, 0), 1, Math.min(...durations) / 2) : 0;
+// Gap after clip i. xfade names are from https://ffmpeg.org/ffmpeg-filters.html#xfade
+// (fade, slideleft, zoomin). "cut" and the older "none" are a hard cut, so no xfade.
+const XFADE_NAME = { fade: "fade", slide: "slideleft", zoom: "zoomin" };
+function boundary(i) {
+  if (i < 0 || i >= clips.length - 1) return { duration: 0, xfade: "" };
+  const spec = clips[i].transition || timeline.transition || { type: "fade", duration: 0.4 };
+  const type = spec.type || "fade";
+  if (!HAS_XFADE || type === "none" || type === "cut" || !XFADE_NAME[type]) return { duration: 0, xfade: "" };
+  const requested = Number(spec.duration ?? timeline.transition?.duration ?? 0.4);
+  const cap = Math.min(durations[i], durations[i + 1]) / 2;
+  const duration = Math.min(Math.max(Number.isFinite(requested) ? requested : 0, 0), 1, cap);
+  if (duration < 0.04) return { duration: 0, xfade: "" };
+  return { duration, xfade: XFADE_NAME[type] };
+}
 
 // Blurred, darkened copy of the picture fills the frame; the whole picture sits on top.
 // No black bars when a landscape photo goes into a vertical video.
@@ -224,7 +305,7 @@ const textFile = (name, text) => {
 const segments = [];
 clips.forEach((clip, i) => {
   const dur = durations[i];
-  const len = dur + (i < clips.length - 1 ? T : 0);
+  const len = dur + boundary(i).duration;
   const frames = Math.round(len * FPS);
   const out = path.join(work, `seg-${String(i).padStart(3, "0")}.mp4`);
   const filters = [];
@@ -278,24 +359,28 @@ const finalPath = path.join(dir, "final.mp4");
 const graph = [];
 segments.forEach((_, k) => graph.push(`[${k}:v]fps=${FPS},settb=AVTB,setpts=PTS-STARTPTS[s${k}]`));
 let last = "s0";
-if (T > 0) {
-  let offset = 0;
+if (segments.length > 1) {
   for (let k = 1; k < segments.length; k++) {
-    offset += durations[k - 1];
-    graph.push(`[${last}][s${k}]xfade=transition=fade:duration=${T}:offset=${offset.toFixed(3)}[x${k}]`);
-    last = `x${k}`;
+    const gap = boundary(k - 1);
+    // offset is the cut in the timeline (sum of the clip lengths), which is where the
+    // overlap starts. Each previous xfade consumes the extra tail, so the offset stays
+    // the sum of durations even when earlier gaps were cuts.
+    const offset = durations.slice(0, k).reduce((sum, item) => sum + item, 0);
+    if (gap.duration > 0) {
+      graph.push(`[${last}][s${k}]xfade=transition=${gap.xfade}:duration=${gap.duration.toFixed(3)}:offset=${offset.toFixed(3)}[x${k}]`);
+      last = `x${k}`;
+    } else {
+      graph.push(`[${last}][s${k}]concat=n=2:v=1:a=0[c${k}]`);
+      last = `c${k}`;
+    }
   }
-} else if (segments.length > 1) {
-  graph.push(`${segments.map((_, k) => `[s${k}]`).join("")}concat=n=${segments.length}:v=1:a=0[c]`);
-  last = "c";
 }
 const edge = Math.min(0.4, total / 4);
 graph.push(`[${last}]fade=t=in:st=0:d=${edge},fade=t=out:st=${(total - edge).toFixed(3)}:d=${edge},format=yuv420p[out]`);
 
-// Sound: timeline.voice = { "path": "assets/voice.mp3", "volume": 1 } plays once from the start;
-// timeline.music = { "path": "assets/music.mp3", "volume": 0.6 } is looped or cut to the video's
-// length with a fade in and out. With both, they are mixed without lowering the voice; the
-// edit stage already sets the music lower when there is a voiceover.
+// Sound: timeline.voice plays once from the start. timeline.music (assets/music.* or
+// assets/bgm.*, or a path named on the timeline) is looped to the video and fades out.
+// With both, the music is ducked under the voice with sidechaincompress.
 const inputs = segments.flatMap((s) => ["-i", s]);
 const vol = (v, fallback) => Math.min(Math.max(Number(v ?? fallback) || 0, 0), 2);
 const fadeIn = Math.min(0.5, total / 4);
@@ -308,17 +393,17 @@ const audioFile = (track, label) => {
   console.warn(say(`找不到${label.zh} ${track.path}，导出时不带它`, `${label.en} ${track.path} not found; exporting without it`));
   return undefined;
 };
+const inputIndex = () => inputs.filter((arg) => arg === "-i").length - 1;
 
 const voicePath = audioFile(timeline.voice, { zh: "配音", en: "voiceover" });
+let voiceIndex;
+let voiceVolume = 1;
 if (voicePath) {
-  const volume = vol(timeline.voice.volume, 1);
+  voiceVolume = vol(timeline.voice.volume, 1);
   inputs.push("-i", voicePath);
-  graph.push(
-    `[${inputs.filter((a) => a === "-i").length - 1}:a]atrim=0:${total.toFixed(3)},asetpts=PTS-STARTPTS,volume=${volume},afade=t=out:st=${Math.max(0, total - 0.3).toFixed(3)}:d=0.3[voice]`,
-  );
-  tracks.push("[voice]");
+  voiceIndex = inputIndex();
   const voiceLength = Number(spawnSync("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", voicePath], { encoding: "utf8" }).stdout?.trim());
-  console.log(say(`配音：${timeline.voice.path}，音量 ${volume}`, `voiceover: ${timeline.voice.path}, volume ${volume}`));
+  console.log(say(`配音：${timeline.voice.path}，音量 ${voiceVolume}`, `voiceover: ${timeline.voice.path}, volume ${voiceVolume}`));
   if (voiceLength > total + 0.05) {
     console.warn(
       say(
@@ -330,14 +415,42 @@ if (voicePath) {
 }
 
 const musicPath = audioFile(timeline.music, { zh: "背景音乐", en: "music" });
+let musicIndex;
+let musicVolume = 0.6;
 if (musicPath) {
-  const volume = vol(timeline.music.volume, 0.6);
+  musicVolume = vol(timeline.music.volume, 0.6);
   inputs.push("-stream_loop", "-1", "-i", musicPath);
+  musicIndex = inputIndex();
+  console.log(say(`背景音乐：${timeline.music.path}，音量 ${musicVolume}`, `music: ${timeline.music.path}, volume ${musicVolume}`));
+}
+
+const voiceOut = Math.max(0, total - 0.3).toFixed(3);
+const musicOut = (total - fadeOut).toFixed(3);
+if (voiceIndex != null && musicIndex != null) {
+  // Duck the music while the voice is loud, then fade the music out at the end.
+  // https://ffmpeg.org/ffmpeg-filters.html#sidechaincompress
+  // Both tracks are padded to the video length: on FFmpeg 8 sidechaincompress can
+  // stop when the voice ends, which cut the music (and the audio) short.
+  // https://ffmpeg.org/ffmpeg-filters.html#apad
+  // threshold 0.05 is inside the documented range 0.00097563–1 (default 0.125).
+  // ratio 8 is inside 1–20 (default 2): above the threshold the music is reduced.
+  // attack 20 ms and release 250 ms are the documented defaults.
+  // makeup 1, knee 2.82843, link=average, detection=rms, level_sc=1 and mix=1 are the documented defaults.
   graph.push(
-    `[${inputs.filter((a) => a === "-i").length - 1}:a]atrim=0:${total.toFixed(3)},asetpts=PTS-STARTPTS,volume=${volume},afade=t=in:st=0:d=${fadeIn},afade=t=out:st=${(total - fadeOut).toFixed(3)}:d=${fadeOut}[music]`,
+    `[${voiceIndex}:a]asplit=2[vsrc][scsrc]`,
+    `[vsrc]atrim=0:${total.toFixed(3)},asetpts=PTS-STARTPTS,volume=${voiceVolume},afade=t=out:st=${voiceOut}:d=0.3,apad=whole_dur=${total.toFixed(3)}[voice]`,
+    `[scsrc]atrim=0:${total.toFixed(3)},asetpts=PTS-STARTPTS,apad=whole_dur=${total.toFixed(3)}[sc]`,
+    `[${musicIndex}:a]atrim=0:${total.toFixed(3)},asetpts=PTS-STARTPTS,volume=${musicVolume}[mraw]`,
+    `[mraw][sc]sidechaincompress=threshold=0.05:ratio=8:attack=20:release=250:makeup=1:knee=2.82843:link=average:detection=rms:level_sc=1:mix=1,afade=t=in:st=0:d=${fadeIn},afade=t=out:st=${musicOut}:d=${fadeOut},apad=whole_dur=${total.toFixed(3)},atrim=0:${total.toFixed(3)}[music]`,
   );
+  tracks.push("[voice]", "[music]");
+  console.log(say("背景音乐在有人声时压低", "music ducks under the voice"));
+} else if (voiceIndex != null) {
+  graph.push(`[${voiceIndex}:a]atrim=0:${total.toFixed(3)},asetpts=PTS-STARTPTS,volume=${voiceVolume},afade=t=out:st=${voiceOut}:d=0.3[voice]`);
+  tracks.push("[voice]");
+} else if (musicIndex != null) {
+  graph.push(`[${musicIndex}:a]atrim=0:${total.toFixed(3)},asetpts=PTS-STARTPTS,volume=${musicVolume},afade=t=in:st=0:d=${fadeIn},afade=t=out:st=${musicOut}:d=${fadeOut}[music]`);
   tracks.push("[music]");
-  console.log(say(`背景音乐：${timeline.music.path}，音量 ${volume}`, `music: ${timeline.music.path}, volume ${volume}`));
 }
 
 let audioArgs = ["-an"];
@@ -348,10 +461,17 @@ if (tracks.length) {
     // amix halves each input unless normalize=0 (FFmpeg 4.4+); on older builds, scale back up.
     graph.push(`${tracks.join("")}amix=inputs=${tracks.length}:duration=longest${AMIX_NORMALIZE ? ":normalize=0" : `,volume=${tracks.length}`}[aout]`);
   }
-  audioArgs = ["-map", "[aout]", "-c:a", "aac", "-b:a", "160k"];
+  const audioBitrate = Number(platform?.audioBitrateKbps) > 0 ? `${Math.round(platform.audioBitrateKbps)}k` : "160k";
+  audioArgs = ["-map", "[aout]", "-c:a", "aac", "-b:a", audioBitrate];
 }
+const videoRate = Number(platform?.videoBitrateKbps) > 0 ? ["-b:v", `${Math.round(platform.videoBitrateKbps)}k`] : ["-crf", "20"];
+if (Number(platform?.maxVideoBitrateKbps) > 0) {
+  const cap = `${Math.round(platform.maxVideoBitrateKbps)}k`;
+  videoRate.push("-maxrate", cap, "-bufsize", cap);
+}
+if (platform) console.log(say(`平台：${platform.id}，${W}x${H}`, `platform: ${platform.id}, ${W}x${H}`));
 run(
-  [...inputs, "-filter_complex", graph.join(";"), "-map", "[out]", ...audioArgs, "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-r", String(FPS), "-pix_fmt", "yuv420p", "-movflags", "+faststart", finalPath],
+  [...inputs, "-filter_complex", graph.join(";"), "-map", "[out]", ...audioArgs, "-c:v", "libx264", "-preset", "veryfast", ...videoRate, "-r", String(FPS), "-pix_fmt", "yuv420p", "-movflags", "+faststart", finalPath],
   "join",
 );
 fs.rmSync(work, { recursive: true, force: true });
