@@ -165,6 +165,19 @@ function declined(detail?: string): Error {
   return new Error(`模型拒绝了这个请求 / Model declined the request${detail ? ` (${detail})` : ""}`);
 }
 
+/**
+ * A streamed reply that ended before the provider said it was finished. Its text is only part of
+ * the reply, so it is an error, marked retryable so a stage's `retries` try the call again.
+ */
+function cutOff(p: ResolvedProvider): Error {
+  return Object.assign(
+    new Error(
+      `${p.id} 的回复中途断了（没有收到结束标记），只收到一部分，没有用它。再试一次 / The reply from ${p.id} stopped partway (the stream ended without a finish reason), so the partial text was not used. Try again`,
+    ),
+    { retryable: true },
+  );
+}
+
 function hitMaxTokens(req: LlmRequest): Error {
   return new Error(`模型输出超过了 maxTokens (${req.maxTokens})，请调大 executor.maxTokens / Model output hit maxTokens (${req.maxTokens}); raise executor.maxTokens`);
 }
@@ -248,6 +261,9 @@ export const openaiComplete: LlmComplete = async (req: LlmRequest): Promise<LlmR
   }
   if (finish === "content_filter" || (refusal && !text)) throw declined(refusal || finish);
   if (finish === "length") throw hitMaxTokens(req);
+  // The request asks for usage at the end of the stream, so a stream with neither a finish reason
+  // nor usage was cut off. DeepSeek does this after stalling for minutes, with "{" as the text.
+  if (!finish && !usage) throw cutOff(p);
   return { text, model, stopReason: finish, usage };
 };
 

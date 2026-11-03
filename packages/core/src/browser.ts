@@ -31,6 +31,7 @@ export * from "./plan.js";
 export {
   RUNS_ON_COMPUTER,
   descriptionAllows,
+  descriptionLanguage,
   generateFlow,
   generateMockComplete,
   generatePromptFile,

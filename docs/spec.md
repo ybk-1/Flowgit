@@ -497,9 +497,9 @@ Each run of a stage:
 
 ### 重试 / Retries
 
-`llm` 和 `service` 可以写 `retries`（整数，默认 0），表示失败后再试几次。只重试网络错误（连不上、超时）、HTTP 429 和 5xx。其他 4xx 不重试。产物不符合 JSON Schema 也不走这里，llm 仍按原来的方式修一次。等待时间从 200 毫秒起，每次翻倍，再加 0 到 199 毫秒的随机抖动，最多 30 秒。每一次重试都记在 `run.json` 的 `params.retries` 里：`n`（从 1 起）、`status`（有的话）、`error`（第一行）和 `delayMs`。
+`llm` 和 `service` 可以写 `retries`（整数，默认 0），表示失败后再试几次。只重试网络错误（连不上、超时）、HTTP 429、5xx，以及回复到一半断掉（OpenAI 协议的流结束了，却没有结束标记也没有用量；这时阶段报错，不写半截回复）。其他 4xx 不重试。产物不符合 JSON Schema 也不走这里，llm 仍按原来的方式修一次。等待时间从 200 毫秒起，每次翻倍，再加 0 到 199 毫秒的随机抖动，最多 30 秒。每一次重试都记在 `run.json` 的 `params.retries` 里：`n`（从 1 起）、`status`（有的话）、`error`（第一行）和 `delayMs`。
 
-`llm` and `service` accept `retries` (an integer, default 0): how many extra attempts to make after a failure. Only network errors (unreachable, timed out), HTTP 429 and 5xx are retried. Other 4xx are not. A JSON Schema failure does not use this; an llm stage still does its own one repair. The wait starts at 200ms, doubles each time, and adds jitter from 0 to 199ms, capped at 30 seconds. Each retry is stored in `params.retries` of `run.json`: `n` (from 1), `status` when there is one, `error` (the first line) and `delayMs`.
+`llm` and `service` accept `retries` (an integer, default 0): how many extra attempts to make after a failure. Only network errors (unreachable, timed out), HTTP 429, 5xx and a reply that stopped partway are retried (an OpenAI-protocol stream that ends with no finish reason and no usage; the stage fails rather than write the partial reply). Other 4xx are not. A JSON Schema failure does not use this; an llm stage still does its own one repair. The wait starts at 200ms, doubles each time, and adds jitter from 0 to 199ms, capped at 30 seconds. Each retry is stored in `params.retries` of `run.json`: `n` (from 1), `status` when there is one, `error` (the first line) and `delayMs`.
 
 ### token 预算 / Token budget
 

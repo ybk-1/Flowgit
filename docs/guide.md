@@ -30,9 +30,9 @@ The sections below build the weekly report by hand. For a first draft you can ed
 flowgit new "把一周的笔记整理成周报，并用脚本检查格式" ~/my-report
 ```
 
-不在终端里（例如脚本、CI）时它不会写文件，加上 `--yes` 才写入。`--language en` 让流程和提示词用英文，`--md` 写成 `flow.md`。描述没有明确要求时，不会生成会在电脑上跑命令的 script 或 agent 阶段；上面这句要求了脚本，预演里会标明。
+不在终端里（例如脚本、CI）时它不会写文件，加上 `--yes` 才写入。`--language en` 让流程和提示词用英文，`--md` 写成 `flow.md`。描述没有明确要求时，不会生成会在电脑上跑命令的 script 或 agent 阶段；上面这句要求了脚本，预演里会标明，还会生成它要运行的 `scripts/check.mjs`。生成的脚本只用 Node.js 标准库，不联网、不删文件、不启动别的程序，写入前列在文件清单里，运行前可以先打开看看。
 
-Outside a terminal (a script, or CI) it writes nothing unless you add `--yes`. `--language en` writes the flow and the prompts in English, and `--md` writes `flow.md`. Unless the description explicitly asks, it does not add a script or agent stage, because those run commands on your computer; the sentence above does ask for a script, and the dry run says so.
+Outside a terminal (a script, or CI) it writes nothing unless you add `--yes`. `--language en` writes the flow and the prompts in English, and `--md` writes `flow.md`. Unless the description explicitly asks, it does not add a script or agent stage, because those run commands on your computer; the sentence above does ask for a script, so the dry run says so and it also writes `scripts/check.mjs`, the script that stage runs. A generated script uses only the Node.js standard library and does not use the network, delete files or start other programs; it is in the file list before anything is written, so you can read it before it runs.
 
 不在终端里，它会先打印预演和文件列表，然后停下来，一个文件都不写 / Outside a terminal it prints the dry run and the file list, then stops without writing anything:
 
@@ -49,6 +49,7 @@ Outside a terminal (a script, or CI) it writes nothing unless you add `--yes`. `
 要写入的文件 / files to write:
   flow.json
   prompts/draft.md
+  scripts/check.mjs
 
 会在你的电脑上运行命令 / runs commands on your computer:
   check: node scripts/check.mjs

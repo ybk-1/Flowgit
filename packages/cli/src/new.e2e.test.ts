@@ -109,9 +109,10 @@ describe("flowgit new", () => {
     }
   });
 
-  it("marks a script stage, repairs, and writes nothing after three failures", () => {
+  it("marks a script stage, writes its script, repairs, and writes nothing after three failures", () => {
     if (!fs.existsSync(cli)) throw new Error("Build the CLI first: pnpm -r run build");
     const work = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-new-repair-"));
+    const checkScript = 'import fs from "node:fs";\nconst [output] = JSON.parse(process.env.FLOWGIT_OUTPUTS);\nfs.writeFileSync(output.path, "{}\\n");\n';
     const withScript = {
       flow: {
         ...weeklyDoc.flow,
@@ -127,6 +128,7 @@ describe("flowgit new", () => {
         ],
       },
       prompts: weeklyDoc.prompts,
+      scripts: { "scripts/check.mjs": checkScript },
     };
     const scriptPlan = {
       ...weeklyPlan,
@@ -159,6 +161,8 @@ describe("flowgit new", () => {
       expect(scripted.out).toContain("node scripts/check.mjs");
       const flow = JSON.parse(fs.readFileSync(path.join(scriptDir, "flow.json"), "utf8")) as { stages: { executor: { type: string } }[] };
       expect(flow.stages.map((stage) => stage.executor.type)).toEqual(["human", "llm", "script"]);
+      expect(scripted.out).toMatch(/要写入的文件 \/ files to write:[\s\S]*scripts\/check\.mjs/);
+      expect(fs.readFileSync(path.join(scriptDir, "scripts", "check.mjs"), "utf8")).toBe(checkScript);
 
       const badDir = path.join(work, "bad");
       const badMocks = writeMocks(path.join(work, "bad-mocks"), {

@@ -88,6 +88,10 @@ beforeAll(async () => {
       }
       if (req.url?.endsWith("/v1/messages")) return anthropicReply(res, model, "# Hello from anthropic protocol");
       if (req.url?.endsWith("/chat/completions")) {
+        if (model === "cut-off") {
+          // The stream stops after the first chunk: no finish reason, no usage, no [DONE].
+          return sse(res, [[null, { id: "c1", object: "chat.completion.chunk", created: 1, model, choices: [{ index: 0, delta: { role: "assistant", content: "{" }, finish_reason: null }] }]]);
+        }
         return openaiReply(res, model, model === "too-long" ? "cut off" : "# Hello from openai protocol", model === "too-long" ? "length" : "stop");
       }
       res.writeHead(404).end();
@@ -343,6 +347,22 @@ describe("calling a provider over HTTP", () => {
 
     process.env.TEST_OAI_KEY = "k";
     await expect(runStage(loadFlow(dir), "write", { model: "mine/too-long" })).rejects.toThrow(/hit maxTokens/);
+  });
+
+  it("refuses a reply whose stream stopped partway, writes nothing, and lets retries try again", async () => {
+    process.env.TEST_OAI_KEY = "k";
+    writeFlow(flowWith("mine/cut-off"), { providers: { mine: { protocol: "openai", baseUrl: `${base}/v1`, apiKeyEnv: "TEST_OAI_KEY" } } });
+    await expect(runStage(loadFlow(dir), "write", {})).rejects.toThrow(/stopped partway/);
+    expect(fs.existsSync(path.join(dir, "out.md"))).toBe(false);
+    expect(seen).toHaveLength(1);
+
+    seen = [];
+    const flow = flowWith("mine/cut-off");
+    Object.assign(flow.stages[0]!.executor, { retries: 2 });
+    writeFlow(flow, { providers: { mine: { protocol: "openai", baseUrl: `${base}/v1`, apiKeyEnv: "TEST_OAI_KEY" } } });
+    await expect(runStage(loadFlow(dir), "write", { sleep: async () => {} })).rejects.toThrow(/stopped partway/);
+    expect(seen).toHaveLength(3);
+    expect(fs.existsSync(path.join(dir, "out.md"))).toBe(false);
   });
 
   it("explains an empty balance, rate limits and server errors, after the SDK's own retries", async () => {
