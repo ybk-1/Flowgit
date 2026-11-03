@@ -85,6 +85,7 @@ import {
 } from "@flowgit/core";
 import { openBrowser, startBoard } from "@flowgit/web";
 import { runBatch } from "./batch.js";
+import { registerNew } from "./commands/new.js";
 import { registerServeMcp } from "./commands/serve-mcp.js";
 import { buildGallery } from "./gallery.js";
 import { bilingualCliError, c, colorizeUnifiedDiff, nextHint, statusBoard, table, width } from "./format.js";
@@ -1649,6 +1650,7 @@ galleryCmd
     }
   });
 
+registerNew(program, fail);
 registerServeMcp(program, { version: VERSION, dirOf, fail });
 
 program.parseAsync(process.argv).catch(fail);
