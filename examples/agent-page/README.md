@@ -56,3 +56,8 @@ Change `"agent"` in the two agent stages of `flow.json` to `codex`, `gemini` or 
 Claude Code 用 `--permission-mode acceptEdits` 启动：可以直接改流程目录里的文件，但不会自动放行其他需要确认的操作。示例不会加任何跳过所有权限的参数。
 
 Claude Code starts with `--permission-mode acceptEdits`: it can edit files in the flow directory without asking, but nothing else that needs approval is allowed automatically. The example adds no bypass-all-permissions flag.
+
+## 依据 / Sources
+
+- Agent 在流程目录里写文件，只用能写这个目录的最小权限。Flowgit 的 [agent 执行器](../../docs/spec.md) 写了 Claude Code 用 `--permission-mode acceptEdits`，不默认加上跳过所有权限的参数。 / The agent writes in the flow directory with the least permission that can do that. Flowgit's [agent executor](../../docs/spec.md) starts Claude Code with `--permission-mode acceptEdits` and does not add a bypass-all-permissions flag.
+- 网页是单个文件，不引用外部资源。检查脚本按有没有标题、语言对不对、有没有外链、体积大不大来判断。 / The page is one file and cites no external resource. The check script looks for a title, the right language, no external links, and a sane size.

@@ -1,0 +1,168 @@
+{
+  "format": "flowgit",
+  "version": "0.1",
+  "id": "data-report",
+  "name": "数据报告",
+  "description": "从一张表做出数据报告（示例是销售表）：你提供表格 → 脚本画像（类型、缺失、唯一值、最小/最大/平均/中位数、日期范围）→ 模型只写图表规格（柱状、折线或表格，不写代码）→ 脚本汇总并手写 SVG → 模型先写结论再引用图 → 脚本合成报告，并核对分析里的每个数字都能在画像或汇总里找到。 / Turn a table (the sample is sales) into a data report: you provide the table → a script profiles each column → the model writes a chart spec only (bar, line or table, never code) → a script aggregates and draws SVG by hand → the model leads with the answer and cites each chart → a script assembles the report and checks that every number in the analysis appears in the profile or the aggregates.",
+  "language": "zh",
+  "author": {
+    "name": "Flowgit"
+  },
+  "license": "Apache-2.0",
+  "tags": [
+    "data",
+    "report",
+    "charts"
+  ],
+  "inputs": {
+    "question": {
+      "type": "string",
+      "description": "要回答的问题，例如：哪个类目和地区的销售额最高，下一步该补货还是促销？ / The question to answer",
+      "required": true
+    },
+    "audience": {
+      "type": "string",
+      "description": "谁来读这份报告，例如：区域销售经理 / Who will read the report",
+      "default": "区域销售经理"
+    },
+    "language": {
+      "type": "string",
+      "enum": [
+        "zh",
+        "en"
+      ],
+      "default": "zh",
+      "description": "输出语言：zh 中文，en English / Output language: zh or en"
+    }
+  },
+  "stages": [
+    {
+      "id": "data",
+      "name": "表格",
+      "description": "放上要分析的 CSV，data/ 里只放这一个，第一行是列名。示例 data/sales.csv 是虚构的一个季度销售，208 行，列是 date、category、region、amount、quantity，有少量空值。 / The CSV to analyse, the only one in data/, with a header row. The sample data/sales.csv is a fictional quarter of sales, 208 rows, with date, category, region, amount and quantity, and a few empty cells.",
+      "executor": {
+        "type": "human",
+        "instructions": "把你的表另存为 CSV 放进 data/，再删掉示例 sales.csv：data/ 里只能有一个 CSV。第一行是列名，叫什么都行。Excel 的“CSV UTF-8”和默认的 CSV 都能读。数字不要带千分位和货币符号，日期写成 2025-01-31。空着的格子不用补。 / Save your table as a CSV in data/ and delete the sample sales.csv: data/ holds one CSV. The first row is the header, with any column names. Excel's CSV UTF-8 and its default CSV both work. Write numbers without thousands separators or currency signs, and dates as 2025-01-31. Leave empty cells empty."
+      },
+      "outputs": [
+        {
+          "type": "dir",
+          "path": "data/"
+        }
+      ]
+    },
+    {
+      "id": "profile",
+      "name": "画像",
+      "description": "按列写出类型、缺失个数、唯一值个数、最小/最大/平均/中位数，以及日期范围。缺失值只计数，不填补。 / For each column: type, missing count, distinct count, min, max, mean and median, plus the date range. Missing values are counted and not filled in.",
+      "inputs": [
+        "data"
+      ],
+      "executor": {
+        "type": "script",
+        "run": "node scripts/profile.mjs"
+      },
+      "outputs": [
+        {
+          "type": "application/json",
+          "path": "profile.json",
+          "schema": "schemas/profile.schema.json"
+        }
+      ]
+    },
+    {
+      "id": "plan",
+      "name": "图表规格",
+      "description": "模型只写 charts.json：每张图是 bar、line 或 table，带 x、y、汇总方式和筛选。不写代码，不算新的总数。 / The model writes charts.json only: each chart is a bar, line or table, with x, y, an aggregation and a filter. No code, and no new totals.",
+      "inputs": [
+        "profile",
+        "data"
+      ],
+      "executor": {
+        "type": "llm",
+        "prompt": "prompts/plan.md",
+        "effort": "low"
+      },
+      "outputs": [
+        {
+          "type": "application/json",
+          "path": "charts.json",
+          "schema": "schemas/charts.schema.json"
+        }
+      ]
+    },
+    {
+      "id": "charts",
+      "name": "出图",
+      "description": "按规格汇总，手写 charts/*.svg（浅色和深色都能看清）和 aggregates.json。柱状图按数值从高到低、从 0 起算；折线按时间排列并带点；表格写出精确值。柱状图和表格最多 30 组。 / Aggregate the spec into hand-written charts/*.svg (readable in light and dark) and aggregates.json. Bars are sorted and start at 0; lines follow time and mark each point; tables print the exact values. A bar chart or a table holds at most 30 groups.",
+      "inputs": [
+        "data",
+        "plan"
+      ],
+      "executor": {
+        "type": "script",
+        "run": "node scripts/charts.mjs"
+      },
+      "outputs": [
+        {
+          "type": "application/json",
+          "path": "aggregates.json",
+          "schema": "schemas/aggregates.schema.json"
+        },
+        {
+          "type": "dir",
+          "path": "charts/"
+        }
+      ]
+    },
+    {
+      "id": "analysis",
+      "name": "分析",
+      "description": "先用一句话回答问题，再写发生了什么、可能的原因和建议。每个发现都引用一张图，数字只从 profile.json 和 aggregates.json 原样抄。 / Answer the question in one sentence, then what happened, a possible reason, and what to do. Every finding cites a chart. Copy numbers from profile.json and aggregates.json; do not compute new ones.",
+      "inputs": [
+        "profile",
+        "plan",
+        "charts"
+      ],
+      "executor": {
+        "type": "llm",
+        "prompt": "prompts/analysis.md",
+        "effort": "medium"
+      },
+      "outputs": [
+        {
+          "type": "text/markdown",
+          "path": "analysis.md"
+        }
+      ]
+    },
+    {
+      "id": "report",
+      "name": "报告",
+      "description": "合成 report.md 和自包含的 report.html。正文里对不上画像或汇总的数字、没被引用的图、没有把结论放在开头，都写进 check-report.md，只提醒不拦截。 / Assemble report.md and a self-contained report.html. Numbers missing from the profile or the aggregates, uncited charts, and an analysis that does not lead with the answer go in check-report.md. Those checks warn and do not block.",
+      "inputs": [
+        "analysis",
+        "profile",
+        "charts"
+      ],
+      "executor": {
+        "type": "script",
+        "run": "node scripts/report.mjs"
+      },
+      "outputs": [
+        {
+          "type": "text/markdown",
+          "path": "report.md"
+        },
+        {
+          "type": "text/html",
+          "path": "report.html"
+        },
+        {
+          "type": "text/markdown",
+          "path": "check-report.md"
+        }
+      ]
+    }
+  ]
+}

@@ -3,6 +3,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
+import { createRequire } from "node:module";
 import { pipeline } from "node:stream/promises";
 import { fileURLToPath } from "node:url";
 import {
@@ -12,6 +13,10 @@ import {
   flowLog,
   planModelCalls,
   planRunAll,
+  TrustChangedError,
+  TrustNeededError,
+  trustFlow,
+  trustState,
   FLOW_FILE,
   FLOW_MD_FILE,
   findFlowFile,
@@ -42,14 +47,24 @@ import {
   type AddStageSpec,
   type AgentName,
   type Flow,
+  type FlowAction,
   type PlanStep,
   type FlowInput,
   type Output,
   type RunEvent,
+  type TrustState,
   type ValidationIssue,
 } from "@flowgit/core";
 
 const publicDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "public");
+
+/** i18next's browser build (https://www.i18next.com), served to the board as /vendor/i18next.js. */
+const i18nextFile = path.join(
+  path.dirname(createRequire(import.meta.url).resolve("i18next/package.json")),
+  "dist",
+  "umd",
+  "i18next.min.js",
+);
 
 const CSP = [
   "default-src 'none'",
@@ -82,10 +97,14 @@ const LOCKED_PAGE = `<!doctype html>
 </html>
 `;
 
+/** Board files: names under public/, or an absolute path for a file from a dependency. */
 const STATIC: Record<string, { file: string; type: string }> = {
   "/": { file: "index.html", type: "text/html; charset=utf-8" },
   "/index.html": { file: "index.html", type: "text/html; charset=utf-8" },
   "/app.js": { file: "app.js", type: "text/javascript; charset=utf-8" },
+  "/fx.js": { file: "fx.js", type: "text/javascript; charset=utf-8" },
+  "/i18n.js": { file: "i18n.js", type: "text/javascript; charset=utf-8" },
+  "/vendor/i18next.js": { file: i18nextFile, type: "text/javascript; charset=utf-8" },
   "/style.css": { file: "style.css", type: "text/css; charset=utf-8" },
 };
 
@@ -128,6 +147,8 @@ export interface BoardStage {
   state: string;
   runs: number;
   latest: { n: number; time: string; status: string } | null;
+  /** The run the files on disk match, when known (StageStatus.current); after a restore it differs from latest. */
+  current: number | null;
   /** Human stage instructions, when the executor has them. */
   instructions?: string;
   outputs: BoardOutput[];
@@ -197,6 +218,7 @@ export function flowBoard(dir: string): FlowBoard {
       latest: status.latest
         ? { n: status.latest.n, time: status.latest.finishedAt, status: status.latest.status }
         : null,
+      current: status.current ?? null,
       ...(status.stage.executor.type === "human" && status.stage.executor.instructions
         ? { instructions: status.stage.executor.instructions }
         : {}),
@@ -361,6 +383,11 @@ function handle(req: http.IncomingMessage, res: http.ServerResponse, ctx: Handle
     void postRun(req, res, ctx).catch((err) => sendError(res, err));
     return;
   }
+  if (req.method === "POST" && pathname === "/api/trust") {
+    if (!authorized(req, res, ctx)) return;
+    void postTrust(req, res, ctx).catch((err) => sendError(res, err));
+    return;
+  }
   if (req.method === "POST" && pathname === "/api/restore") {
     if (!authorized(req, res, ctx)) return;
     if (busy(req, res, ctx)) return;
@@ -456,7 +483,7 @@ function handle(req: http.IncomingMessage, res: http.ServerResponse, ctx: Handle
     send(res, 401, body, { "Content-Type": "text/html; charset=utf-8" });
     return;
   }
-  const file = path.join(publicDir, asset.file);
+  const file = path.isAbsolute(asset.file) ? asset.file : path.join(publicDir, asset.file);
   let body: Buffer | string = fs.readFileSync(file);
   if (asset.file === "index.html") {
     body = body.toString("utf8").replaceAll("__FLOWGIT_TOKEN__", ctx.token);
@@ -674,6 +701,31 @@ async function postRestore(req: http.IncomingMessage, res: http.ServerResponse, 
   }
 }
 
+/** What the page shows before it asks to confirm a copied flow. */
+function trustPayload(state: TrustState): { reason: string; source: string | null; fingerprint: string; actions: FlowAction[] } {
+  return { reason: state.reason, source: state.source ?? null, fingerprint: state.fingerprint, actions: state.actions };
+}
+
+/**
+ * Confirm a copied flow, like `flowgit trust`. The body carries the fingerprint of the list
+ * the person was shown; if the flow changed since, nothing is recorded and the new list comes back.
+ */
+async function postTrust(req: http.IncomingMessage, res: http.ServerResponse, ctx: HandlerCtx): Promise<void> {
+  const body = await readJsonObject(req);
+  if (typeof body.fingerprint !== "string" || !body.fingerprint) throw new HttpError(400, "缺少 fingerprint / missing fingerprint");
+  const loaded = loadFlow(ctx.dir);
+  try {
+    const state = trustFlow(loaded, body.fingerprint);
+    sendJson(res, 200, { ok: true, reason: state.reason });
+  } catch (err) {
+    if (err instanceof TrustChangedError) {
+      sendJson(res, 409, { error: err.message, trust: trustPayload(err.state) });
+      return;
+    }
+    throw coreHttpError(err);
+  }
+}
+
 function optionalString(body: Record<string, unknown>, key: string): string | undefined {
   const value = body[key];
   if (value === undefined || value === null) return undefined;
@@ -870,6 +922,12 @@ async function postRun(req: http.IncomingMessage, res: http.ServerResponse, ctx:
   }
   if (ctx.running) {
     sendJson(res, 409, { error: "已有运行在进行 / a run is already in progress" });
+    return;
+  }
+  // A flow copied from a Git URL runs only after the person has seen what it does.
+  const trust = trustState(loaded);
+  if (trust.needed) {
+    sendJson(res, 409, { error: new TrustNeededError(loaded, trust).message, trust: trustPayload(trust) });
     return;
   }
   ctx.running = true;

@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Social post angles",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["angles"],
+  "properties": {
+    "angles": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 5,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "hook", "audience", "whyItSpreads"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "hook": { "type": "string", "minLength": 1 },
+          "audience": { "type": "string", "minLength": 1 },
+          "whyItSpreads": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}

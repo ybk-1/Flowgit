@@ -139,9 +139,9 @@ CLI messages and errors are bilingual. What a template produces (script, caption
 
 | 命令 / Command | 作用 | What it does |
 | --- | --- | --- |
-| `flowgit init [dir] [-t 模板\|目录\|Git 地址]` | 从模板、本地目录或 Git 地址新建流程。本地目录和 Git 默认不复制产物，`--with-outputs` 才复制；Git 可加 `--ref` 和 `--path` | Create a flow from a template, a local directory or a Git URL. A local directory or Git URL skips outputs unless `--with-outputs` is set; Git also takes `--ref` and `--path` |
+| `flowgit init [dir] [-t 模板\|社区 id\|目录\|Git 地址]` | 从模板、社区模板、本地目录或 Git 地址新建流程。本地目录和 Git 默认不复制产物，`--with-outputs` 才复制；Git 可加 `--ref` 和 `--path`，地址末尾的 `#path=` 也表示子目录 | Create a flow from a template, a community id, a local directory or a Git URL. A local directory or Git URL skips outputs unless `--with-outputs` is set; Git also takes `--ref` and `--path`, and `#path=` at the end of the URL is a subdirectory |
 | `flowgit share <目录> [--with-outputs] [--force]` | 复制一份可以分享的流程：默认不带产物，发现密钥就拒绝写入，邮箱和本机路径只提醒 | Copy a flow that is safe to share: outputs stay behind by default, a secret refuses the write, emails and local paths are warnings |
-| `flowgit templates [--json]` | 列出自带的模板和它们的阶段 | List the bundled templates and their stages |
+| `flowgit templates [--json] [--all]` | 列出自带的模板和它们的阶段。`--all` 连社区模板；读不到登记时仍列出自带模板并提示一行 | List the bundled templates and their stages. `--all` adds community templates; if the registry cannot be read, the bundled list is still printed with one note |
 | `flowgit validate` | 按规范检查 `flow.json` 或 `flow.md` | Check `flow.json` or `flow.md` against the spec |
 | `flowgit convert --to md\|json` | 在 `flow.json` 和 `flow.md` 之间转换，内容不变 | Switch between `flow.json` and `flow.md`; the flow stays the same |
 | `flowgit stage add <id> --type <类型>` | 加一个阶段。没写 `--after` 就加在最后，没写 `--input` 就用前一个阶段；llm / agent 会建提示词骨架 | Add a stage. Omit `--after` to append, omit `--input` to use the previous stage; llm / agent gets a prompt skeleton |
@@ -152,13 +152,17 @@ CLI messages and errors are bilingual. What a template produces (script, caption
 | `flowgit run <stage\|all>` | 跑一个阶段，或按顺序跑完所有需要跑的阶段 | Run one stage, or every stage that needs it, in order |
 | `flowgit run all --dry-run` | 预演：列出每个阶段会跳过、运行还是停下等你，以及最多调用几次模型；什么都不运行 | Dry run: whether each stage would be skipped, run or stop for you, and at most how many model calls; nothing runs |
 | `flowgit run <stage> --from <path>` | 人工阶段：把文件或文件夹放进产物位置 | Human stage: put a file or folder in place as the output |
+| `flowgit batch <file.csv> [--out 目录] [--concurrency n] [--rows a-b] [--yes]` | 用一份 CSV 一次做很多份。表头是流程输入，每行复制一份再跑；空单元格用默认值。某一行失败或停在人工阶段，其余行继续。退出码 0 全完成、2 有等待、1 有失败。从 Git 地址复制来的流程先确认一次，`--yes` 不问 | Run many copies from one CSV. Headers are flow inputs; each row is copied and run, and empty cells use defaults. A row that fails or stops at a human stage does not stop the others. Exit 0 when all are done, 2 when some are waiting, 1 when any failed. A flow copied from a Git URL is confirmed once first; `--yes` skips the question |
+| `flowgit trust` | 确认从 Git 地址复制来的流程会在你电脑上做的事。第一次运行这种流程时 `run` 也会列出来再问，`run --yes` 不问直接确认；命令变了会再问 | Confirm what a flow copied from a Git URL does on your computer. The first run of such a flow lists it and asks too, and `run --yes` confirms without asking; you are asked again when its commands change |
 | `flowgit log [stage]` | 这个阶段的历史版本；不写阶段就按时间列出整个流程的，并合计 token 用量 | The stage's version history; without a stage, the whole flow's by time, with a token total |
 | `flowgit diff <stage> <a> [b] [--json]` | 对比两个版本的产物；省略 `b` 则和当前文件比 | Diff one version against another, or against the current files when `b` is omitted |
 | `flowgit restore <stage> <n>` | 回退到某个版本 | Roll back to a version |
+| `flowgit prune [--keep <n>] [--stage <id>] [--dry-run] [--yes]` | 清理旧版本。默认每个阶段留最新 5 个，并留下手动修改、和当前文件一致的版本、最近一次成功的运行。`--dry-run` 只列出；不在终端里要加 `--yes` | Delete old versions. Each stage keeps its newest 5, plus manual edits, the version matching the current files, and the newest successful run. `--dry-run` only lists; outside a terminal add `--yes` |
 | `flowgit providers [--json]` | 列出模型供应商，以及密钥有没有设置（不显示密钥） | List model providers and whether each key is set (never the key) |
 | `flowgit doctor [--model m] [--json]` | 跑之前检查这台电脑：Node、流程输入、密钥、脚本和 agent 要用的命令。不调用模型，不运行阶段 | Check this machine before a run: Node, flow inputs, keys, and the programs script and agent stages use. Calls no model and runs no stage |
 | `flowgit graph [--status] [--md] [-o 文件]` | 把流程画成 Mermaid 流程图（GitHub、Obsidian 能直接显示），`--status` 按状态上色，`-o` 写成 UTF-8 文件 | Draw the flow as a Mermaid diagram (GitHub and Obsidian render it); `--status` colors it by state, `-o` writes a UTF-8 file |
 | `flowgit export-skill [-o SKILL.md]` | 生成 `SKILL.md`，给 AI 工具用 | Generate a `SKILL.md` for AI tools |
+| `flowgit gallery build [--out gallery-dist]` | 生成静态模板画廊（不部署） | Write a static template gallery (does not deploy) |
 
 所有命令都接受 `-C <dir>` 指定流程目录。`run` 还接受 `--input k=v`（只对这次运行生效）、`--model`、`--force` 和 `--dry-run`。`diff` 对文本和 JSON 按行输出 unified diff（`+` 绿色、`-` 红色，尊重 `NO_COLOR`），二进制只比较 sha256，文件夹列出新增、删除和改动的文件。
 
@@ -185,10 +189,30 @@ Every command accepts `-C <dir>` for the flow directory. `run` also takes `--inp
 | `hiring` | `flowgit init -t hiring` | 岗位需求（人）→ 岗位分析 → 招聘启事和面试题（模型，并行）→ 评分表和检查（脚本）/ the role (person) → job analysis → job ad and interview questions (model, in parallel) → scorecard and check (script) |
 | `travel-guide` | `flowgit init -t travel-guide` | 备选地点 → 按天行程 → 攻略笔记（模型）→ 检查（脚本）/ candidate places → day-by-day itinerary → guide (model) → check (script) |
 | `online-course` | `flowgit init -t online-course` | 学员和成果 → 课程大纲 → 试听课逐字稿和介绍页（模型，并行）→ 检查（脚本）/ learners and outcomes → syllabus → trial lesson and course page (model, in parallel) → check (script) |
+| `landing-page` | `flowgit init -t landing-page` | 简报（人）→ 结构 → 文案 → 照片（可空）→ 生成网页 → 检查 / brief (person) → structure → copy → photos (optional) → build → check |
+| `social-posts` | `flowgit init -t social-posts` | 角度 → 挑选（人）→ 多平台帖子（模型）→ 检查 → 导出 / angles → pick (person) → posts (model) → check → export |
+| `data-report` | `flowgit init -t data-report` | 表格（人）→ 列画像（脚本）→ 图表规格（模型，只写 JSON）→ 手写 SVG（脚本）→ 结论在前的分析（模型）→ 报告和数字核对（脚本）/ table (person) → column profile (script) → chart spec (model, JSON only) → hand-drawn SVG (script) → answer-first analysis (model) → report and number check (script) |
+| `meeting-notes` | `flowgit init -t meeting-notes` | 转录（人）→ 整理 → 纪要 → 待办（模型）→ 检查（脚本）→ 会后邮件 / transcript (person) → clean → minutes → actions (model) → check (script) → follow-up |
 
-图文模板按平台（小红书、公众号、博客）决定篇幅和语气，导出 `post.md` 和 `post.html`。说明见 [`packages/cli/templates/article/README.md`](packages/cli/templates/article/README.md)。客服 SOP 模板把你的资料整理成规程和测试用例，最后打包成 `skill/SKILL.md`，说明见 [`packages/cli/templates/support-sop/README.md`](packages/cli/templates/support-sop/README.md)。短视频见 [`packages/cli/templates/short-video/README.md`](packages/cli/templates/short-video/README.md)，周报入门见 [教程](docs/guide.md)。
+图文模板按平台（小红书、公众号、博客）决定篇幅和语气，导出 `post.md` 和 `post.html`。说明见 [`packages/cli/templates/article/README.md`](packages/cli/templates/article/README.md)。客服 SOP 模板把你的资料整理成规程和测试用例，最后打包成 `skill/SKILL.md`，说明见 [`packages/cli/templates/support-sop/README.md`](packages/cli/templates/support-sop/README.md)。落地页从简报生成 `site/index.html`：表单按 WCAG 2.2 和各地的隐私规则生成并检查，缺图用色块，页面不访问网络。说明见 [`packages/cli/templates/landing-page/README.md`](packages/cli/templates/landing-page/README.md)。短视频见 [`packages/cli/templates/short-video/README.md`](packages/cli/templates/short-video/README.md)，周报入门见 [教程](docs/guide.md)。
 
-The article template sets length and tone from the platform (Xiaohongshu, WeChat, blog) and exports `post.md` and `post.html`. See [`packages/cli/templates/article/README.md`](packages/cli/templates/article/README.md). The support-SOP template turns your notes into an SOP and test cases, then packages them as `skill/SKILL.md`; see [`packages/cli/templates/support-sop/README.md`](packages/cli/templates/support-sop/README.md). The short video is [`packages/cli/templates/short-video/README.md`](packages/cli/templates/short-video/README.md); the weekly-report starter is built in the [guide](docs/guide.md).
+The article template sets length and tone from the platform (Xiaohongshu, WeChat, blog) and exports `post.md` and `post.html`. See [`packages/cli/templates/article/README.md`](packages/cli/templates/article/README.md). The support-SOP template turns your notes into an SOP and test cases, then packages them as `skill/SKILL.md`; see [`packages/cli/templates/support-sop/README.md`](packages/cli/templates/support-sop/README.md). The landing page builds `site/index.html` from a brief, with a form built and checked against WCAG 2.2 and privacy rules in several regions; it uses a color block when a photo is missing and loads nothing from the network. See [`packages/cli/templates/landing-page/README.md`](packages/cli/templates/landing-page/README.md). The short video is [`packages/cli/templates/short-video/README.md`](packages/cli/templates/short-video/README.md); the weekly-report starter is built in the [guide](docs/guide.md).
+
+## 模板画廊和社区模板 / Gallery and community templates
+
+自带模板装在命令行里。社区模板记在 [`registry/community.json`](registry/community.json)：一条一个 Git 地址，子目录写在 `#path=` 里。登记方式和审核标准（要能通过校验、没有密钥、许可证写清楚、模板有「依据 / Sources」）见 [`registry/README.md`](registry/README.md)。
+
+Bundled templates ship with the CLI. Community templates are listed in [`registry/community.json`](registry/community.json): one Git URL each, with a subdirectory in `#path=`. How to register one, and the review bar (it validates, has no secrets, names a clear license, and the template has 依据 / Sources), is in [`registry/README.md`](registry/README.md).
+
+```bash
+flowgit templates --all                              # 自带的 + 社区的 / bundled + community
+flowgit init my-page -t agent-page                   # 按登记的地址复制 / copy the registered URL
+flowgit gallery build                                # 静态页面写到 gallery-dist/，不部署 / static pages in gallery-dist/, no deploy
+```
+
+在这个仓库里运行时，命令用仓库里的 `registry/community.json`。找不到这份文件时（例如从 npm 装的命令行），改读 GitHub 上的 raw 地址。`FLOWGIT_REGISTRY` 可以换成别的网址或一个本地文件；读不到时，`templates --all` 仍列出自带模板，并只提示一行。
+
+When you run it inside this repo, the command uses the repo's `registry/community.json`. When that file is not there (for example a CLI installed from npm), it reads the raw file on GitHub. `FLOWGIT_REGISTRY` can point at another URL or a local file; if the list cannot be read, `templates --all` still prints the bundled templates and one note.
 
 ## 接任何模型 / Any model
 
@@ -261,9 +285,9 @@ A `service` stage calls an HTTP endpoint. `POST` sends the flow inputs and text 
 
 ## 接 MCP 工具 / MCP tools
 
-`mcp` 阶段调用一个 MCP 工具。服务器写在 `mcpServers` 里，和 Claude Desktop、Cursor 一样：本机用 `command` / `args` / `env`，远程用 `url`（Streamable HTTP）。`env` 的值必须是 `${变量名}`，密钥不写进 flow.json。`flowgit mcp tools <服务器>` 列出工具和参数，`flowgit doctor` 检查命令在不在 PATH 上、变量有没有设置。说明见 [docs/mcp.md](docs/mcp.md)，可运行的例子是 [`examples/mcp-echo`](examples/mcp-echo)。
+`mcp` 阶段调用一个 MCP 工具。服务器写在 `mcpServers` 里，和 Claude Desktop、Cursor 一样：本机用 `command` / `args` / `env`，远程用 `url`（Streamable HTTP）。`env` 的值必须是 `${变量名}`，密钥不写进 flow.json。`flowgit mcp tools <服务器>` 列出工具和参数，`flowgit doctor` 检查命令在不在 PATH 上、变量有没有设置。从 Git 地址复制来的流程会把要启动的服务器列进确认清单，确认前不会启动。说明见 [docs/mcp.md](docs/mcp.md)，可运行的例子是 [`examples/mcp-echo`](examples/mcp-echo)。
 
-An `mcp` stage calls an MCP tool. Servers live in `mcpServers`, the same shape as Claude Desktop and Cursor: `command` / `args` / `env` locally, or `url` (Streamable HTTP) for a remote server. An `env` value must be `${VAR}`; secrets are not written into flow.json. `flowgit mcp tools <server>` lists tools and parameters, and `flowgit doctor` checks that the command is on PATH and the variables are set. See [docs/mcp.md](docs/mcp.md). A runnable example is [`examples/mcp-echo`](examples/mcp-echo).
+An `mcp` stage calls an MCP tool. Servers live in `mcpServers`, the same shape as Claude Desktop and Cursor: `command` / `args` / `env` locally, or `url` (Streamable HTTP) for a remote server. An `env` value must be `${VAR}`; secrets are not written into flow.json. `flowgit mcp tools <server>` lists tools and parameters, and `flowgit doctor` checks that the command is on PATH and the variables are set. A flow copied from a Git URL lists the servers it would start and does not start them until you confirm. See [docs/mcp.md](docs/mcp.md). A runnable example is [`examples/mcp-echo`](examples/mcp-echo).
 
 ## 子流程 / Sub-flows
 
@@ -341,7 +365,7 @@ To build your own flow from scratch, follow [docs/guide.md](docs/guide.md) (abou
 packages/
   core/   @flowgit/core  格式、校验、版本记录、执行器 / format, validation, runs, executors
   cli/    flowgit        命令行工具和模板 / CLI and templates
-    templates/             自带模板：short-video（短视频）、weekly-report（周报入门）、article（图文）、support-sop（客服 SOP）、job-application（求职材料）、research-report（调研报告）、ecommerce-listing（电商上架）、slides（演示稿）、live-selling（直播带货）、short-drama（短剧）、lesson-plan（备课）、novel-serial（网文连载）、business-plan（商业计划书）、event-plan（活动策划）、hiring（招聘）、travel-guide（旅行攻略）、online-course（知识付费课程）/ bundled templates: short-video, weekly-report (starter), article, support-sop, job-application, research-report, ecommerce-listing, slides, live-selling, short-drama, lesson-plan, novel-serial, business-plan, event-plan, hiring, travel-guide, online-course
+    templates/             自带模板：short-video（短视频）、weekly-report（周报入门）、article（图文）、support-sop（客服 SOP）、job-application（求职材料）、research-report（调研报告）、ecommerce-listing（电商上架）、slides（演示稿）、live-selling（直播带货）、short-drama（短剧）、lesson-plan（备课）、novel-serial（网文连载）、business-plan（商业计划书）、event-plan（活动策划）、hiring（招聘）、travel-guide（旅行攻略）、online-course（知识付费课程）、landing-page（落地页）、social-posts（社媒帖子）、data-report（数据报告）、meeting-notes（会议纪要）/ bundled templates: short-video, weekly-report (starter), article, support-sop, job-application, research-report, ecommerce-listing, slides, live-selling, short-drama, lesson-plan, novel-serial, business-plan, event-plan, hiring, travel-guide, online-course, landing-page, social-posts, data-report, meeting-notes
   web/    @flowgit/web   本机网页看板：查看、修改、运行、新增和删除阶段、填写输入、看历史、对比和回退、流程图、预演和 token 用量 / local web board: view, edit, run, add and remove stages, fill in inputs, browse history, compare, restore, a flow graph, preview, and token usage
 docs/
   spec.md                  格式规范 / format spec
@@ -370,17 +394,17 @@ Everything on GitHub (commit messages, PRs, docs) is bilingual, Chinese first.
 
 ## 路线图 / Roadmap
 
-1. **格式 + 命令行**（本仓库现状，0.1.0 准备发布）：Flow 规范 v0.1，JSON 产物可以带 schema；十一个自带模板（短视频、周报入门、图文、客服 SOP、求职材料、调研报告、电商上架、PPT 演示稿、直播带货、竖屏短剧、老师备课）；llm 阶段接任何模型，agent 阶段接 Claude Code、Codex、Cursor、Gemini，service 阶段调用 HTTP 服务，`workflow` 阶段用 `engine: "flowgit"` 运行子流程；script、agent 和 service 阶段可以设超时；`stage add` / `stage rm`、`diff`（版本对比）、`doctor`、`templates`、`graph`（流程图）等命令。更新记录见 [CHANGELOG.md](CHANGELOG.md)。
-2. **阶段看板**：本机看板已经有了（`flowgit board`）：每张卡能看产物、改、运行、看历史、对比和回退；可以新增和删除阶段，在卡片和流程图之间切换；文件一变就实时刷新（SSE 的 `flow:changed`）。「预演 / Preview」列出每个阶段会跳过、运行、等你还是不能运行，以及最多调用几次模型；全部运行前如果会调用真实模型会先确认。每张卡显示用过的 token，页面顶部是合计。下一步是网站：在网上打开一个流程就是一块看板。
-3. **发布与复用**：已经能从别人的流程开始（`flowgit init -t <Git 地址>`，默认不带产物），分享前自动去隐私（`flowgit share`）。下一步是画廊。
-4. **更多领域**：更多模板（下一个是落地页网站，做网站现在有 `examples/agent-page` 示例）；之后让作者把流程变成 MCP 服务供别人调用。
+1. **格式 + 命令行**（本仓库现状，0.1.0 准备发布）：Flow 规范 v0.1，JSON 产物可以带 schema；二十一个自带模板（短视频、周报入门、图文、客服 SOP、求职材料、调研报告、电商上架、PPT 演示稿、直播带货、竖屏短剧、老师备课、网文连载、商业计划书、活动策划、招聘、旅行攻略、知识付费课程、落地页、社媒帖子、数据报告、会议纪要）；llm 阶段接任何模型，agent 阶段接 Claude Code、Codex、Cursor、Gemini，service 阶段调用 HTTP 服务，`workflow` 阶段用 `engine: "flowgit"` 运行子流程；script、agent 和 service 阶段可以设超时；`stage add` / `stage rm`、`diff`（版本对比）、`prune`（清理旧版本）、`doctor`、`templates`、`graph`（流程图）等命令。更新记录见 [CHANGELOG.md](CHANGELOG.md)。
+2. **阶段看板**：本机看板已经有了（`flowgit board`）：每张卡能看产物、改、运行、看历史、对比和回退；可以新增和删除阶段，在卡片和流程图之间切换；文件一变就实时刷新（SSE 的 `flow:changed`）。「预演 / Preview」列出每个阶段会跳过、运行、等你还是不能运行，以及最多调用几次模型；全部运行要按住 1 秒，按住时卡片和流程图上先标出预演结果，提前松手就不运行。状态解码、跟着运行滚动、侧栏圆形展开和唱片式的历史版本这些动效，系统打开“减少动态效果”时都会关掉。每张卡显示用过的 token，页面顶部是合计。下一步是网站：在网上打开一个流程就是一块看板。
+3. **发布与复用**：已经能从别人的流程开始（`flowgit init -t <Git 地址>`，默认不带产物，第一次运行前先确认它会做的事），分享前自动去隐私（`flowgit share`）。下一步是画廊。
+4. **更多领域**：落地页已经是自带模板；用 agent 做网页仍见 `examples/agent-page`。接下来让作者把流程变成 MCP 服务供别人调用。
 
 English:
 
-1. **Format + CLI** (this repo today, 0.1.0 getting ready to ship): Flow spec v0.1, with optional schemas for JSON outputs; eleven bundled templates (short video, weekly-report starter, article posts, support SOP, job application, research report, e-commerce listing, slide deck, live selling, vertical short drama, lesson prep); llm stages on any model, agent stages on Claude Code, Codex, Cursor or Gemini, service stages that call HTTP services, and `workflow` stages that run a sub-flow with `engine: "flowgit"`; timeouts for script, agent and service stages; commands such as `stage add` / `stage rm`, `diff` (compare versions), `doctor`, `templates` and `graph` (a diagram of the flow). See [CHANGELOG.md](CHANGELOG.md) for details.
-2. **Stage board**: the local board is here (`flowgit board`). Each card lets you see its outputs, edit them, run, browse history, compare and restore; stages can be added and removed, the view switches between cards and a flow graph, and it refreshes as soon as files change (the SSE event `flow:changed`). "预演 / Preview" lists whether each stage would be skipped, run, wait for you or cannot run, and at most how many model calls; Run all asks first when it would call a real model. Each card shows the tokens its stage has used, and the top of the page shows the total. Next is the web app: open a flow online and it is a board.
-3. **Publish and reuse**: you can already start from someone else's flow (`flowgit init -t <Git URL>`, without their outputs by default) and strip private data before sharing (`flowgit share`). Next is a gallery.
-4. **More domains**: more templates (a landing-page site is next; building a website has the `examples/agent-page` example today); later, authors can expose a flow as an MCP service for others to call.
+1. **Format + CLI** (this repo today, 0.1.0 getting ready to ship): Flow spec v0.1, with optional schemas for JSON outputs; twenty-one bundled templates (short video, weekly-report starter, article posts, support SOP, job application, research report, e-commerce listing, slide deck, live selling, vertical short drama, lesson prep, web novel serial, business plan, event plan, hiring, travel guide, online course, landing page, social posts, data report, meeting notes); llm stages on any model, agent stages on Claude Code, Codex, Cursor or Gemini, service stages that call HTTP services, and `workflow` stages that run a sub-flow with `engine: "flowgit"`; timeouts for script, agent and service stages; commands such as `stage add` / `stage rm`, `diff` (compare versions), `prune` (delete old versions), `doctor`, `templates` and `graph` (a diagram of the flow). See [CHANGELOG.md](CHANGELOG.md) for details.
+2. **Stage board**: the local board is here (`flowgit board`). Each card lets you see its outputs, edit them, run, browse history, compare and restore; stages can be added and removed, the view switches between cards and a flow graph, and it refreshes as soon as files change (the SSE event `flow:changed`). "预演 / Preview" lists whether each stage would be skipped, run, wait for you or cannot run, and at most how many model calls; Run all is held for a second, the cards and the graph show that preview while you hold, and letting go early runs nothing. The motion (states that decode into place, scrolling to the running stage, a side panel that opens as a circle, and history as a stack of discs) turns off when the system asks for reduced motion. Each card shows the tokens its stage has used, and the top of the page shows the total. Next is the web app: open a flow online and it is a board.
+3. **Publish and reuse**: you can already start from someone else's flow (`flowgit init -t <Git URL>`, without their outputs by default, and confirmed once before its first run) and strip private data before sharing (`flowgit share`). Next is a gallery.
+4. **More domains**: the landing page is now a bundled template; building a page with an agent is still `examples/agent-page`. Next, authors can expose a flow as an MCP service for others to call.
 
 ## 许可证 / License
 

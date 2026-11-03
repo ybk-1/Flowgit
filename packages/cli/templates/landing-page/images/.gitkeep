@@ -1,0 +1,2 @@
+把图片放在这里，文件名用 structure.json 里每个区块的 image。没有图片也可以，生成时会用色块加说明。
+Put images here, named after each block's image field in structure.json. An empty folder is fine: the build uses a color block and a caption.

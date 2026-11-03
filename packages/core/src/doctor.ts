@@ -11,6 +11,7 @@ import { pickProxy, proxyOff, proxyProblem, proxySourceLabel, showProxy, systemP
 import { MissingInputsError, loadFlowInputs } from "./runs.js";
 import { flowFileId, flowgitParams, renderInputTree, resolveSubflowFile, subflowEnterProblem, subflowStack } from "./subflow.js";
 import type { ExecutorWorkflow, LoadedFlow, Stage } from "./types.js";
+import { trustState } from "./trust.js";
 import { findOnPath } from "./util.js";
 
 export type DoctorLevel = "ok" | "warn" | "error";
@@ -340,6 +341,20 @@ export function doctor(loaded: LoadedFlow, opts: DoctorOptions = {}): DoctorChec
         checks.push({ level: "error", message: (err as Error).message });
       }
     }
+  }
+
+  const trust = trustState(loaded, env);
+  if (trust.needed) {
+    checks.push({
+      level: "warn",
+      message:
+        trust.reason === "changed"
+          ? `要运行的命令和你上次确认的不一样了 / the commands changed since you confirmed them`
+          : `从 ${trust.source ?? "?"} 复制来的流程，还没确认它会做的事 / copied from ${trust.source ?? "?"}; what it does hasn't been confirmed yet`,
+      hint: `flowgit trust 看一眼并确认，第一次运行时也会问你 / run flowgit trust to look and confirm; the first run asks too`,
+    });
+  } else if (trust.reason === "trusted") {
+    checks.push({ level: "ok", message: `已确认从 ${trust.source ?? "?"} 复制来的流程 / confirmed the flow copied from ${trust.source ?? "?"}` });
   }
 
   // Stages with the same result share one line, e.g. "edit, export: found node".

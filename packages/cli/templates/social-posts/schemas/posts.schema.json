@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Social posts",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["posts"],
+  "properties": {
+    "posts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["platform", "title", "body", "hashtags", "imageIdea", "suggestedTime"],
+        "properties": {
+          "platform": {
+            "enum": ["xiaohongshu", "weibo", "x", "douyin", "linkedin", "wechat-moments"]
+          },
+          "title": { "type": "string" },
+          "body": { "type": "string", "minLength": 1 },
+          "hashtags": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 }
+          },
+          "imageIdea": { "type": "string", "minLength": 1 },
+          "suggestedTime": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}

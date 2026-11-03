@@ -5,12 +5,14 @@ import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { parseFlowMd, renderFlowMd } from "./flowmd.js";
 import {
+  TrustNeededError,
   doctor,
   flowActions,
   listMcpTools,
   listRuns,
   loadFlow,
   planRunAll,
+  runAll,
   runStage,
   stageConfigHash,
   stageStatus,
@@ -264,6 +266,49 @@ describe("mcp executor", () => {
 
     (stage.executor as ExecutorMcp).args = { text: "changed", mode: "text" };
     expect(stageStatus(loaded, "echo", { x: "hi" }).state).toBe("stale");
+  });
+
+  it("throws TrustNeededError and starts no MCP server when the flow was copied from Git", async () => {
+    const home = tempDir();
+    const previousHome = process.env.FLOWGIT_HOME;
+    process.env.FLOWGIT_HOME = home;
+    try {
+      const dir = tempDir();
+      const marker = path.join(dir, "started.txt");
+      fs.writeFileSync(path.join(dir, "spawn-marker.cjs"), `require("node:fs").writeFileSync(${JSON.stringify(marker)}, "started\\n");\n`);
+      const flow: Flow = {
+        format: "flowgit",
+        version: "0.1",
+        name: "copied",
+        forkedFrom: { source: "https://example.com/someone/flow.git", commit: "abc123" },
+        mcpServers: { echo: { command: "node", args: ["spawn-marker.cjs"], env: { ECHO_TOKEN: "${ECHO_TOKEN}" } } },
+        stages: [
+          {
+            id: "echo",
+            name: "echo",
+            executor: { type: "mcp", server: "echo", tool: "echo" },
+            outputs: [{ type: "text/plain", path: "out.txt" }],
+          },
+        ],
+      };
+      writeFlow(dir, flow);
+      const loaded = loadFlow(dir);
+      const actions = flowActions(loaded.flow, dir);
+      expect(actions).toEqual([{ stage: "echo", kind: "mcp", detail: "node spawn-marker.cjs", env: ["ECHO_TOKEN"] }]);
+
+      const refused = await runStage(loaded, "echo").catch((err: unknown) => err);
+      expect(refused).toBeInstanceOf(TrustNeededError);
+      expect((refused as TrustNeededError).message).toContain("flowgit trust");
+      expect((refused as TrustNeededError).state.actions).toEqual(actions);
+      await expect(runAll(loaded)).rejects.toBeInstanceOf(TrustNeededError);
+      expect(fs.existsSync(marker)).toBe(false);
+      expect(fs.existsSync(path.join(dir, "out.txt"))).toBe(false);
+      expect(listRuns(dir, "echo")).toEqual([]);
+      expect(fs.existsSync(path.join(home, "trusted.json"))).toBe(false);
+    } finally {
+      if (previousHome === undefined) delete process.env.FLOWGIT_HOME;
+      else process.env.FLOWGIT_HOME = previousHome;
+    }
   });
 
   it("runs the mcp-echo example", async () => {

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import http from "node:http";
 import fs from "node:fs";
@@ -359,9 +360,11 @@ describe("read-only board", () => {
     expect(board.stages.find((s) => s.id === "script")?.state).toBe("edited");
     const page = await httpGet(server.port, "/app.js");
     expect(page.status).toBe(200);
-    expect(page.body).toContain("保存 Save");
-    expect(page.body).toContain("已手动修改");
-    expect(page.body).toContain("Before this stage next runs, the edit is saved as its own version and is not lost.");
+    expect(page.body).toContain('I18N.text(save, "file.save")');
+    expect(page.body).toContain('"editNote"');
+    const i18n = await httpGet(server.port, "/i18n.js");
+    expect(i18n.body).toContain('edited: "已手动修改"');
+    expect(i18n.body).toContain("Before this stage next runs, the edit is saved as its own version and is not lost.");
   });
 
   it("rejects run, inputs, and the event stream without a token", async () => {
@@ -425,43 +428,88 @@ describe("read-only board", () => {
   it("offers run controls, a model field, and the human upload", async () => {
     const page = await httpGet(server.port, `/?token=${server.token}`);
     const app = await httpGet(server.port, "/app.js");
-    expect(page.body).toContain("全部运行 Run all");
-    expect(page.body).toContain("保存输入 Save inputs");
-    expect(page.body).toContain("新增阶段 / Add stage");
-    expect(page.body).toContain("删除阶段 / Remove stage");
-    expect(page.body).toContain("一起断开依赖 / detach downstream");
-    expect(app.body).toContain("删除阶段 / Remove stage");
+    const i18n = await httpGet(server.port, "/i18n.js");
+    // The page ships in Chinese; i18n.js switches every marked element to the chosen language.
+    expect(page.body).toContain('data-i18n="top.runAll">全部运行<');
+    expect(page.body).toContain('data-i18n="inputs.save">保存输入<');
+    expect(page.body).toContain('data-i18n="top.addStage">新增阶段<');
+    expect(page.body).toContain('data-i18n="remove.title">删除阶段<');
+    expect(page.body).toContain('data-i18n="remove.force">一起断开依赖<');
+    expect(page.body).toContain('data-i18n="live.on">实时更新<');
+    expect(page.body).toContain('data-i18n="view.cards">卡片<');
+    expect(page.body).toContain('data-i18n="view.graph">流程图<');
+    expect(page.body).toContain('data-i18n="top.preview">预演<');
+    expect(page.body).toContain('data-i18n="usage.label">模型用量合计<');
+    expect(app.body).toContain('"stage.remove"');
     expect(app.body).toContain('"/api/stage"');
-    expect(app.body).toContain("运行这一步 Run");
-    expect(app.body).toContain("全部运行 Run all");
+    expect(app.body).toContain('"stage.run"');
     expect(app.body).toContain('stage.state === "waiting-upstream"');
     expect(app.body).toContain("stage.instructions");
-    expect(app.body).toContain("上传文件 / Upload a file");
+    expect(app.body).toContain('"file.upload"');
     expect(app.body).toContain("provider/model");
-    expect(app.body).toContain("必填 required");
+    expect(app.body).toContain('"inputs.required"');
     expect(app.body).toContain("/api/events?token=");
     expect(app.body).toContain('type === "flow:changed"');
-    expect(app.body).toContain("实时更新已断开，改为每 3 秒刷新 / live updates lost, refreshing every 3 seconds");
+    expect(app.body).toContain('"live.lost"');
     expect(app.body).toContain("setInterval(refresh, 3000)");
-    expect(page.body).toContain("实时更新 / live updates");
-    expect(page.body).toContain("卡片 / Cards");
-    expect(page.body).toContain("流程图 / Graph");
-    expect(page.body).toContain("预演 / Preview");
-    expect(page.body).toContain("模型用量合计 / total model usage");
     expect(app.body).toContain('"/api/graph"');
     expect(app.body).toContain('"/api/plan"');
+    expect(app.body).toContain('"/api/trust"');
     expect(app.body).toContain('"/api/usage"');
-    expect(app.body).toContain("最多调用 ");
-    expect(app.body).toContain("at most ");
-    expect(app.body).toContain("这次最多调用 ");
-    expect(app.body).toContain("This run makes at most ");
-    expect(app.body).toContain("model calls. Continue?");
-    expect(app.body).toContain("跳过 / skipped");
-    expect(app.body).toContain("等你 / wait for you");
-    expect(app.body).toContain("不能运行 / cannot run");
+    expect(app.body).toContain('t("plan.calls"');
+    expect(app.body).toContain('t("run.confirm"');
     expect(app.body).toContain("window.confirm");
+    for (const text of [
+      'calls_other: "最多调用 {{count}} 次模型"',
+      'calls_other: "At most {{count}} model calls"',
+      'confirm_other: "这次最多调用 {{count}} 次模型，继续吗？"',
+      'confirm_other: "This run makes at most {{count}} model calls. Continue?"',
+      'skip: "跳过"',
+      'skip: "Skipped"',
+      'wait: "等你"',
+      '"cannot-run": "不能运行"',
+      '"cannot-run": "Cannot run"',
+      'live: { on: "实时更新"',
+      'lost: "Live updates lost, refreshing every 3 seconds"',
+    ]) {
+      expect(i18n.body).toContain(text);
+    }
     expect(app.body).toContain("localStorage.getItem");
     expect(app.body).toContain("localStorage.setItem");
+  });
+
+  it("serves the motion script before the app, and the app holds Run all", async () => {
+    const page = await httpGet(server.port, `/?token=${server.token}`);
+    const fx = await httpGet(server.port, "/fx.js");
+    const app = await httpGet(server.port, "/app.js");
+    expect(fx.status).toBe(200);
+    expect(fx.headers["content-type"]).toBe("text/javascript; charset=utf-8");
+    expect(fx.body).toContain("prefers-reduced-motion");
+    expect(page.body.indexOf('src="/fx.js"')).toBeGreaterThan(-1);
+    expect(page.body.indexOf('src="/fx.js"')).toBeLessThan(page.body.indexOf('src="/app.js"'));
+    expect(page.body).toContain('aria-describedby="run-all-help"');
+    expect(app.body).toContain("FX.hold(runAllButton");
+    expect(app.body).toContain('key: "state.running"');
+  });
+
+  it("serves i18next and the dictionaries before the app, with a language switch", async () => {
+    const page = await httpGet(server.port, `/?token=${server.token}`);
+    const vendor = await httpGet(server.port, "/vendor/i18next.js");
+    const i18n = await httpGet(server.port, "/i18n.js");
+    expect(vendor.status).toBe(200);
+    expect(vendor.headers["content-type"]).toBe("text/javascript; charset=utf-8");
+    expect(vendor.body).toContain("i18next");
+    expect(i18n.status).toBe(200);
+    expect(i18n.body).toContain("i18next.createInstance()");
+    const at = (src: string) => page.body.indexOf(`src="${src}"`);
+    expect(at("/vendor/i18next.js")).toBeGreaterThan(-1);
+    expect(at("/vendor/i18next.js")).toBeLessThan(at("/i18n.js"));
+    expect(at("/i18n.js")).toBeLessThan(at("/app.js"));
+    expect(page.body).toContain('data-lang="zh"');
+    expect(page.body).toContain('data-lang="en"');
+    // The visible labels are one language at a time: no "中文 / English" pairs left on the page.
+    const visible = page.body.replace(/<noscript>[\s\S]*?<\/noscript>/, "").replace(/aria-label="[^"]*"/g, "");
+    expect(visible).not.toMatch(/[\u4e00-\u9fff][^<]* \/ [A-Za-z]/);
   });
 });
 
@@ -819,21 +867,37 @@ describe("history, diff, and restore on the board", () => {
       expect(restored.status, restored.body).toBe(200);
       expect(fs.readFileSync(path.join(work, "note.txt"), "utf8")).toBe(snap);
       const flow = JSON.parse((await httpGet(board.port, "/api/flow", authed())).body) as {
-        stages: Array<{ id: string; state: string }>;
+        stages: Array<{ id: string; state: string; current: number | null; latest: { n: number } | null }>;
       };
       expect(flow.stages.find((stage) => stage.id === "copy")?.state).toBe("stale");
+      // the board can tell which version the restored files are
+      expect(flow.stages.find((stage) => stage.id === "write")).toMatchObject({ current: 1, latest: { n: 2 } });
 
       const appJs = await httpGet(board.port, "/app.js");
       expect(appJs.status).toBe(200);
-      expect(appJs.body).toContain("历史 History");
-      expect(appJs.body).toContain("对比 Compare");
-      expect(appJs.body).toContain("回退到这个版本 Restore");
-      expect(appJs.body).toContain("手动修改 manual edit");
+      expect(appJs.body).toContain('"stage.history"');
+      expect(appJs.body).toContain('"compare.go"');
+      expect(appJs.body).toContain('"history.restore"');
+      expect(appJs.body).toContain('"history.manual"');
+      // and shows it: on the card, and as "current" in the history, which offers no restore for it
+      expect(appJs.body).toContain('"stage.restored"');
+      expect(appJs.body).toContain('"history.headCurrent"');
+      expect(appJs.body).toContain('"history.isCurrent"');
+      const i18nJs = await httpGet(board.port, "/i18n.js");
+      for (const text of [
+        'restored: "v{{n}} · 已回退（最新是 v{{latest}}）"',
+        'restored: "v{{n}} · restored (latest is v{{latest}})"',
+        'now: "当前"',
+        'now: "current"',
+      ]) {
+        expect(i18nJs.body).toContain(text);
+      }
       expect(appJs.body).toContain("/api/diff");
       expect(appJs.body).toContain("/api/restore");
       const css = await httpGet(board.port, "/style.css");
       expect(css.body).toContain(".diff-add");
       expect(css.body).toContain(".diff-del");
+      expect(css.body).toContain(".disc .now");
     } finally {
       await board.close();
       fs.rmSync(work, { recursive: true, force: true });
@@ -1146,6 +1210,62 @@ describe("add and remove stages on the board", () => {
   });
 });
 
+describe("confirming a copied flow on the board", () => {
+  it("won't run a flow copied from a Git URL until the list it was shown is confirmed", async () => {
+    const work = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-web-trust-"));
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-web-trust-home-"));
+    const flowWith = (run: string) => ({
+      format: "flowgit",
+      version: "0.1",
+      name: "copied",
+      forkedFrom: { source: "https://example.com/someone/flow.git" },
+      stages: [{ id: "make", name: "做", executor: { type: "script", run }, outputs: [{ type: "text/plain", path: "out.txt" }] }],
+    });
+    fs.writeFileSync(path.join(work, "make.cjs"), `require("node:fs").writeFileSync("out.txt", "made\\n");\n`);
+    fs.writeFileSync(path.join(work, "flow.json"), `${JSON.stringify(flowWith("node make.cjs"), null, 2)}\n`);
+    const previousHome = process.env.FLOWGIT_HOME;
+    process.env.FLOWGIT_HOME = home;
+    const board = await startBoard({ dir: work, port: 0, open: false });
+    const json = { "X-Flowgit-Token": board.token, "Content-Type": "application/json" };
+    type TrustBody = { error: string; trust: { reason: string; source: string | null; fingerprint: string; actions: Array<{ stage: string; kind: string; detail: string }> } };
+    try {
+      const refused = await httpCall(board.port, "POST", "/api/run", JSON.stringify({ stage: "make" }), json);
+      expect(refused.status, refused.body).toBe(409);
+      const body = JSON.parse(refused.body) as TrustBody;
+      expect(body.error).toContain("flowgit trust");
+      expect(body.trust).toMatchObject({ reason: "new", source: "https://example.com/someone/flow.git", actions: [{ stage: "make", kind: "script", detail: "node make.cjs" }] });
+      expect(fs.existsSync(path.join(work, "out.txt"))).toBe(false);
+      expect(fs.existsSync(path.join(work, "runs"))).toBe(false);
+      // refusing is not a run in progress
+      expect((await httpCall(board.port, "POST", "/api/run", JSON.stringify({ stage: "all" }), json)).status).toBe(409);
+
+      expect((await httpCall(board.port, "POST", "/api/trust", JSON.stringify({ fingerprint: body.trust.fingerprint }), { "Content-Type": "application/json" })).status).toBe(401);
+      expect((await httpCall(board.port, "POST", "/api/trust", JSON.stringify({}), json)).status).toBe(400);
+
+      // the flow changes after the list was shown: nothing is confirmed, the new list comes back
+      fs.writeFileSync(path.join(work, "flow.json"), `${JSON.stringify(flowWith("node make.cjs --twice"), null, 2)}\n`);
+      const stale = await httpCall(board.port, "POST", "/api/trust", JSON.stringify({ fingerprint: body.trust.fingerprint }), json);
+      expect(stale.status, stale.body).toBe(409);
+      const fresh = JSON.parse(stale.body) as TrustBody;
+      expect(fresh.trust.actions[0]?.detail).toBe("node make.cjs --twice");
+      expect(fs.existsSync(path.join(home, "trusted.json"))).toBe(false);
+
+      const confirmed = await httpCall(board.port, "POST", "/api/trust", JSON.stringify({ fingerprint: fresh.trust.fingerprint }), json);
+      expect(confirmed.status, confirmed.body).toBe(200);
+      expect(fs.existsSync(path.join(home, "trusted.json"))).toBe(true);
+      const ran = await httpCall(board.port, "POST", "/api/run", JSON.stringify({ stage: "make" }), json);
+      expect(ran.status, ran.body).toBe(200);
+      expect(fs.readFileSync(path.join(work, "out.txt"), "utf8")).toBe("made\n");
+    } finally {
+      if (previousHome === undefined) delete process.env.FLOWGIT_HOME;
+      else process.env.FLOWGIT_HOME = previousHome;
+      await board.close();
+      fs.rmSync(work, { recursive: true, force: true });
+      fs.rmSync(home, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("plan and usage on the board", () => {
   function writeRun(dir: string, stage: string, n: number, record: Record<string, unknown>): void {
     const file = path.join(dir, "runs", stage, String(n), "run.json");
@@ -1335,6 +1455,97 @@ describe("plan and usage on the board", () => {
     } finally {
       if (previous === undefined) delete process.env.FLOWGIT_LLM_MOCK_DIR;
       else process.env.FLOWGIT_LLM_MOCK_DIR = previous;
+      await board.close();
+      fs.rmSync(work, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("board history with a gap in version numbers", () => {
+  it("lists, diffs and restores the versions that are still there", async () => {
+    const work = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-web-gap-"));
+    fs.writeFileSync(
+      path.join(work, "flow.json"),
+      JSON.stringify(
+        {
+          format: "flowgit",
+          version: "0.1",
+          name: "gap",
+          stages: [
+            {
+              id: "write",
+              name: "写",
+              executor: { type: "script", run: "node write.cjs" },
+              outputs: [{ type: "text/plain", path: "note.txt" }],
+            },
+          ],
+        },
+        null,
+        2,
+      ),
+    );
+    const writeVersion = (n: number, content: string) => {
+      const base = path.join(work, "runs", "write", String(n));
+      fs.mkdirSync(path.join(base, "outputs"), { recursive: true });
+      fs.writeFileSync(path.join(base, "outputs", "note.txt"), content);
+      fs.writeFileSync(
+        path.join(base, "run.json"),
+        `${JSON.stringify({
+          stage: "write",
+          n,
+          status: "ok",
+          executor: "script",
+          startedAt: "2026-01-01T00:00:00.000Z",
+          finishedAt: `2026-01-01T00:00:0${n}.000Z`,
+          inputHash: "x",
+          inputs: [],
+          flowInputs: {},
+          outputs: [
+            {
+              path: "note.txt",
+              type: "text/plain",
+              sha256: createHash("sha256").update(content).digest("hex"),
+              bytes: Buffer.byteLength(content),
+              isDir: false,
+            },
+          ],
+        })}\n`,
+      );
+    };
+    writeVersion(1, "one\n");
+    writeVersion(2, "two\n");
+    writeVersion(3, "three\n");
+    fs.rmSync(path.join(work, "runs", "write", "2"), { recursive: true, force: true });
+    fs.writeFileSync(path.join(work, "note.txt"), "three\n");
+    const board = await startBoard({ dir: work, port: 0, open: false });
+    const authed = { "X-Flowgit-Token": board.token };
+    try {
+      const listed = JSON.parse((await httpGet(board.port, "/api/runs?stage=write", authed)).body) as {
+        runs: Array<{ n: number }>;
+      };
+      expect(listed.runs.map((run) => run.n)).toEqual([1, 3]);
+
+      const diff = JSON.parse((await httpGet(board.port, "/api/diff?stage=write&a=1&b=3", authed)).body) as {
+        a: number;
+        b: number | null;
+        outputs: Array<{ diff?: string }>;
+      };
+      expect(diff).toMatchObject({ a: 1, b: 3 });
+      expect(diff.outputs[0]?.diff).toContain("one");
+      expect(diff.outputs[0]?.diff).toContain("three");
+
+      const missing = await httpGet(board.port, "/api/diff?stage=write&a=2&b=3", authed);
+      expect(missing.status).toBe(404);
+      expect(missing.body).toContain("没有 v2");
+
+      const restored = await httpCall(board.port, "POST", "/api/restore", JSON.stringify({ stage: "write", n: 1 }), {
+        ...authed,
+        "Content-Type": "application/json",
+      });
+      expect(restored.status, restored.body).toBe(200);
+      expect(fs.readFileSync(path.join(work, "note.txt"), "utf8")).toBe("one\n");
+      expect(fs.existsSync(path.join(work, "runs", "write", "2"))).toBe(false);
+    } finally {
       await board.close();
       fs.rmSync(work, { recursive: true, force: true });
     }
