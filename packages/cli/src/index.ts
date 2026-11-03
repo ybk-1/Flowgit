@@ -89,6 +89,7 @@ import { runBatch } from "./batch.js";
 import { registerNew } from "./commands/new.js";
 import { registerServeMcp } from "./commands/serve-mcp.js";
 import { registerPublish } from "./commands/publish.js";
+import { registerImport } from "./commands/import.js";
 import { registerSite } from "./commands/site.js";
 import { buildGallery } from "./gallery.js";
 import { bilingualCliError, c, colorizeUnifiedDiff, nextHint, statusBoard, table, width } from "./format.js";
@@ -1711,5 +1712,6 @@ registerNew(program, fail);
 registerServeMcp(program, { version: VERSION, dirOf, fail });
 registerSite(program, fail);
 registerPublish(program, fail);
+registerImport(program, fail);
 
 program.parseAsync(process.argv).catch(fail);
