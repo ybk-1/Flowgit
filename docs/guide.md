@@ -591,3 +591,29 @@ Running it again leaves folders that already exist in place, and stages that are
 做出了好用的流程？欢迎用 [流程想法](https://github.com/cgold9820-dotcom/Flowgit/issues/new?template=flow_idea.yml) 告诉我们，或者直接开 PR 放进 `examples/`（只在仓库里的示例）或 `packages/cli/templates/`（随命令行一起安装的模板）。
 
 Made a flow that works well? Tell us with a [flow idea](https://github.com/cgold9820-dotcom/Flowgit/issues/new?template=flow_idea.yml), or open a PR adding it to `examples/` (repo-only examples) or `packages/cli/templates/` (templates installed with the CLI).
+
+## 把你的流程发布到社区 / Publish your flow
+
+流程在你自己的公开 Git 仓库里。仓库根目录要有 `flow.json`（或 `flow.md`）、`LICENSE`，README 里要有一节「依据 / Sources」。不要提交 `runs/`，也不要留下密钥、邮箱或只在你电脑上才有的路径。
+
+The flow lives in your own public Git repository. The root needs `flow.json` (or `flow.md`) and a `LICENSE`, and the README needs a 依据 / Sources section. Do not commit `runs/`, and do not leave keys, email addresses or paths that exist only on your computer.
+
+在流程目录里运行：
+
+From the flow directory:
+
+```bash
+flowgit publish --git https://github.com/you/your-flow.git --author "你的名字 / Your Name" --tag writing --language zh
+```
+
+不过关时，它会把原因逐条列出来（中英双语）并停住，什么都不提交。过关时，它打印一条符合 `registry/community.schema.json` 的 JSON。GitHub 的新建文件页面没有写明可以预填内容的网址参数，所以命令不打开带内容的链接，也不调用 GitHub API。按它打印的步骤，在 [registry/community](https://github.com/cgold9820-dotcom/Flowgit/tree/main/registry/community) 里新建 `registry/community/<id>.json`，把 JSON 贴进去，开一个 Pull Request。一个人一个文件，同时登记不会撞车。
+
+When something fails, it lists every reason in both languages and stops, without publishing anything. When it passes, it prints JSON that matches `registry/community.schema.json`. GitHub's new-file page does not document URL parameters that prefill the editor, so the command does not open a prefilled link and does not call the GitHub API. Follow the steps it prints: add `registry/community/<id>.json` under [registry/community](https://github.com/cgold9820-dotcom/Flowgit/tree/main/registry/community), paste the JSON, and open a pull request. One file per entry, so two people can register at the same time.
+
+Pull Request 会浅克隆你写的地址（按 `ref`，没有就用默认分支），只读：跑校验、密钥扫描和许可证检查，不运行任何阶段，也不安装依赖，然后留一条双语评论。
+
+The pull request shallow-clones the URL you wrote (at `ref`, or the default branch), read only: it validates, scans for secrets and checks the license. It runs no stage and installs nothing, then leaves one bilingual comment.
+
+`flowgit templates --all` 先读 https://flowgit.dev/registry.json（站点构建把这些文件合并成它），读不到再读本仓库的目录。画廊卡片上的 GitHub 星标是构建时读的，读不到就不显示。详情页的评论来自 `site/config.json` 里的 giscus，没配就不显示。
+
+`flowgit templates --all` reads https://flowgit.dev/registry.json first (the site build merges these files into it), then this repo's directory. GitHub stars on gallery cards are read at build time and hidden when they cannot be read. Comments on a template page come from giscus in `site/config.json` and are hidden when that is not set.

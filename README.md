@@ -179,6 +179,7 @@ flowgit new "把一周的笔记整理成周报" ~/my-report --yes
 | `flowgit export-skill [-o SKILL.md]` | 生成 `SKILL.md`，给 AI 工具用 | Generate a `SKILL.md` for AI tools |
 | `flowgit gallery build [--out gallery-dist]` | 生成静态模板画廊（不部署） | Write a static template gallery (does not deploy) |
 | `flowgit site build [--out site-dist]` | 生成官网（首页、文档、画廊、schema、网页版）并检查站内死链 | Write the website (home, docs, gallery, schema, web app) and check internal links |
+| `flowgit publish [dir]` | 检查流程能否公开，并打印要贴进 `registry/community/<id>.json` 的条目 | Check that a flow is safe to publish, and print the `registry/community/<id>.json` entry |
 
 所有命令都接受 `-C <dir>` 指定流程目录。`run` 还接受 `--input k=v`（只对这次运行生效）、`--model`、`--force` 和 `--dry-run`。`diff` 对文本和 JSON 按行输出 unified diff（`+` 绿色、`-` 红色，尊重 `NO_COLOR`），二进制只比较 sha256，文件夹列出新增、删除和改动的文件。
 
@@ -220,9 +221,9 @@ The article template sets length and tone from the platform (Xiaohongshu, WeChat
 
 ## 模板画廊和社区模板 / Gallery and community templates
 
-自带模板装在命令行里。社区模板记在 [`registry/community.json`](registry/community.json)：一条一个 Git 地址，子目录写在 `#path=` 里。登记方式和审核标准（要能通过校验、没有密钥、许可证写清楚、模板有「依据 / Sources」）见 [`registry/README.md`](registry/README.md)。
+自带模板装在命令行里。社区模板一个条目一个文件，放在 [`registry/community/`](registry/community)：一条一个 Git 地址，子目录写在 `#path=` 里。`flowgit publish` 会先检查再打印条目。登记方式和审核标准（要能通过校验、没有密钥、许可证写清楚、模板有「依据 / Sources」）见 [`registry/README.md`](registry/README.md)。
 
-Bundled templates ship with the CLI. Community templates are listed in [`registry/community.json`](registry/community.json): one Git URL each, with a subdirectory in `#path=`. How to register one, and the review bar (it validates, has no secrets, names a clear license, and the template has 依据 / Sources), is in [`registry/README.md`](registry/README.md).
+Bundled templates ship with the CLI. Community templates are one file each in [`registry/community/`](registry/community): one Git URL each, with a subdirectory in `#path=`. `flowgit publish` checks the flow, then prints the entry. How to register one, and the review bar (it validates, has no secrets, names a clear license, and the template has 依据 / Sources), is in [`registry/README.md`](registry/README.md).
 
 ```bash
 flowgit templates --all                              # 自带的 + 社区的 / bundled + community
@@ -230,9 +231,9 @@ flowgit init my-page -t agent-page                   # 按登记的地址复制 
 flowgit gallery build                                # 静态页面写到 gallery-dist/，不部署 / static pages in gallery-dist/, no deploy
 ```
 
-在这个仓库里运行时，命令用仓库里的 `registry/community.json`。找不到这份文件时（例如从 npm 装的命令行），改读 GitHub 上的 raw 地址。`FLOWGIT_REGISTRY` 可以换成别的网址或一个本地文件；读不到时，`templates --all` 仍列出自带模板，并只提示一行。
+`flowgit templates --all` 先读 [https://flowgit.dev/registry.json](https://flowgit.dev/registry.json)，读不到再读仓库里的 `registry/community/`（旧的单文件 `community.json` 也还能读）。`FLOWGIT_REGISTRY` 可以换成别的网址、一个 JSON 文件或一个目录；读不到时仍列出自带模板，并只提示一行。
 
-When you run it inside this repo, the command uses the repo's `registry/community.json`. When that file is not there (for example a CLI installed from npm), it reads the raw file on GitHub. `FLOWGIT_REGISTRY` can point at another URL or a local file; if the list cannot be read, `templates --all` still prints the bundled templates and one note.
+`flowgit templates --all` reads [https://flowgit.dev/registry.json](https://flowgit.dev/registry.json) first, then `registry/community/` in the checkout (the old single-file `community.json` still reads too). `FLOWGIT_REGISTRY` can point at another URL, a JSON file or a directory; if the list cannot be read, the bundled templates are still printed with one note.
 
 ## 官网 / Website
 

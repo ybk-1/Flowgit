@@ -344,7 +344,8 @@ function homePage(pages: PageModel[], cards: HomeCard[], note?: string): string 
   <h2>${bi(card.name.zh, card.name.en)}</h2>
   <p class="one-line">${bi(card.description.zh, card.description.en)}</p>
   <div class="card-meta">${count}<p class="pills">${langs}</p></div>
-  ${tagList ? `<ul class="tags">${tagList}</ul>` : ""}
+      ${tagList ? `<ul class="tags">${tagList}</ul>` : ""}
+  ${card.stars !== undefined ? `<p class="stars">★ ${card.stars}</p>` : ""}
 </a>`;
     })
     .join("\n");
@@ -366,7 +367,7 @@ function homePage(pages: PageModel[], cards: HomeCard[], note?: string): string 
   <div class="cards">${cardHtml}</div>
   <p id="empty" class="empty" hidden>${bi("没有匹配的模板。", "No templates match.")}</p>
   <footer class="colophon">
-    <p>${bi("想把自己的流程放进来，给 registry/community.json 开一个 Pull Request。审核要能通过校验、没有密钥、许可证写清楚，并且模板里有「依据 / Sources」。", "To add your flow, open a pull request on registry/community.json. Review checks that it validates, has no secrets, names a clear license, and that the template has 依据 / Sources.")}</p>
+    <p>${bi("想把自己的流程放进来，运行 flowgit publish，或给 registry/community/<id>.json 开一个 Pull Request。审核要能通过校验、没有密钥、许可证写清楚，并且模板里有「依据 / Sources」。", "To add your flow, run flowgit publish, or open a pull request that adds registry/community/<id>.json. Review checks that it validates, has no secrets, names a clear license, and that the template has 依据 / Sources.")}</p>
   </footer>
 </main>`;
   return shell({ title: "模板画廊 / Template gallery · Flowgit", depth: 0, body });
@@ -382,9 +383,10 @@ interface HomeCard {
   languages: string[];
   tags: string[];
   stages?: { name: string; executor: string }[];
+  stars?: number;
 }
 
-function templatePage(page: PageModel): string {
+function templatePage(page: PageModel, giscus?: GiscusConfig): string {
   const sources = page.sources.length
     ? `<ul>${page.sources.map((item) => `<li>${item}</li>`).join("")}</ul>`
     : `<p>${bi("这份模板还没有「依据 / Sources」一节。", "This template has no Sources section yet.")}</p>`;
@@ -433,8 +435,88 @@ function templatePage(page: PageModel): string {
     <p>${bi("下载给会读 Skill 的 AI 工具，它可以按阶段运行这个流程。", "Download it for an AI tool that reads skills. The tool can run this flow stage by stage.")}</p>
     <a class="btn" href="SKILL.md" download="SKILL.md">${bi("导出 SKILL.md", "Export SKILL.md")}</a>
   </section>
+  ${giscusHtml(giscus)}
 </main>`;
   return shell({ title: `${page.name.zh} / ${page.name.en} · Flowgit`, depth: 2, body });
+}
+
+/** giscus comment thread. Hidden when any required field is missing. https://giscus.app */
+export interface GiscusConfig {
+  repo: string;
+  repoId: string;
+  category: string;
+  categoryId: string;
+  mapping?: string;
+  lang?: string;
+}
+
+export function readGiscusConfig(file: string): GiscusConfig | undefined {
+  if (!fs.existsSync(file)) return undefined;
+  let data: unknown;
+  try {
+    data = JSON.parse(fs.readFileSync(file, "utf8")) as unknown;
+  } catch {
+    return undefined;
+  }
+  if (!data || typeof data !== "object") return undefined;
+  const giscus = (data as { giscus?: unknown }).giscus;
+  if (!giscus || typeof giscus !== "object") return undefined;
+  const src = giscus as Record<string, unknown>;
+  const repo = typeof src.repo === "string" ? src.repo.trim() : "";
+  const repoId = typeof src.repoId === "string" ? src.repoId.trim() : "";
+  const category = typeof src.category === "string" ? src.category.trim() : "";
+  const categoryId = typeof src.categoryId === "string" ? src.categoryId.trim() : "";
+  if (!repo || !repoId || !category || !categoryId) return undefined;
+  const config: GiscusConfig = { repo, repoId, category, categoryId };
+  if (typeof src.mapping === "string" && src.mapping.trim()) config.mapping = src.mapping.trim();
+  if (typeof src.lang === "string" && src.lang.trim()) config.lang = src.lang.trim();
+  return config;
+}
+
+function giscusHtml(config: GiscusConfig | undefined): string {
+  if (!config) return "";
+  const attrs = [
+    ["data-repo", config.repo],
+    ["data-repo-id", config.repoId],
+    ["data-category", config.category],
+    ["data-category-id", config.categoryId],
+    ["data-mapping", config.mapping || "pathname"],
+    ["data-strict", "0"],
+    ["data-reactions-enabled", "1"],
+    ["data-emit-metadata", "0"],
+    ["data-input-position", "bottom"],
+    ["data-theme", "preferred_color_scheme"],
+    ["data-lang", config.lang || "zh-CN"],
+    ["data-loading", "lazy"],
+    ["crossorigin", "anonymous"],
+    ["async", ""],
+  ]
+    .map(([name, value]) => (value === "" ? name : `${name}="${escapeHtml(value)}"`))
+    .join(" ");
+  return `<section class="giscus"><h2>${bi("评论", "Comments")}</h2><script src="https://giscus.app/client.js" ${attrs}></script></section>`;
+}
+
+/** Public GitHub star count. Unavailable (undefined) when the API cannot be read; the card then hides it. */
+export async function fetchGithubStars(repo: string, fetchImpl: typeof fetch = fetch): Promise<number | undefined> {
+  try {
+    const res = await fetchImpl(`https://api.github.com/repos/${repo}`, {
+      headers: { Accept: "application/vnd.github+json", "User-Agent": "flowgit-gallery" },
+      signal: AbortSignal.timeout(4000),
+    });
+    if (!res.ok) return undefined;
+    const body = (await res.json()) as { stargazers_count?: unknown };
+    return typeof body.stargazers_count === "number" ? body.stargazers_count : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function githubRepoName(url: string | undefined): string | undefined {
+  if (!url) return undefined;
+  const split = splitGitFragment(url);
+  const match = split.url.match(/^https?:\/\/github\.com\/([^/]+)\/([^/#]+?)(?:\.git)?\/?$/i);
+  if (!match?.[1] || !match[2]) return undefined;
+  return `${match[1]}/${match[2]}`;
 }
 
 export interface GalleryBuildResult {
@@ -444,7 +526,15 @@ export interface GalleryBuildResult {
 }
 
 /** Write the static gallery. Invalid registry fails; an unreadable one still writes the bundled pages and one note. */
-export async function buildGallery(options: { outDir: string; cwd?: string; registry?: string }): Promise<GalleryBuildResult> {
+export async function buildGallery(options: {
+  outDir: string;
+  cwd?: string;
+  registry?: string;
+  /** Star lookup. Defaults to the public GitHub API; a missing count is omitted from the card. */
+  stars?: (repo: string) => Promise<number | undefined>;
+  /** Pass null to force comments off. Omit to read site/config.json when this checkout has one. */
+  giscus?: GiscusConfig | null;
+}): Promise<GalleryBuildResult> {
   const cwd = options.cwd ?? process.cwd();
   const outDir = path.resolve(cwd, options.outDir);
   if (path.resolve(outDir) === path.resolve(cwd)) {
@@ -507,6 +597,25 @@ export async function buildGallery(options: { outDir: string; cwd?: string; regi
       });
     }
   }
+  const starOf = options.stars ?? fetchGithubStars;
+  const repos = new Map<string, number | undefined>();
+  const repoForCard = (card: HomeCard): string | undefined => {
+    if (card.kind === "bundled") return githubRepoName(REPO_WEB_URL);
+    const entry = entries.find((item) => item.id === card.id);
+    return githubRepoName(entry ? communityWebUrl(entry).replace(/\/tree\/.*$/, "") : card.href);
+  };
+  for (const card of cards) {
+    const repo = repoForCard(card);
+    if (!repo) continue;
+    if (!repos.has(repo)) repos.set(repo, await starOf(repo));
+    const count = repos.get(repo);
+    if (count !== undefined) card.stars = count;
+  }
+  const giscus =
+    options.giscus === null
+      ? undefined
+      : options.giscus ??
+        readGiscusConfig(path.join(root ?? cwd, "site", "config.json"));
   fs.mkdirSync(path.join(outDir, "assets"), { recursive: true });
   fs.writeFileSync(path.join(outDir, "assets", "gallery.css"), GALLERY_CSS);
   fs.writeFileSync(path.join(outDir, "assets", "gallery.js"), GALLERY_JS);
@@ -515,7 +624,7 @@ export async function buildGallery(options: { outDir: string; cwd?: string; regi
   for (const page of pages) {
     const dir = path.join(outDir, "templates", page.id);
     fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(path.join(dir, "index.html"), templatePage(page));
+    fs.writeFileSync(path.join(dir, "index.html"), templatePage(page, giscus));
     fs.writeFileSync(path.join(dir, "SKILL.md"), page.skill);
     written.push(page.id);
   }
@@ -782,6 +891,7 @@ h1 {
 }
 .tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 0; padding: 0; list-style: none; }
 .tags li { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.stars { margin: 8px 0 0; font-family: var(--font-mono); font-weight: 700; }
 .execs { display: flex; flex-wrap: wrap; gap: 4px; margin: 8px 0 0; }
 .exec {
   display: inline-flex;

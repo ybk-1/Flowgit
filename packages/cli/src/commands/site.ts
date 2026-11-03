@@ -5,7 +5,7 @@ import type { Command } from "commander";
 import { buildGallery } from "../gallery.js";
 import { c } from "../format.js";
 import { escapeHtml, renderMarkdown } from "../markdown.js";
-import { registryLocation, REPO_WEB_URL } from "../registry.js";
+import { findRepoRegistry, loadCommunityRegistry, registryLocation, REPO_WEB_URL } from "../registry.js";
 
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
 
@@ -597,7 +597,7 @@ export async function buildSite(options: SiteBuildOptions): Promise<SiteBuildRes
   await buildGallery({ outDir: path.join(outDir, "gallery"), cwd: repoRoot, registry });
 
   const pages = docPages(path.join(repoRoot, "docs"));
-  const indexBody = `<article class="prose"><h1>文档</h1><p>这些页面照仓库里的 <code>docs/*.md</code> 渲染，中英文都保留。 / These pages are the repository's <code>docs/*.md</code> files, in both languages, as written.</p><ul>${pages
+  const indexBody = `<article class="prose"><h1>文档</h1><p>这些页面照仓库里的 <code>docs/*.md</code> 渲染，中英文都保留。 / These pages are the repository's <code>docs/*.md</code> files, in both languages, as written.</p><p><a href="/registry.json">registry.json</a></p><ul>${pages
     .map((page) => `<li><a href="/docs/${page.name}/">${escapeHtml(page.title)}</a></li>`)
     .join("")}</ul></article>`;
   fs.mkdirSync(path.join(outDir, "docs"), { recursive: true });
@@ -626,6 +626,15 @@ export async function buildSite(options: SiteBuildOptions): Promise<SiteBuildRes
     log(APP_PLACEHOLDER_LINE);
   } else {
     copyApp(appDist, outDir);
+  }
+
+  const localRegistry = findRepoRegistry(repoRoot);
+  if (localRegistry) {
+    const loaded = await loadCommunityRegistry(localRegistry);
+    if (!loaded.ok && loaded.kind === "invalid") {
+      throw new Error([`社区模板登记不合法 / the community registry is invalid: ${loaded.from}`, ...loaded.errors].join("\n"));
+    }
+    fs.writeFileSync(path.join(outDir, "registry.json"), `${JSON.stringify(loaded.ok ? loaded.entries : [], null, 2)}\n`);
   }
 
   const dead = findDeadLinks(outDir);

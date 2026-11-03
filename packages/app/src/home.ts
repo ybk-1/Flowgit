@@ -179,7 +179,7 @@ interface CommunityEntry {
   ref?: string;
 }
 
-const REGISTRY = "https://raw.githubusercontent.com/cgold9820-dotcom/Flowgit/main/registry/community.json";
+const REGISTRY = "https://flowgit.dev/registry.json";
 
 function both(text: CommunityEntry["name"] | undefined): string {
   if (!text) return "";
