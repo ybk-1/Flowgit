@@ -4,7 +4,7 @@ import { resolveSubflowFile } from "./subflow.js";
 import type { Flow, LoadedFlow } from "./types.js";
 import { isDirOutput, outputRel } from "./util.js";
 
-const SKIP_DIRS = new Set(["runs", "node_modules", ".git"]);
+const SKIP_DIRS = new Set(["runs", "node_modules", ".git", ".flowgit"]);
 
 function isEnvFile(name: string): boolean {
   return name === ".env" || name.startsWith(".env.");
@@ -55,7 +55,7 @@ function isOutput(rel: string, files: Set<string>, dirs: string[]): boolean {
 
 /**
  * Files that belong to a flow, as sorted relative paths with "/" separators.
- * Always leaves out runs/, flowgit.local.json, node_modules/, .git/ and .env*.
+ * Always leaves out runs/, flowgit.local.json, node_modules/, .git/, .flowgit/ and .env*.
  * When withOutputs is false, also leaves out each stage's declared outputs, sub-flows' included.
  */
 export function flowFiles(loaded: LoadedFlow, opts: { withOutputs: boolean }): string[] {

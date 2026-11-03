@@ -21,15 +21,16 @@ my-flow/
 ├── storyboard.json
 ├── assets/
 ├── flowgit.local.json     # 本地填写的流程输入，不分享 / local input values, not shared
+├── .flowgit/              # 看板缓存的视频帧，不分享 / video frames cached for the board, not shared
 └── runs/                  # 历史版本，flowgit 自动写入 / version history, written by flowgit
     └── <stage>/<n>/
         ├── run.json       # 这次运行的记录 / the run record
         └── outputs/...    # 产物快照 / snapshot of the outputs
 ```
 
-**模板和项目是同一个格式。** 去掉 `runs/`、`flowgit.local.json` 和各阶段产物，剩下的就是可以分享、可以 fork 的模板；带上它们就是一个做了一半或做完的项目。
+**模板和项目是同一个格式。** 去掉 `runs/`、`flowgit.local.json`、`.flowgit/` 和各阶段产物，剩下的就是可以分享、可以 fork 的模板；带上它们就是一个做了一半或做完的项目。
 
-**A template and a project are the same format.** Strip `runs/`, `flowgit.local.json` and the artifacts and you have a shareable, forkable template; keep them and it is a project, half done or finished.
+**A template and a project are the same format.** Strip `runs/`, `flowgit.local.json`, `.flowgit/` and the artifacts and you have a shareable, forkable template; keep them and it is a project, half done or finished.
 
 ## flow.json
 

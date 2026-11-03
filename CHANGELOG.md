@@ -32,6 +32,8 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 - The board has depth: cards have layered shadows and their height shows their state (ready to run floats highest, waiting for upstream sits recessed), stage numbers are extruded, and buttons press down like keys; with a mouse, the card under it tilts toward it and its contents float at different depths. The graph is 2.5D by default: stages are blocks on a tilted floor, a stage that is ready bobs gently, and the edge into the running stage flows; switch back to the flat graph at the top right of the graph, remembered in the browser. Tilting and bobbing turn off when the system asks for reduced motion.
 - 回退以后，卡片和阶段面板显示现在的文件是哪一版，例如“v2 · 已回退（最新是 v3）”；历史里这一版标着“当前”，也不再提供“回退到这个版本”。
 - After a restore, the card and the stage panel show which version the files are, e.g. "v2 · restored (latest is v3)"; the history marks that version "current" and no longer offers to restore it.
+- 卡片上能直接看到产物的样子（最高 120px）：图片原样显示，视频用 ffmpeg 抽第 1 秒的一帧（没有 ffmpeg 就显示视频图标，帧缓存在 `.flowgit/thumbs/`），音频显示波形和时长，文本和 Markdown 显示去掉语法后的前三行，JSON 显示顶层键和数组长度，文件夹显示前四张图和文件数。点缩略图打开原来的产物侧栏。说明超过三行时收起来，点「展开」看全部。新接口 `GET /api/thumb?stage=&output=`。
+- Cards show what each output looks like (120px tall at most): the image itself, a frame from 1 second into a video when ffmpeg is available (a video icon when it is not; frames are cached in `.flowgit/thumbs/`), a waveform and duration for audio, the first three lines of text and Markdown with the syntax removed, top-level keys and array lengths for JSON, and the first four images plus a file count for a folder. Clicking a thumbnail opens the existing output panel. Instructions longer than three lines fold until you click "more". New route `GET /api/thumb?stage=&output=`.
 
 ### 模板和示例 / Templates and examples
 
@@ -94,7 +96,7 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 - `init -t` 可以是 Git 地址（`git clone --depth 1`，可加 `--ref` 和 `--path`）。从本地目录或 Git 复制时默认不带产物，`--with-outputs` 才带上；Git 来源会把 `forkedFrom` 写进新的 `flow.json`。没有安装 git 时会说明怎么装。
 - `convert --to md|json` 在 `flow.json` 和 `flow.md` 之间转换，内容不变；`init --format md` 新建时直接用 `flow.md`。`stage add`、`stage rm` 写回时保持原来的格式。
 - `stage add` / `stage rm`：用命令加、删阶段。llm 和 agent 没给提示词时会建一个中英双语骨架，已有文件不覆盖。删阶段不删文件，也不动 `runs/`；还有别的阶段依赖它时要 `--force`。
-- `share`：把流程复制成可以分享的副本。先检查密钥（发现就拒绝、什么都不写）、邮箱和本机路径（写完后提醒）。`runs/`、`flowgit.local.json` 和 `.env*` 永远不复制。
+- `share`：把流程复制成可以分享的副本。先检查密钥（发现就拒绝、什么都不写）、邮箱和本机路径（写完后提醒）。`runs/`、`flowgit.local.json`、`.env*` 和 `.flowgit/` 永远不复制。
 - `doctor` 在运行前检查 Node、流程输入、密钥、代理设置，以及脚本和 agent 要用的命令。
 - 用代理或 VPN 时自动连得上模型：`run` 和 `board` 会走 `HTTPS_PROXY`，不用再设 `NODE_USE_ENV_PROXY=1`；Windows 和 macOS 上打开了系统代理也会自动用上。`doctor` 显示用的是哪个代理，`FLOWGIT_PROXY=off` 可以关掉。
 - `export-skill` 把流程导出成 `SKILL.md`，AI 工具不用界面也能按步骤运行。
@@ -118,7 +120,7 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 - `init`, `templates`, `validate`, `status` (terminal board), `board` (web board), `inputs`, `run`, `log`, `diff`, `restore`, `providers`, `doctor`, `graph`, `export-skill`.
 - `init -t` accepts a Git URL (`git clone --depth 1`, with `--ref` and `--path`). Copying a local directory or a Git URL leaves outputs behind unless `--with-outputs` is set, and a Git source writes `forkedFrom` into the new `flow.json`. If git is not installed, the error says how to install it.
 - `stage add` / `stage rm`: add or remove a stage from the command line. An llm or agent stage without a prompt gets a bilingual skeleton, and an existing file is never overwritten. Removing a stage deletes no files and leaves `runs/` alone; `--force` is required when other stages depend on it.
-- `share` copies a flow into a directory that is safe to hand to someone else. A secret blocks the write entirely; emails and local paths are listed afterwards. `runs/`, `flowgit.local.json` and `.env*` are never copied.
+- `share` copies a flow into a directory that is safe to hand to someone else. A secret blocks the write entirely; emails and local paths are listed afterwards. `runs/`, `flowgit.local.json`, `.env*` and `.flowgit/` are never copied.
 - `doctor` checks Node, flow inputs, keys, proxy settings, and the programs script and agent stages use, before a run.
 - Models are reachable behind a proxy or VPN: `run` and `board` use `HTTPS_PROXY` without `NODE_USE_ENV_PROXY=1`, and pick up the Windows or macOS system proxy too. `doctor` shows which proxy is used; `FLOWGIT_PROXY=off` turns this off.
 - `export-skill` exports a flow as a `SKILL.md`, so AI tools can run it step by step without the UI.

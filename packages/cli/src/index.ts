@@ -567,7 +567,7 @@ program
         recursive: true,
         filter: (p) => {
           const rel = path.relative(builtin, p).split(path.sep)[0];
-          return !["runs", "node_modules", "flowgit.local.json"].includes(rel);
+          return !["runs", "node_modules", "flowgit.local.json", ".flowgit"].includes(rel);
         },
       });
       finish(path.basename(findFlowFile(builtin)!));
@@ -705,7 +705,7 @@ program
       }
       console.log(`${c.green("✓")} 已写到 / wrote ${target}`);
       console.log(`  复制了 ${rels.length} 个文件 / copied ${rels.length} file(s)`);
-      console.log(`  永远不会复制 / never copied: runs/、flowgit.local.json、.env*`);
+      console.log(`  永远不会复制 / never copied: runs/、flowgit.local.json、.env*、.flowgit/`);
       console.log(skipped.length ? `  跳过的产物 / skipped outputs: ${skipped.join(", ")}` : `  没有跳过产物 / no outputs skipped`);
       console.log(`  下一步 / next: 在这个目录里 git init，提交后推到 GitHub / in that directory, git init, commit, and push it to GitHub`);
     } catch (err) {

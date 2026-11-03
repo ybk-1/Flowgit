@@ -426,6 +426,8 @@ function render(data) {
 }
 
 function paintBoard() {
+  thumbGen += 1;
+  releaseThumbUrls();
   const scroller = boardEl.querySelector(".graph-scroll");
   const scroll = scroller ? scroller.scrollLeft : boardEl.scrollLeft;
   boardEl.replaceChildren();
@@ -922,7 +924,7 @@ function openStage(stage) {
   if (stage.state === "edited") nodes.push(elt("p", "edit-note", "editNote"));
   nodes.push(actions);
   if (stage.executor === "human" && stage.state !== "waiting-upstream") {
-    if (stage.instructions) nodes.push(elr("p", "instructions", stage.instructions));
+    if (stage.instructions) nodes.push(foldedInstructions(stage.instructions));
     const dir = humanDir(stage);
     if (dir) nodes.push(uploadControl(stage, dir.path, stageBack(stage)));
   }
@@ -996,7 +998,7 @@ function renderCard(stage) {
 
   // A human stage whose upstream is ready is waiting on the person: show what to do, and the upload button.
   if (stage.executor === "human" && stage.state !== "waiting-upstream") {
-    if (stage.instructions) card.append(elr("p", "instructions", stage.instructions));
+    if (stage.instructions) card.append(foldedInstructions(stage.instructions));
     const dir = humanDir(stage);
     if (dir) card.append(uploadControl(stage, dir.path));
   }
@@ -1014,15 +1016,319 @@ function renderCard(stage) {
 
   const outputs = el("div", "outputs");
   outputs.append(elt("p", "outputs-label", "stage.outputs"));
-  for (const output of stage.outputs ?? []) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.textContent = output.directory ? `${output.path}/` : output.path;
-    button.addEventListener("click", () => openOutput(output, stage));
-    outputs.append(button);
+  for (const [index, output] of (stage.outputs ?? []).entries()) {
+    outputs.append(outputThumb(output, stage, index));
   }
   card.append(outputs);
   return card;
+}
+
+const IMAGE_EXT = new Set([".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"]);
+const VIDEO_EXT = new Set([".mp4", ".mov", ".webm", ".m4v"]);
+const AUDIO_EXT = new Set([".mp3", ".wav", ".m4a", ".aac", ".ogg", ".flac", ".opus"]);
+const thumbUrls = new Set();
+const observedThumbs = new Set();
+let thumbGen = 0;
+const thumbObserver =
+  typeof IntersectionObserver === "function"
+    ? new IntersectionObserver(
+        (entries) => {
+          for (const entry of entries) {
+            if (!entry.isIntersecting) continue;
+            thumbObserver.unobserve(entry.target);
+            const load = entry.target._flowgitLoad;
+            if (typeof load === "function") load();
+          }
+        },
+        { rootMargin: "160px" },
+      )
+    : null;
+
+function releaseThumbUrls() {
+  if (thumbObserver) {
+    for (const node of observedThumbs) thumbObserver.unobserve(node);
+  }
+  observedThumbs.clear();
+  for (const url of thumbUrls) URL.revokeObjectURL(url);
+  thumbUrls.clear();
+}
+
+function rememberThumbUrl(url) {
+  thumbUrls.add(url);
+}
+
+function fileExt(filePath) {
+  const base = String(filePath || "").split(/[\\/]/).pop() || "";
+  const dot = base.lastIndexOf(".");
+  return dot <= 0 ? "" : base.slice(dot).toLowerCase();
+}
+
+function outputKind(output) {
+  if (output.directory) return "dir";
+  const type = String(output.type || "").toLowerCase();
+  const ext = fileExt(output.path);
+  if (type.startsWith("image/") || IMAGE_EXT.has(ext)) return "image";
+  if (type.startsWith("audio/") || (AUDIO_EXT.has(ext) && !type.startsWith("video/"))) return "audio";
+  if (type.startsWith("video/") || VIDEO_EXT.has(ext)) return "video";
+  if (type === "application/json" || type.endsWith("+json") || ext === ".json") return "json";
+  return "text";
+}
+
+/** First three content lines, with Markdown markers taken off. */
+function stripMarkdown(text) {
+  const lines = String(text).replace(/\r\n/g, "\n").split("\n");
+  const out = [];
+  let fence = false;
+  for (const raw of lines) {
+    const trimmed = raw.trim();
+    if (/^```/.test(trimmed)) {
+      fence = !fence;
+      continue;
+    }
+    if (fence) continue;
+    if (!trimmed || /^([-*_])\1{2,}$/.test(trimmed)) continue;
+    const plain = trimmed
+      .replace(/^#{1,6}\s+/, "")
+      .replace(/^>\s?/, "")
+      .replace(/^[-*+]\s+/, "")
+      .replace(/^\d+\.\s+/, "")
+      .replace(/!\[[^\]]*]\([^)]*\)/g, "")
+      .replace(/\[([^\]]+)]\([^)]*\)/g, "$1")
+      .replace(/[*_~`]/g, "")
+      .trim();
+    if (!plain) continue;
+    out.push(plain);
+    if (out.length === 3) break;
+  }
+  return out.join("\n");
+}
+
+function summarizeJson(text) {
+  let value;
+  try {
+    value = JSON.parse(text);
+  } catch {
+    return stripMarkdown(text);
+  }
+  if (Array.isArray(value)) return t("thumb.items", { count: value.length });
+  if (!value || typeof value !== "object") return String(value);
+  const lines = [];
+  for (const [key, val] of Object.entries(value)) {
+    if (Array.isArray(val)) lines.push(`${key}: ${t("thumb.items", { count: val.length })}`);
+    else if (val && typeof val === "object") lines.push(`${key}: ${t("thumb.items", { count: Object.keys(val).length })}`);
+    else if (typeof val === "string") lines.push(`${key}: ${val.length > 48 ? `${val.slice(0, 48)}…` : val}`);
+    else lines.push(`${key}: ${String(val)}`);
+  }
+  return lines.join("\n");
+}
+
+function formatDuration(seconds) {
+  if (typeof seconds !== "number" || !Number.isFinite(seconds) || seconds < 0) return t("thumb.lengthUnknown");
+  const rounded = seconds >= 10 ? String(Math.round(seconds)) : seconds.toFixed(1);
+  return t("thumb.seconds", { n: rounded });
+}
+
+function waveform() {
+  const box = el("div", "wave");
+  for (const height of [35, 70, 48, 90, 55, 78, 40, 66, 52, 84, 44, 60]) {
+    const bar = document.createElement("i");
+    bar.style.height = `${height}%`;
+    box.append(bar);
+  }
+  return box;
+}
+
+function videoMark() {
+  const box = el("div", "video-mark");
+  box.append(el("span", "video-icon", "▶"), elt("span", "video-label", "thumb.video"));
+  return box;
+}
+
+function thumbNote(key) {
+  return elt("p", "thumb-text", key);
+}
+
+function thumbText(text) {
+  return text ? el("p", "thumb-text", text) : elt("p", "thumb-text", "thumb.empty");
+}
+
+function scheduleThumb(node, load) {
+  node._flowgitLoad = load;
+  if (!thumbObserver) {
+    load();
+    return;
+  }
+  // Observe after the card is in the document, or a detached node never intersects.
+  requestAnimationFrame(() => {
+    if (!node.isConnected || !thumbObserver) return;
+    observedThumbs.add(node);
+    thumbObserver.observe(node);
+  });
+}
+
+function outputThumb(output, stage, index, options) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "thumb";
+  const label = output.directory ? `${output.path}/` : output.path;
+  button.setAttribute("aria-label", `${label} · ${t("thumb.open")}`);
+  button.addEventListener("click", () => openOutput(output, stage, options));
+  button.append(el("span", "thumb-name", label));
+  const body = el("div", "thumb-body");
+  button.append(body);
+  const gen = thumbGen;
+  scheduleThumb(button, () => {
+    void fillThumb(body, output, stage, index, gen);
+  });
+  return button;
+}
+
+async function fillThumb(body, output, stage, index, gen) {
+  if (gen !== thumbGen || !body.isConnected) return;
+  const kind = outputKind(output);
+  try {
+    if (kind === "image" || kind === "video" || kind === "audio") {
+      await fillMediaThumb(body, stage, index, gen, kind);
+      return;
+    }
+    if (kind === "dir") {
+      await fillDirThumb(body, output, gen);
+      return;
+    }
+    await fillTextThumb(body, output, gen, kind === "json");
+  } catch {
+    if (gen === thumbGen && body.isConnected) body.replaceChildren(thumbNote("thumb.noPreview"));
+  }
+}
+
+async function fillMediaThumb(body, stage, index, gen, kind) {
+  const res = await fetch(`/api/thumb?stage=${encodeURIComponent(stage.id)}&output=${index}`, {
+    headers: headers(),
+    cache: "no-store",
+  });
+  if (gen !== thumbGen || !body.isConnected) return;
+  if (kind === "audio") {
+    let duration = null;
+    if (res.ok) {
+      const data = await res.json().catch(() => ({}));
+      if (typeof data.duration === "number") duration = data.duration;
+    }
+    if (gen !== thumbGen || !body.isConnected) return;
+    body.replaceChildren(waveform());
+    setThumbCaption(body, formatDuration(duration));
+    return;
+  }
+  if (res.status === 204) {
+    body.replaceChildren(videoMark());
+    return;
+  }
+  if (!res.ok) {
+    body.replaceChildren(thumbNote("thumb.notYet"));
+    return;
+  }
+  const type = (res.headers.get("content-type") || "").toLowerCase();
+  if (!type.startsWith("image/")) {
+    body.replaceChildren(kind === "video" ? videoMark() : thumbNote("thumb.noPreview"));
+    return;
+  }
+  const blob = await res.blob();
+  if (gen !== thumbGen || !body.isConnected) return;
+  const url = URL.createObjectURL(blob);
+  rememberThumbUrl(url);
+  const img = document.createElement("img");
+  img.alt = "";
+  img.loading = "lazy";
+  img.src = url;
+  body.replaceChildren(img);
+}
+
+async function fillTextThumb(body, output, gen, json) {
+  const res = await fetch(`/api/file?path=${encodeURIComponent(output.path)}`, {
+    headers: headers(),
+    cache: "no-store",
+  });
+  if (gen !== thumbGen || !body.isConnected) return;
+  if (!res.ok) {
+    body.replaceChildren(thumbNote("thumb.notYet"));
+    return;
+  }
+  const text = await res.text();
+  if (gen !== thumbGen || !body.isConnected) return;
+  body.replaceChildren(thumbText(json ? summarizeJson(text) : stripMarkdown(text)));
+}
+
+async function fillDirThumb(body, output, gen) {
+  const rel = String(output.path || "").replace(/\/+$/, "");
+  const res = await fetch(`/api/file?path=${encodeURIComponent(rel)}`, {
+    headers: headers(),
+    cache: "no-store",
+  });
+  if (gen !== thumbGen || !body.isConnected) return;
+  if (!res.ok) {
+    body.replaceChildren(thumbNote("thumb.notYet"));
+    return;
+  }
+  const data = await res.json().catch(() => ({}));
+  const files = Array.isArray(data.files) ? data.files : [];
+  const images = files.filter((name) => IMAGE_EXT.has(fileExt(name))).slice(0, 4);
+  if (images.length) {
+    const grid = el("div", "thumb-grid");
+    body.replaceChildren(grid);
+    for (const name of images) {
+      const img = document.createElement("img");
+      img.alt = "";
+      img.loading = "lazy";
+      grid.append(img);
+      const fileRes = await fetch(`/api/file?path=${encodeURIComponent(`${rel}/${name}`)}`, {
+        headers: headers(),
+        cache: "no-store",
+      });
+      if (gen !== thumbGen || !body.isConnected) return;
+      if (!fileRes.ok) continue;
+      const blob = await fileRes.blob();
+      if (gen !== thumbGen || !body.isConnected) return;
+      const url = URL.createObjectURL(blob);
+      rememberThumbUrl(url);
+      img.src = url;
+    }
+  } else if (gen === thumbGen && body.isConnected) {
+    body.replaceChildren();
+  }
+  if (gen !== thumbGen || !body.isConnected) return;
+  const n = files.length;
+  setThumbCaption(body, t("thumb.files", { count: n }));
+}
+
+function setThumbCaption(body, text) {
+  const parent = body.parentElement;
+  if (!parent) return;
+  let caption = parent.querySelector(":scope > .thumb-count");
+  if (!caption) {
+    caption = el("p", "thumb-count", "");
+    parent.append(caption);
+  }
+  caption.textContent = text;
+}
+
+function foldedInstructions(text) {
+  const wrap = el("div", "instructions-fold");
+  const p = elr("p", "instructions is-clamped", text);
+  const more = document.createElement("button");
+  more.type = "button";
+  more.className = "more";
+  more.hidden = true;
+  more.textContent = t("thumb.more");
+  more.addEventListener("click", () => {
+    const open = p.classList.toggle("is-open");
+    p.classList.toggle("is-clamped", !open);
+    more.textContent = open ? t("thumb.less") : t("thumb.more");
+  });
+  wrap.append(p, more);
+  requestAnimationFrame(() => {
+    if (!p.isConnected) return;
+    more.hidden = !(p.scrollHeight > p.clientHeight + 1);
+  });
+  return wrap;
 }
 
 function modelField(stageId) {
