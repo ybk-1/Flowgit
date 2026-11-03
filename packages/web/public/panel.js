@@ -6,6 +6,8 @@ import { openHistory } from "./history.js";
 import { I18N } from "./i18n.js";
 import { modelForStage, refresh, startRun, syncRunButtons } from "./run.js";
 import { S, el, elr, elt, errorEl, modelDrafts, paintBadge, paintVersion, panelBody, panelEl, panelPortal, panelTitle, setError, shownBadge, stageLabel, stageUsageLine, t } from "./state.js";
+import { openTimeline } from "./viewers/timeline.js";
+import { openStoryboard } from "./viewers/storyboard.js";
 
 /** Shows the side panel. When it was closed, it opens as a circle from the last click or key press. */
 export function revealPanel() {
@@ -522,11 +524,14 @@ const viewers = new Map();
 /**
  * Show an output type with `viewer` instead of the built-in preview.
  * `viewer` receives `{ output, stage, options, response, rel, readOnly }`.
- * New viewers live in `viewers/` and call this.
+ * New viewers live in `viewers/` and are registered below, after `viewers` exists.
  */
 export function registerViewer(outputType, viewer) {
     viewers.set(outputType, viewer);
 }
+
+registerViewer("flowgit/timeline+json", openTimeline);
+registerViewer("flowgit/storyboard+json", openStoryboard);
 
 export function releaseBlob() {
     if (!S.currentBlob)

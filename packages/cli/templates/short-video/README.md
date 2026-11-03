@@ -184,6 +184,24 @@ Put a music file named `music.mp3` (or `music.m4a`, `music.wav`, `bgm.mp3`, …)
 
 请只用你有权使用的音乐。/ Only use music you have the rights to.
 
+## 在时间线上剪辑 / Edit on the timeline
+
+剪辑阶段写出 `timeline.json` 之后，在看板上打开它，直接在时间线上改，不用手改 JSON。
+
+After the edit stage writes `timeline.json`, open it on the board and change it on the timeline instead of editing the JSON by hand.
+
+- 拖动镜头改变顺序，拖边缘改变时长。拖边缘时，靠近配音结尾会吸附到配音的长度；「吸附配音」按配音总长重分各镜头。
+- 双击字幕改文字。点一个镜头，从 `assets/` 里已上传的文件换素材。
+- 刻度可以缩放，播放头可以拖。预览用画面、字幕、配音和背景音乐播放。字幕的位置、字号和描边跟 FFmpeg 导出一致，规则在 `scripts/caption-style.json`（剪辑阶段会抄一份到时间线上，预览读这份；导出时 `render.mjs` 再读这个文件）。
+- 键盘：Tab 选中镜头，左右键移动，`[` `]` 改变时长，空格播放。撤销和重做保留 50 步。系统开了「减少动态效果」时，预览不再做推拉镜头。
+- 保存后，这次修改成为手动修改，导出阶段显示为需要重跑。时间线顶部的「重新导出」会再跑导出。
+
+- Drag a shot to reorder it, or drag an edge to change its length. An edge near the end of the voiceover snaps to that length; "Snap to voice" shares the voiceover across the shots.
+- Double-click a caption to edit the text. Click a shot to swap its asset for a file already in `assets/`.
+- Zoom the ruler and drag the playhead. The preview plays picture, captions, voice and music. Caption position, size and outline match the FFmpeg export; the rules live in `scripts/caption-style.json` (the edit stage copies them onto the timeline for the preview, and `render.mjs` reads the file again on export).
+- Keyboard: Tab selects a shot, the arrow keys move it, `[` and `]` change its length, and Space plays. Undo and redo keep 50 steps. With "reduce motion" on, the preview does not zoom the picture.
+- Saving stores the change as a hand edit, and the export stage shows that it needs a re-run. "Re-export" at the top of the timeline runs the export again.
+
 ## 改一步，重跑后面 / Change one step, re-run what follows
 
 - 不满意分镜：直接改 `storyboard.json`，或改 `prompts/storyboard.md` 后 `flowgit run storyboard`。
