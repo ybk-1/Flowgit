@@ -1,0 +1,43 @@
+{
+  "format": "flowgit",
+  "version": "0.1",
+  "id": "plugin-echo",
+  "name": "插件回声",
+  "description": "用流程目录里的插件给上游文字加前缀，写进 echo.txt。演示 plugin 执行器：./ 路径、config、upstream.read 和 writeOutput。 / Prefix upstream text with a plugin that lives in the flow directory, and write echo.txt. Shows the plugin executor: a ./ path, config, upstream.read and writeOutput.",
+  "stages": [
+    {
+      "id": "source",
+      "name": "原文",
+      "description": "人把要回声的文字放进 source.txt。",
+      "executor": {
+        "type": "human",
+        "instructions": "把要回声的文字写入 source.txt。 / Write the text to echo into source.txt."
+      },
+      "outputs": [
+        {
+          "type": "text/plain",
+          "path": "source.txt"
+        }
+      ]
+    },
+    {
+      "id": "echo",
+      "name": "回声",
+      "description": "插件读取上游文字，加上 config.prefix，写入 echo.txt。",
+      "inputs": ["source"],
+      "executor": {
+        "type": "plugin",
+        "plugin": "./plugins/echo",
+        "config": {
+          "prefix": "echo: "
+        }
+      },
+      "outputs": [
+        {
+          "type": "text/plain",
+          "path": "echo.txt"
+        }
+      ]
+    }
+  ]
+}

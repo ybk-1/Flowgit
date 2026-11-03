@@ -14,6 +14,7 @@ import type {
 import { requireStage, topoOrder } from "./graph.js";
 import { MAX_SUBFLOW_DEPTH } from "./subflow.js";
 import { mcpServerFingerprint } from "./mcp.js";
+import { pluginFingerprint } from "./plugins.js";
 import { copyPath, hashPath, isDirOutput, isSafeRelative, outputRel, sha256String } from "./util.js";
 
 export const RUNS_DIR = "runs";
@@ -135,6 +136,8 @@ export function commandFiles(dir: string, command: string): string[] {
  * every stage inside it, so editing its prompt or script marks this stage stale.
  * An mcp stage also includes `mcpServers[server]` with env values removed, so
  * changing the command, URL, tool or args marks it stale and rotating a secret does not.
+ * A plugin stage also includes `config` and, for a package, its package.json
+ * version (a hash of the plugin's files, for a folder plugin).
  * `seen` holds sub-flow flow.json paths already entered, to stop a cycle.
  */
 export function stageConfigHash(dir: string, stage: Stage, seen: Set<string> = new Set(), flow?: Flow): string {
@@ -166,8 +169,9 @@ export function stageConfigHash(dir: string, stage: Stage, seen: Set<string> = n
     const abs = path.join(dir, f);
     return [f, fs.existsSync(abs) ? hashPath(abs).sha256 : null];
   });
-  const payload: { executor: Stage["executor"]; files: (string | null)[][]; nested?: string[]; mcp?: unknown } = { executor: ex, files: fileHashes };
+  const payload: { executor: Stage["executor"]; files: (string | null)[][]; nested?: string[]; mcp?: unknown; plugin?: unknown } = { executor: ex, files: fileHashes };
   if (ex.type === "mcp") payload.mcp = { tool: ex.tool, args: ex.args ?? null, server: mcpServerFingerprint(flow?.mcpServers?.[ex.server]) };
+  if (ex.type === "plugin") payload.plugin = pluginFingerprint(dir, ex.plugin, ex.config ?? null);
   if (nested) payload.nested = nested;
   return sha256String(JSON.stringify(payload));
 }

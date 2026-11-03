@@ -229,6 +229,9 @@
         },
         {
           "$ref": "#/$defs/executorMcp"
+        },
+        {
+          "$ref": "#/$defs/executorPlugin"
         }
       ]
     },
@@ -561,6 +564,34 @@
           "type": "integer",
           "minimum": 1,
           "description": "Stop the call and kill the stdio child after this many seconds. Default 60."
+        }
+      }
+    },
+    "executorPlugin": {
+      "type": "object",
+      "description": "Run a plugin from the flow directory. A package name resolves only from that directory's node_modules. A ./ path must stay inside the flow directory.",
+      "required": [
+        "type",
+        "plugin"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "plugin"
+        },
+        "plugin": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Package name (resolved from the flow directory's node_modules only) or a ./ path inside the flow directory."
+        },
+        "config": {
+          "type": "object",
+          "description": "JSON object passed to the plugin as ctx.config. Counts toward the staleness hash."
+        },
+        "timeoutSec": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Abort the plugin's signal after this many seconds and fail the run. Unset means no limit."
         }
       }
     }

@@ -299,6 +299,12 @@ An `mcp` stage calls an MCP tool. Servers live in `mcpServers`, the same shape a
 
 `flowgit serve --mcp` turns a flow into a local MCP server that Claude Code, Claude Desktop and Cursor call directly: `run_flow` takes the flow inputs as parameters and stops at a human stage, saying what to prepare (or asking you, when the client supports it); `get_output` reads outputs and `status` shows the state. A flow with a script, agent, service or mcp stage needs `--allow-exec`. `--print-config` prints the setup for all three clients. Each run records `via: "mcp"` and the client's name in `run.json`. See [docs/mcp.md](docs/mcp.md#把流程变成-mcp-服务器--serve-a-flow-as-an-mcp-server).
 
+## 自己的执行器 / Your own executor
+
+`plugin` 阶段运行流程目录里的一个插件。包名只从这份流程的 `node_modules` 解析，不会自动安装；`./plugins/echo` 这种路径必须留在流程目录内。插件默认导出 `{ flowgitPlugin: 1, name, executor: { run(ctx) } }`，不要 import Flowgit 的内部模块。`flowgit plugins` 和 `flowgit doctor` 列出解析到的路径、版本，以及没找到的。从 Git 地址复制来的流程会把要加载的插件列进确认清单，确认前不会加载。说明见 [docs/plugins.md](docs/plugins.md)，例子是 [`examples/plugin-echo`](examples/plugin-echo)。
+
+A `plugin` stage runs a plugin from the flow directory. A package name resolves only from that flow's `node_modules` and is never auto-installed; a path like `./plugins/echo` must stay inside the flow directory. The default export is `{ flowgitPlugin: 1, name, executor: { run(ctx) } }`, and the plugin does not import Flowgit internals. `flowgit plugins` and `flowgit doctor` list the resolved path, the version, and anything missing. A flow copied from a Git URL lists the plugins it would load and does not load them until you confirm. See [docs/plugins.md](docs/plugins.md). The example is [`examples/plugin-echo`](examples/plugin-echo).
+
 ## 子流程 / Sub-flows
 
 `workflow` 阶段在 `engine` 为 `flowgit` 时运行另一份 `flow.json`。`params.inputs` 把父流程的输入传进去（字符串里可以写 `{{inputs.名称}}`），`params.copy` 把子流程的产物复制成这个阶段的产物。子流程用自己的 `runs/`。可以嵌套，最多 5 层；绕回去会报错。示例：[`examples/subflow`](examples/subflow)。
