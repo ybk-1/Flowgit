@@ -103,6 +103,11 @@ export const flowSchemaJson: Record<string, unknown> = {
         "$ref": "#/$defs/mcpServer"
       }
     },
+    "concurrency": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "How many stages `run all` may run at once. Stages with no dependency between them share a wave, up to this many. Default 2. `flowgit run all --concurrency` overrides it."
+    },
     "stages": {
       "type": "array",
       "minItems": 1,
@@ -304,6 +309,11 @@ export const flowSchemaJson: Record<string, unknown> = {
         "maxTokens": {
           "type": "integer",
           "minimum": 256
+        },
+        "retries": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Extra attempts after a network error, HTTP 429 or 5xx. Default 0. Other 4xx and schema failures are not retried. Each retry is recorded in run.json."
         }
       }
     },
@@ -497,6 +507,11 @@ export const flowSchemaJson: Record<string, unknown> = {
           "type": "integer",
           "minimum": 1,
           "description": "Abort the request after this many seconds. Default 60. Same field name as script and agent timeouts."
+        },
+        "retries": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Extra attempts after a network error, HTTP 429 or 5xx. Default 0. Other 4xx and a response that is not the expected body are not retried. Each retry is recorded in run.json."
         }
       }
     },

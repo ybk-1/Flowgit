@@ -141,6 +141,24 @@ export function nowIso(): string {
   return host().now().toISOString();
 }
 
+/** `run all` width: an explicit value, otherwise `fallback` (the flow's concurrency or 2). */
+export function resolveConcurrency(value: number | undefined, fallback = 2): number {
+  const n = value ?? fallback;
+  if (!Number.isInteger(n) || n < 1) {
+    throw new Error(`并发必须是不小于 1 的整数，收到 ${String(value ?? n)} / concurrency must be an integer of at least 1, got ${String(value ?? n)}`);
+  }
+  return n;
+}
+
+/** `--max-tokens`: a non-negative integer. Unset means no budget. */
+export function resolveMaxTokens(value: number | undefined): number | undefined {
+  if (value === undefined) return undefined;
+  if (!Number.isInteger(value) || value < 0) {
+    throw new Error(`--max-tokens 必须是不小于 0 的整数，收到 ${String(value)} / --max-tokens must be an integer of at least 0, got ${String(value)}`);
+  }
+  return value;
+}
+
 export function truncate(s: string, max: number): string {
   if (s.length <= max) return s;
   return `${s.slice(0, max)}\n... [truncated ${s.length - max} chars]`;

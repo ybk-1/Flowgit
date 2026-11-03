@@ -5,13 +5,16 @@ import { reloadGraph } from "./graph.js";
 import { I18N } from "./i18n.js";
 import { loadInputs } from "./inputs.js";
 import { fieldValue, panelHasModel } from "./panel.js";
-import { S, applyUsage, boardEl, clearPlan, hintEl, logEl, noticeEl, panelEl, planLabel, previewButton, runAllButton, setRunning, showPlan, t, withStatus } from "./state.js";
+import { S, applyUsage, boardEl, clearPlan, hintEl, logEl, noticeEl, panelEl, planLabel, previewButton, runAllButton, setRunning, showPlan, t, togetherNames, withStatus } from "./state.js";
 
-/** The stage finished: its next state comes with a forced refresh, decoding from "running". */
-export function clearRunning() {
-    if (!S.runningId)
-        return;
-    S.runningId = "";
+/** One stage finished, or the whole run ended when `id` is omitted. Its next state comes with a forced refresh. */
+export function clearRunning(id) {
+    if (id)
+        S.runningIds.delete(id);
+    else
+        S.runningIds.clear();
+    if (!S.runningIds.has(S.followId))
+        S.followId = [...S.runningIds][0] || "";
     void refreshNow();
 }
 
@@ -87,7 +90,9 @@ export function planLines(data) {
     for (const step of steps) {
         const label = planLabel(step.action);
         const detail = step.detail ? ` · ${I18N.pick(step.detail)}` : "";
-        lines.push(`${I18N.pick(step.name || step.id)} ${step.id} · ${label}${detail}`);
+        const names = togetherNames(step, steps);
+        const side = names ? ` · ${t("plan.together", { names })}` : "";
+        lines.push(`${I18N.pick(step.name || step.id)} ${step.id} · ${label}${detail}${side}`);
     }
     lines.push(t("plan.calls", { count: modelCallCount(data) }));
     return lines;
@@ -276,19 +281,17 @@ export function onStreamEvent(type, data) {
         setRunning(data.stage);
     }
     else if (type === "stage:log")
-        appendLog(`    ${I18N.pick(data.line ?? "")}`);
+        appendLog(`    [${data.stage}] ${I18N.pick(data.line ?? "")}`);
     else if (type === "stage:done") {
         appendLog(`✓ ${I18N.pick(data.name || data.stage)} → v${data.n}`);
-        if (data.stage === S.runningId)
-            clearRunning();
+        clearRunning(data.stage);
     }
     else if (type === "stage:skip") {
         appendLog(`· ${t("run.skipped", { name: I18N.pick(data.name || data.stage), reason: I18N.pick(data.reason ?? "") })}`);
     }
     else if (type === "stage:error") {
         appendLog(`✗ ${I18N.pick(data.name || data.stage)}: ${I18N.pick(data.error ?? "")}`);
-        if (data.stage === S.runningId)
-            clearRunning();
+        clearRunning(data.stage);
     }
     else if (type === "run:end") {
         if (data.waiting) {
@@ -297,11 +300,13 @@ export function onStreamEvent(type, data) {
             if (data.waiting.instructions)
                 appendLog(I18N.pick(data.waiting.instructions));
         }
+        else if (data.budget)
+            appendLog(I18N.pick(data.budget));
         else if (data.ok)
             appendLog(t("run.finished"));
         else
             appendLog(data.error ? I18N.pick(data.error) : t("run.failed"));
-        if (S.runningId)
+        if (S.runningIds.size)
             clearRunning();
         else
             void refresh();

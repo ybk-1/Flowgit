@@ -641,7 +641,8 @@ describe("run and inputs on the board", () => {
       expect(post.status, post.body).toBe(200);
       const end = await live.waitFor("run:end");
       const done = live.events.filter((event) => event.event === "stage:done").map((event) => JSON.parse(event.data).stage);
-      expect(done).toEqual(["script", "voice", "storyboard"]);
+      expect(done[0]).toBe("script");
+      expect(done.slice(1).sort()).toEqual(["storyboard", "voice"]);
       expect(live.events.filter((event) => event.event !== "flow:changed").at(-1)?.event).toBe("run:end");
       const ended = JSON.parse(end.data) as { ok: boolean; waiting?: { stage: string; missing: string[]; instructions?: string } };
       expect(ended.ok).toBe(true);
@@ -656,11 +657,9 @@ describe("run and inputs on the board", () => {
 
       const late = await openEvents(board.port, board.token);
       await late.waitFor("run:end");
-      expect(late.events.filter((event) => event.event === "stage:done").map((event) => JSON.parse(event.data).stage)).toEqual([
-        "script",
-        "voice",
-        "storyboard",
-      ]);
+      const replayed = late.events.filter((event) => event.event === "stage:done").map((event) => JSON.parse(event.data).stage);
+      expect(replayed[0]).toBe("script");
+      expect(replayed.slice(1).sort()).toEqual(["storyboard", "voice"]);
       const cursor = live.events.length;
       const again = await httpCall(
         board.port,

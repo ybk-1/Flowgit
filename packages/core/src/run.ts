@@ -4,9 +4,11 @@ import { requireStage, topoOrder } from "./graph.js";
 import {
   getExecutor,
   HumanInputNeededError,
+  usageTokens,
   type InputArtifact,
   type RunOptions,
 } from "./executors/index.js";
+import { TokenBudgetError } from "./budget.js";
 import {
   hashOutputs,
   inputHash,
@@ -26,7 +28,9 @@ import {
 } from "./runs.js";
 import { schemaFailure, schemaProblems } from "./schema-check.js";
 import { assertTrusted } from "./trust.js";
-import { isDirOutput, isTextType, listFiles, nowIso, staysInside, truncate } from "./util.js";
+import { isDirOutput, isTextType, listFiles, nowIso, resolveConcurrency, resolveMaxTokens, staysInside, truncate } from "./util.js";
+
+export { TokenBudgetError } from "./budget.js";
 
 export class UpstreamNotReadyError extends Error {
   constructor(
@@ -185,7 +189,8 @@ export async function runStage(loaded: LoadedFlow, stageId: string, options: Run
     return record;
   } catch (err) {
     const error = err as Error;
-    if (error instanceof HumanInputNeededError) throw error;
+    // A budget stop is the run's decision, not a failed attempt of this stage.
+    if (error instanceof HumanInputNeededError || error instanceof TokenBudgetError) throw error;
     // An executor can attach params (e.g. model usage) to the error it throws.
     const params = (error as Error & { params?: Record<string, unknown> }).params;
     const record: RunRecord = {
@@ -210,9 +215,26 @@ export async function runStage(loaded: LoadedFlow, stageId: string, options: Run
   }
 }
 
+type StageOutcome = "ok" | "skip" | "kept" | "error" | "wait" | "budget";
+
+/** An llm stage that will call a model. Canned replies (FLOWGIT_LLM_MOCK_DIR, and no injected llm) do not. */
+function stageCallsModel(stage: Stage, options: RunOptions): boolean {
+  if (stage.executor.type !== "llm") return false;
+  if (options.llm) return true;
+  return !host().env.FLOWGIT_LLM_MOCK_DIR;
+}
+
+function addTokens(ledger: { used: number }, params: Record<string, unknown> | undefined): void {
+  const tokens = usageTokens(params?.usage as Record<string, unknown> | undefined);
+  if (!tokens) return;
+  ledger.used += tokens.input + tokens.output;
+}
+
 /**
- * Run every stage in dependency order. Stages that are already ok are skipped
- * unless options.force is set. Stops at the first human stage that is waiting.
+ * Run every stage. Independent stages run at the same time, up to `concurrency`
+ * (the option, else the flow's `concurrency`, else 2). Dependency order, staleness
+ * and hand-edit protection match a one-by-one run. Stops scheduling further stages
+ * when one fails, a person is waiting, or the token budget is already over.
  * A copied flow that hasn't been confirmed here throws TrustNeededError first.
  */
 export async function runAll(loaded: LoadedFlow, options: RunOptions = {}): Promise<RunRecord[]> {
@@ -220,21 +242,105 @@ export async function runAll(loaded: LoadedFlow, options: RunOptions = {}): Prom
   const flowInputs = loadFlowInputs(loaded.dir, loaded.flow, options.inputs);
   // before anything runs, not halfway through
   if (!options.flowStack?.length) assertTrusted(loaded);
+  const concurrency = resolveConcurrency(options.concurrency ?? loaded.flow.concurrency);
+  const maxTokens = resolveMaxTokens(options.maxTokens);
+  const ledger = options.tokenLedger ?? { used: 0 };
+  const stageOptions: RunOptions = options.tokenLedger ? options : { ...options, tokenLedger: ledger };
+  const order = topoOrder(loaded.flow);
+  const pending = new Set(order);
+  const done = new Map<string, StageOutcome>();
   const records: RunRecord[] = [];
-  for (const sid of topoOrder(loaded.flow)) {
-    const status = stageStatus(loaded, sid, flowInputs);
-    if (!options.force && status.state === "ok") {
-      emit({ type: "stage:skip", stage: status.stage, reason: "已是最新 / up to date" });
-      continue;
+  const inflight = new Map<string, Promise<void>>();
+  let halt = false;
+  let waitError: HumanInputNeededError | undefined;
+  let failError: Error | undefined;
+  let budgetError: TokenBudgetError | undefined;
+
+  const ready = (): string[] => {
+    const ids: string[] = [];
+    for (const id of order) {
+      if (!pending.has(id)) continue;
+      const deps = requireStage(loaded.flow, id).inputs ?? [];
+      if (!deps.every((dep) => done.has(dep))) continue;
+      if (deps.some((dep) => done.get(dep) !== "ok" && done.get(dep) !== "skip" && done.get(dep) !== "kept")) continue;
+      ids.push(id);
     }
-    if (!options.force && status.state === "edited") {
-      // the person changed this stage's outputs: keep their version, move on downstream
-      const kept = recordManualEdit(loaded, sid, flowInputs);
-      emit({ type: "stage:skip", stage: status.stage, reason: `保留了你的手动修改，存为 v${kept.n} / kept your manual edit as v${kept.n}` });
-      records.push(kept);
-      continue;
+    return ids;
+  };
+
+  const runOne = (id: string): Promise<void> => {
+    const stage = requireStage(loaded.flow, id);
+    return (async () => {
+      try {
+        const status = stageStatus(loaded, id, flowInputs);
+        if (!options.force && status.state === "ok") {
+          emit({ type: "stage:skip", stage, reason: "已是最新 / up to date" });
+          done.set(id, "skip");
+          return;
+        }
+        if (!options.force && status.state === "edited") {
+          const kept = recordManualEdit(loaded, id, flowInputs);
+          emit({ type: "stage:skip", stage, reason: `保留了你的手动修改，存为 v${kept.n} / kept your manual edit as v${kept.n}` });
+          records.push(kept);
+          done.set(id, "kept");
+          return;
+        }
+        const record = await runStage(loaded, id, stageOptions);
+        addTokens(ledger, record.params);
+        records.push(record);
+        done.set(id, "ok");
+      } catch (err) {
+        addTokens(ledger, (err as { params?: Record<string, unknown> }).params);
+        if (err instanceof HumanInputNeededError) {
+          done.set(id, "wait");
+          waitError ??= err;
+          halt = true;
+          return;
+        }
+        if (err instanceof TokenBudgetError) {
+          done.set(id, "budget");
+          budgetError ??= err;
+          halt = true;
+          return;
+        }
+        done.set(id, "error");
+        failError ??= err as Error;
+        halt = true;
+      }
+    })();
+  };
+
+  while (pending.size > 0 || inflight.size > 0) {
+    if (!halt) {
+      for (const id of ready()) {
+        if (inflight.size >= concurrency) break;
+        const stage = requireStage(loaded.flow, id);
+        if (maxTokens !== undefined && stageCallsModel(stage, stageOptions) && ledger.used > maxTokens) {
+          budgetError = new TokenBudgetError(ledger.used, maxTokens, stage);
+          done.set(id, "budget");
+          pending.delete(id);
+          halt = true;
+          break;
+        }
+        pending.delete(id);
+        const task = runOne(id).finally(() => {
+          inflight.delete(id);
+        });
+        inflight.set(id, task);
+      }
     }
-    records.push(await runStage(loaded, sid, options));
+    if (inflight.size === 0) break;
+    await Promise.race(inflight.values());
   }
+
+  if (waitError) throw waitError;
+  if (failError) throw failError;
+  if (budgetError) throw budgetError;
+  if (pending.size) {
+    throw new Error(
+      `这些阶段没法开始：${[...pending].join(", ")} / these stages never became ready: ${[...pending].join(", ")}`,
+    );
+  }
+  records.sort((a, b) => order.indexOf(a.stage) - order.indexOf(b.stage));
   return records;
 }

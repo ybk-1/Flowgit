@@ -26,6 +26,7 @@ import {
   type RunEvent,
   runStage,
   saveFlowInputs,
+  TokenBudgetError,
   TrustChangedError,
   trustFlow,
   TrustNeededError,
@@ -304,7 +305,8 @@ export class BrowserBoard {
     try {
       const steps = planRunAll(loaded, model ? { model } : {});
       return json(200, {
-        steps: steps.map((step) => ({ id: step.stage.id, name: step.stage.name, action: step.action, detail: step.detail ?? null, callsModel: step.callsModel })),
+        steps: steps.map((step) => ({ id: step.stage.id, name: step.stage.name, action: step.action, detail: step.detail ?? null, callsModel: step.callsModel, together: step.together ?? null })),
+        concurrency: loaded.flow.concurrency ?? 2,
         modelCalls: planModelCalls(steps),
       });
     } catch (err) {
@@ -429,6 +431,12 @@ export class BrowserBoard {
         this.hub.publish("run:end", { ok: true });
         return json(200, { ok: true });
       } catch (err) {
+        if (err instanceof TokenBudgetError) {
+          const payload = { ok: true as const, budget: err.message };
+          await this.flush();
+          this.hub.publish("run:end", payload);
+          return json(200, payload);
+        }
         if (err instanceof HumanInputNeededError) {
           const payload = {
             ok: true as const,

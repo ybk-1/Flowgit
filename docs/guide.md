@@ -270,17 +270,21 @@ FLOWGIT_LLM_MOCK_DIR=demo-replies flowgit run all
 ```text
 · 随手记 (notes) 跳过 / skipped: 已是最新 / up to date
 ▶ 周报草稿 (draft, llm)
-    调用 / calling claude-opus-5-5 (anthropic, prompt 291 chars)
-    实际由 mock:draft.md 回复 / served by mock:draft.md
-    已写入 / wrote report.md (184 chars, 0 ms)
+    [draft] 调用 / calling claude-opus-5-5 (anthropic, prompt 291 chars)
+    [draft] 实际由 mock:draft.md 回复 / served by mock:draft.md
+    [draft] 已写入 / wrote report.md (184 chars, 0 ms)
 ✓ 周报草稿 → runs/draft/1/
 ▶ 检查 (check, script)
-    $ node scripts/check.mjs
-    ✓ 三个小节都在 / all three sections are there
+    [check] $ node scripts/check.mjs
+    [check] ✓ 三个小节都在 / all three sections are there
 ✓ 检查 → runs/check/1/
 
 ✓ 处理了 2 个阶段 / ran 2 stage(s)
 ```
+
+没有依赖关系的阶段会同时跑（默认 2 个，`--concurrency` 可以改，流程里的 `concurrency` 也行）。日志每一行前面是阶段 id。这条周报是一条直线，所以还是一个接一个。`--max-tokens <n>` 给这一次运行一个 token 上限：超过之后就停，已经跑完的版本还在。
+
+Stages with nothing between them run at the same time (2 by default; change it with `--concurrency`, or set `concurrency` on the flow). Each log line starts with the stage id. This report is a straight line, so the stages still go one after another. `--max-tokens <n>` sets a token budget for this run: once it is over, the run stops and finished versions stay.
 
 换成真的模型之前，可以先用 `flowgit doctor` 看看还缺什么。它检查 Node、流程输入、密钥，以及脚本和 agent 要用的命令有没有装好；不调用模型，也不运行任何阶段：
 

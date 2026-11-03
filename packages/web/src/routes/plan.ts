@@ -29,7 +29,9 @@ export function servePlan(res: http.ServerResponse, ctx: HandlerCtx, url: URL): 
       action: step.action,
       detail: step.detail ?? null,
       callsModel: step.callsModel,
+      together: step.together ?? null,
     })),
+    concurrency: loaded.flow.concurrency ?? 2,
     modelCalls: planModelCalls(steps),
   });
 }

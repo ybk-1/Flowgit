@@ -224,8 +224,13 @@ export function applyUsage(text) {
     S.usageTotal = total && typeof total === "object" ? total : { input: 0, output: 0, calls: 0 };
 }
 
+/** True while the board's run is on this stage. Parallel stages run together. */
+export function isRunning(id) {
+    return typeof id === "string" && id !== "" && S.runningIds.has(id);
+}
+
 export function stageLabel(stage) {
-    if (stage.id && stage.id === S.runningId)
+    if (isRunning(stage.id))
         return RUNNING;
     return stateLabel(stage.state);
 }
@@ -251,9 +256,25 @@ export function paintBadge(badge, stageId, scope, label) {
     FX.decode(badge, text, { key, animate: before !== undefined && before !== text });
 }
 
+/** The other stages a dry run starts at the same time as this one, or "". */
+export function togetherNames(step, steps) {
+    const all = steps || (S.planView ? [...S.planView.values()] : []);
+    if (step.action !== "run" || !step.together)
+        return "";
+    const names = [];
+    for (const other of all) {
+        if (other !== step && other.action === "run" && other.together === step.together)
+            names.push(other.id);
+    }
+    return names.join(", ");
+}
+
 export function planText(step) {
     const label = `${PLAN_ICON[step.action] || "•"} ${planLabel(step.action)}`;
-    return step.callsModel ? `${label} · ${t("plan.callsModel")}` : label;
+    const model = step.callsModel ? ` · ${t("plan.callsModel")}` : "";
+    const names = togetherNames(step);
+    const side = names ? ` · ${t("plan.together", { names })}` : "";
+    return `${label}${model}${side}`;
 }
 
 /** Adds, updates or removes a card's dry-run chip, just under its badge. */
@@ -288,7 +309,8 @@ export function paintPlanNode(node) {
         return;
     if (step) {
         node.setAttribute("data-plan", step.action || "");
-        type.textContent = clipLabel(`${PLAN_ICON[step.action] || "•"} ${planLabel(step.action)}`, NODE_W - 16);
+        const side = togetherNames(step) ? " ∥" : "";
+        type.textContent = clipLabel(`${PLAN_ICON[step.action] || "•"} ${planLabel(step.action)}${side}`, NODE_W - 16);
         type.classList.add("is-plan");
     }
     else {
@@ -319,33 +341,40 @@ export function clearPlan() {
     paintPlan(false);
 }
 
-/** Marks the stage the run is on, decodes its badge to "running", and scrolls the board to it. */
-export function setRunning(id) {
-    S.runningId = id || "";
-    // Only the new stage's badge changes now. A stage that just finished keeps saying "running"
-    // until the refresh brings its new state, so it never flashes its old state in between.
-    const stage = S.boardStages.find((item) => item.id === S.runningId);
+/** Marks every stage that is running: cards, graph nodes, edges into them, and the panel badge. */
+export function paintRunning() {
     for (const card of boardEl.querySelectorAll(".card")) {
-        const on = S.runningId !== "" && card.dataset.id === S.runningId;
+        const id = card.dataset.id || "";
+        const on = isRunning(id);
         card.toggleAttribute("data-running", on);
+        // A stage that just finished keeps saying "running" until the refresh brings its new state.
         const badge = on ? card.querySelector(".badge") : null;
-        if (badge && stage)
-            paintBadge(badge, S.runningId, "card", RUNNING);
+        if (badge)
+            paintBadge(badge, id, "card", RUNNING);
     }
     for (const node of boardEl.querySelectorAll(".flow-node")) {
-        node.toggleAttribute("data-running", S.runningId !== "" && node.getAttribute("data-id") === S.runningId);
+        node.toggleAttribute("data-running", isRunning(node.getAttribute("data-id") || ""));
     }
     for (const edge of boardEl.querySelectorAll(".flow-edge[data-to]")) {
-        edge.toggleAttribute("data-running", S.runningId !== "" && edge.getAttribute("data-to") === S.runningId);
+        edge.toggleAttribute("data-running", isRunning(edge.getAttribute("data-to") || ""));
     }
     const panelBadge = S.panelMode === "stage" ? panelBody.querySelector(".badge[data-stage]") : null;
-    if (panelBadge && stage && panelBadge.getAttribute("data-stage") === S.runningId) {
-        paintBadge(panelBadge, S.runningId, "panel", RUNNING);
+    if (panelBadge) {
+        const id = panelBadge.getAttribute("data-stage") || "";
+        if (isRunning(id))
+            paintBadge(panelBadge, id, "panel", RUNNING);
     }
-    if (S.runningId) {
-        S.followUntil = performance.now() + 1500;
-        followStage(S.runningId);
-    }
+}
+
+/** A stage started: mark it, decode its badge to "running", and scroll the board to it. */
+export function setRunning(id) {
+    if (!id)
+        return;
+    S.runningIds.add(id);
+    S.followId = id;
+    paintRunning();
+    S.followUntil = performance.now() + 1500;
+    followStage(id);
 }
 
 export function followStage(id) {
@@ -431,7 +460,8 @@ export const S = {
   usageByStage: new Map(),
   usageTotal: { input: 0, output: 0, calls: 0 },
   usageText: "",
-  runningId: "",
+  runningIds: new Set(),
+  followId: "",
   followUntil: 0,
   planView: null,
   lastPress: null,

@@ -12,6 +12,7 @@ import {
 } from "../subflow.js";
 import type { ExecutorWorkflow } from "../types.js";
 import { copyPath, isSafeRelative, outputRel } from "../util.js";
+import { TokenBudgetError } from "../budget.js";
 import { HumanInputNeededError, type ExecContext, type ExecResult, type RunOptions, type StageExecutor } from "./types.js";
 
 const posix = posixPath();
@@ -87,6 +88,11 @@ export const workflowExecutor: StageExecutor = {
       model: ctx.options.model,
       force: ctx.options.force,
       caller: ctx.options.caller,
+      concurrency: ctx.options.concurrency,
+      maxTokens: ctx.options.maxTokens,
+      tokenLedger: ctx.options.tokenLedger,
+      sleep: ctx.options.sleep,
+      random: ctx.options.random,
       flowStack: [...stack, flowFileId(resolved.abs)],
       onEvent: (event) => {
         if (event.type === "stage:log") ctx.log(`${prefix} ${event.line}`);
@@ -100,6 +106,7 @@ export const workflowExecutor: StageExecutor = {
     try {
       await runAll(sub, options);
     } catch (err) {
+      if (err instanceof TokenBudgetError) throw err;
       if (err instanceof HumanInputNeededError) throw bubbleWait(err, ctx, sub.dir);
       const error = err as Error;
       if (error.message.includes("sub-flow stage") || error.message.includes("子流程的阶段")) throw error;

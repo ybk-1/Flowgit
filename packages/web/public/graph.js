@@ -3,7 +3,7 @@ import { getGraph } from "./api.js";
 import { paintBoard } from "./cards.js";
 import { I18N } from "./i18n.js";
 import { openStage } from "./panel.js";
-import { GAP_X, GAP_Y, GRID_3D, NODE_H, NODE_W, PAD, RUNNING, S, STATES, SVG_NS, boardEl, clipLabel, el, elt, labelText, paintPlanNode, stageUsageLine, stateLabel, storeGraphStyle, t, withStatus } from "./state.js";
+import { GAP_X, GAP_Y, GRID_3D, NODE_H, NODE_W, PAD, RUNNING, S, STATES, SVG_NS, boardEl, clipLabel, el, elt, isRunning, labelText, paintPlanNode, stageUsageLine, stateLabel, storeGraphStyle, t, withStatus } from "./state.js";
 
 export async function reloadGraph() {
     const ticket = ++S.graphTicket;
@@ -193,7 +193,7 @@ export function graphEdges(layout, className) {
     svg.append(defs);
     for (const route of layout.routes) {
         const path = svgEl("path", { class: "flow-edge", d: route.d, "marker-end": `url(#flow-arrow-${className})`, "data-to": route.to });
-        if (S.runningId && route.to === S.runningId)
+        if (isRunning(route.to))
             path.setAttribute("data-running", "");
         svg.append(path);
     }
@@ -252,7 +252,7 @@ export function drawGraph(payload) {
             "aria-pressed": selected ? "true" : "false",
             "aria-label": labels.aria,
         });
-        if (S.runningId && node.id === S.runningId)
+        if (isRunning(node.id))
             g.setAttribute("data-running", "");
         g.append(svgEl("rect", {
             class: "flow-box",
@@ -335,7 +335,7 @@ export function drawGraph3d(payload) {
         block.setAttribute("aria-pressed", selected ? "true" : "false");
         block.setAttribute("aria-label", labels.aria);
         block.title = labels.title;
-        if (S.runningId && node.id === S.runningId)
+        if (isRunning(node.id))
             block.setAttribute("data-running", "");
         block.style.left = `${place.x}px`;
         block.style.top = `${place.y}px`;

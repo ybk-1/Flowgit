@@ -58,6 +58,22 @@ export interface RunOptions {
   env?: Record<string, string>;
   /** Re-run stages that are already ok (runAll). */
   force?: boolean;
+  /**
+   * How many stages `runAll` may run at once. Overrides the flow's `concurrency`.
+   * Unset means the flow's value, or 2.
+   */
+  concurrency?: number;
+  /**
+   * Stop before the next stage that calls a model once this run has used more
+   * tokens than this. Finished versions are kept.
+   */
+  maxTokens?: number;
+  /** @internal Shared token total for this run, including a sub-flow. */
+  tokenLedger?: { used: number };
+  /** @internal Wait used between retries. Tests pass a no-op. */
+  sleep?: (ms: number) => Promise<void>;
+  /** @internal In [0, 1). Replaces Math.random when computing retry jitter. */
+  random?: () => number;
   /** Recorded in run.json: who asked for the run (`flowgit serve --mcp` sets via "mcp" and the client's name). */
   caller?: { via: "mcp"; client?: string };
   /** Progress callback. */

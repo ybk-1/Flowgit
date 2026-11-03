@@ -5,7 +5,7 @@ import { openHistory } from "./history.js";
 import { I18N } from "./i18n.js";
 import { closePanel, foldedInstructions, modelField, openStage, outputThumb, releaseThumbUrls, uploadControl } from "./panel.js";
 import { modelForStage, refreshNow, startRun, syncRunButtons } from "./run.js";
-import { S, bannerEl, boardEl, captureModelDrafts, el, elr, elt, followStage, paintBadge, paintPlanChip, paintUsageTotal, paintVersion, removeConfirm, removeDeps, removeDialog, removeForce, removeStatus, removeText, stageDialog, stageForm, stageLabel, stageSave, stageStatus, stageUsageLine, storeView, t, withStatus } from "./state.js";
+import { S, bannerEl, boardEl, captureModelDrafts, el, elr, elt, followStage, isRunning, paintBadge, paintPlanChip, paintUsageTotal, paintVersion, removeConfirm, removeDeps, removeDialog, removeForce, removeStatus, removeText, stageDialog, stageForm, stageLabel, stageSave, stageStatus, stageUsageLine, storeView, t, withStatus } from "./state.js";
 
 export function render(data) {
     S.lastFlow = data;
@@ -64,8 +64,8 @@ export function paintBoard() {
     syncViewToggle();
     syncRunButtons();
     // Restoring scrollLeft stops a smooth scroll, so a repaint right after a stage starts picks it up again.
-    if (S.runningId && performance.now() < S.followUntil)
-        followStage(S.runningId);
+    if (isRunning(S.followId) && performance.now() < S.followUntil)
+        followStage(S.followId);
 }
 
 export function syncViewToggle() {
@@ -105,7 +105,7 @@ export function renderCard(stage) {
     const card = el("article", "card");
     card.dataset.id = stage.id || "";
     card.dataset.state = stage.state || "";
-    if (S.runningId && stage.id === S.runningId)
+    if (isRunning(stage.id))
         card.setAttribute("data-running", "");
     const head = el("div", "card-head");
     head.append(elr("h2", null, stage.name || stage.id || ""), cardMenu(stage));

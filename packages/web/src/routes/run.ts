@@ -1,7 +1,7 @@
 import { publish, publishFlowChanged } from "./events.js";
 import { type HandlerCtx, HttpError, readJsonObject, sendJson } from "./shared.js";
 import { trustPayload } from "./trust.js";
-import { HumanInputNeededError, loadFlow, MissingInputsError, runAll, type RunEvent, runStage, TrustNeededError, trustState, UpstreamNotReadyError } from "@flowgit/core";
+import { HumanInputNeededError, TokenBudgetError, loadFlow, MissingInputsError, runAll, type RunEvent, runStage, TrustNeededError, trustState, UpstreamNotReadyError } from "@flowgit/core";
 import http from "node:http";
 
 export function parseRunBody(body: Record<string, unknown>): { stage: string; model?: string } {
@@ -49,6 +49,12 @@ export async function postRun(req: http.IncomingMessage, res: http.ServerRespons
       publish(ctx, "run:end", payload);
       sendJson(res, 200, payload);
     } catch (err) {
+      if (err instanceof TokenBudgetError) {
+        const payload = { ok: true as const, budget: err.message };
+        publish(ctx, "run:end", payload);
+        sendJson(res, 200, payload);
+        return;
+      }
       if (err instanceof HumanInputNeededError) {
         const payload = {
           ok: true as const,
