@@ -355,7 +355,15 @@ function handle(req: http.IncomingMessage, res: http.ServerResponse, ctx: Handle
     sendJson(res, 403, { error: "Host 不被允许 / host not allowed" });
     return;
   }
-  const url = new URL(req.url ?? "/", "http://127.0.0.1");
+  // A path like "//" is protocol-relative and throws. Answer 400 instead of letting it become a 500.
+  let url: URL;
+  try {
+    url = new URL(req.url ?? "/", "http://127.0.0.1");
+  } catch {
+    req.resume();
+    send(res, 400, "请求路径不合法 / invalid request path", { "Content-Type": "text/plain; charset=utf-8" });
+    return;
+  }
   const pathname = url.pathname.length > 1 ? url.pathname.replace(/\/+$/, "") : url.pathname;
 
   if (pathname === "/api/events") {

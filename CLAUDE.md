@@ -42,6 +42,7 @@ pnpm build       # 编译所有包；命令行端到端测试跑的是 dist/ / t
 pnpm typecheck
 pnpm test        # vitest；没有 ffmpeg 时跳过渲染测试 / vitest; the render test is skipped when ffmpeg is missing
 node scripts/pack-smoke.mjs   # 像发布一样打包并安装后试跑（需要先 build）/ pack, install and run like a release (after build)
+pnpm test:e2e    # Playwright 打开真实看板（需要先 build，第一次先 pnpm exec playwright install chromium）/ Playwright on the real board (after build; first run pnpm exec playwright install chromium)
 ```
 
 ## 约定 / Conventions

@@ -38,6 +38,10 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 - After a restore, the card and the stage panel show which version the files are, e.g. "v2 · restored (latest is v3)"; the history marks that version "current" and no longer offers to restore it.
 - 卡片上能直接看到产物的样子（最高 120px）：图片原样显示，视频用 ffmpeg 抽第 1 秒的一帧（没有 ffmpeg 就显示视频图标，帧缓存在 `.flowgit/thumbs/`），音频显示波形和时长，文本和 Markdown 显示去掉语法后的前三行，JSON 显示顶层键和数组长度，文件夹显示前四张图和文件数。点缩略图打开原来的产物侧栏。说明超过三行时收起来，点「展开」看全部。新接口 `GET /api/thumb?stage=&output=`。
 - Cards show what each output looks like (120px tall at most): the image itself, a frame from 1 second into a video when ffmpeg is available (a video icon when it is not; frames are cached in `.flowgit/thumbs/`), a waveform and duration for audio, the first three lines of text and Markdown with the syntax removed, top-level keys and array lengths for JSON, and the first four images plus a file count for a folder. Clicking a thumbnail opens the existing output panel. Instructions longer than three lines fold until you click "more". New route `GET /api/thumb?stage=&output=`.
+- 看板端到端测试：`pnpm test:e2e` 用 Playwright 打开真实看板（不包含在 `pnpm test` 里）。CI 在 Ubuntu 上单独跑。
+- Board end-to-end tests: `pnpm test:e2e` opens the real board with Playwright (not part of `pnpm test`). CI runs them on Ubuntu in their own job.
+- 看板收到无法解析的请求路径（例如 `//`）时返回 400，不再是 500。
+- A request path the board cannot parse (for example `//`) returns 400 instead of 500.
 
 ### 模板和示例 / Templates and examples
 

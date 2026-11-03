@@ -392,6 +392,10 @@ flowgit board                    # 加 --no-open 不自动打开浏览器 / add 
 
 It prints a link ending in `?token=…` and opens it. With `--no-open`, copy that link into your browser; it changes every time the board starts.
 
+看板的端到端测试在 `packages/web/e2e/`，用 Playwright 打开真实页面。在仓库根目录先 `pnpm build`，第一次再 `pnpm exec playwright install chromium`（会下载浏览器），然后 `pnpm test:e2e`。在 `packages/web` 里跑同一条 `pnpm test:e2e` 也行。它不会跟着 `pnpm test` 一起跑。
+
+The board's end-to-end tests live in `packages/web/e2e/` and open the real page with Playwright. From the repo root, run `pnpm build`, then `pnpm exec playwright install chromium` the first time (it downloads a browser), then `pnpm test:e2e`. The same `pnpm test:e2e` works inside `packages/web`. They do not run as part of `pnpm test`.
+
 每个版本的文件快照在 `runs/<阶段>/<版本>/outputs/`，运行记录（用了哪个模型、花了多少 token、读了哪些上游文件）在同一个文件夹的 `run.json` 里。版本多了就用 `flowgit prune`：每个阶段默认留下最新的 5 个，并留下每次手动修改、和当前文件一致的那一版、以及最近一次成功的运行，删掉的编号不会再被用到。
 
 Each version's file snapshot is in `runs/<stage>/<n>/outputs/`, and the run record (which model, how many tokens, which upstream files) is in `run.json` in the same folder. When versions pile up, `flowgit prune` cleans them up: each stage keeps its newest 5, plus every manual edit, the version that matches the current files, and the newest successful run, and a deleted number is never used again.
