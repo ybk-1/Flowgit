@@ -62,6 +62,8 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 - Board end-to-end tests: `pnpm test:e2e` opens the real board with Playwright (not part of `pnpm test`). CI runs them on Ubuntu in their own job.
 - 看板收到无法解析的请求路径（例如 `//`）时返回 400，不再是 500。
 - A request path the board cannot parse (for example `//`) returns 400 instead of 500.
+- 看板的背景更干净：浅色主题的阶段大数字变小，只留 3px 的厚度、去掉模糊阴影；等上游的数字是实心浅灰，不再是空心描边；等上游的卡片平放在页面上，只有一条细边，不再是灰色凹槽；不能运行的按钮是灰色细框，不再是褪色的蓝块；浮起的卡片阴影改成中性色，不再有一大片蓝光；深色主题去掉可以运行的卡片下面的橙色光晕，按钮的蓝光也减弱；流程图地面的网格更淡、边缘渐隐更柔和。
+- The board's background is cleaner: in the light theme the big stage numbers are smaller, 3px deep with no blurred shadow; numbers of stages waiting for upstream are solid light grey instead of outlined; those cards lie flat on the page with a hairline instead of sitting in a grey well; buttons that can't run are a grey outline instead of a faded blue block; and a floating card's shadow is neutral instead of a wide blue haze. In the dark theme the amber glow under the stage you can run is gone and the buttons' blue glow is softer. The graph's floor grid is fainter and fades out more gently.
 
 ### 网页版 / Web app
 
