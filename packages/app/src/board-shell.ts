@@ -8,6 +8,7 @@ import { BrowserBoard } from "./router.js";
 import { flowDir, openWorkspace, validFlowId, type Workspace } from "./workspace.js";
 import { folderAccess, folderStore, watchFolder } from "./folder.js";
 import { getFolder, isFolderId } from "./folders.js";
+import { type Files, zipFlow } from "./import.js";
 
 const i18n = I18N as I18nApi;
 const params = new URLSearchParams(location.search);
@@ -101,26 +102,30 @@ const ready: Promise<Workspace> = opened.then((ws) => {
 function paintNote(ws: Workspace): void {
   const note = document.getElementById("app-note");
   if (!note) return;
-  const parts: string[] = [];
+  // [Chinese, English] pairs, chosen whole: stage and folder names may be in either language,
+  // which would confuse picking one half out of a joined "中文 / English" line.
+  const parts: [string, string][] = [];
   if (folderName) {
-    parts.push(`文件在电脑上的文件夹「${folderName}」里，命令行的改动会自动显示 / Files are in the folder "${folderName}" on this computer; changes from the CLI show up here`);
+    parts.push([`文件在电脑上的文件夹「${folderName}」里，命令行的改动会自动显示`, `Files are in the folder "${folderName}" on this computer; changes from the CLI show up here`]);
   }
-  if (!ws.persistent) parts.push("这个浏览器不能保存文件，关掉页面就没了 / This browser can't keep files; they are gone when the page closes");
+  if (!ws.persistent) parts.push(["这个浏览器不能保存文件，关掉页面就没了", "This browser can't keep files; they are gone when the page closes"]);
   try {
     const computer = loadFlow(dir).flow.stages.filter((stage) => ["script", "agent", "mcp", "plugin"].includes(stage.executor.type));
     if (computer.length) {
-      const names = computer.map((stage) => stage.name).join("、");
-      const ids = computer.map((stage) => stage.name).join(", ");
-      parts.push(`要在电脑上运行：${names} / Needs a computer: ${ids}`);
+      parts.push([
+        `要在电脑上运行：${computer.map((stage) => i18n.pick(stage.name)).join("、")}`,
+        `Needs a computer: ${computer.map((stage) => stage.id).join(", ")}`,
+      ]);
     }
   } catch {
     // the board shows flow errors itself
   }
-  if (demoOn()) parts.push("正在用示例回复，不调用模型 / Using demo replies, no model calls");
-  else if (!keys?.key) parts.push("还没有填模型 key / No model key yet");
+  if (demoOn()) parts.push(["正在用示例回复，不调用模型", "Using demo replies, no model calls"]);
+  else if (!keys?.key) parts.push(["还没有填模型 key", "No model key yet"]);
   note.hidden = parts.length === 0;
   note.classList.toggle("warn", !ws.persistent);
-  i18n.raw(note, parts.join(" · "));
+  const en = i18n.lang() === "en";
+  note.textContent = parts.map(([zh, english]) => (en ? english : zh)).join(" · ");
 }
 
 function setUpKeys(ws: Workspace): void {
@@ -172,8 +177,39 @@ function setUpKeys(ws: Workspace): void {
   });
 }
 
+/** Every file of the flow on the page's host, by path relative to the flow directory. */
+function flowFilesOnHost(ws: Workspace): Files {
+  const out: Files = {};
+  const walk = (abs: string, rel: string) => {
+    for (const entry of ws.host.readdir(abs, { withFileTypes: true })) {
+      const childAbs = `${abs}/${entry.name}`;
+      const childRel = rel ? `${rel}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) walk(childAbs, childRel);
+      else out[childRel] = ws.host.readFile(childAbs);
+    }
+  };
+  walk(dir, "");
+  return out;
+}
+
+/** Download the flow (with its runs/ history) as a zip; keys are never in flow files. */
+function setUpExport(ws: Workspace): void {
+  document.getElementById("app-export")?.addEventListener("click", () => {
+    const zip = zipFlow(flowFilesOnHost(ws));
+    const url = URL.createObjectURL(new Blob([zip as unknown as BlobPart], { type: "application/zip" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${flowId}.zip`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  });
+}
+
 void ready.then((ws) => {
   const start = () => {
+    setUpExport(ws);
     paintNote(ws);
     setUpKeys(ws);
     i18n.onChange(() => paintNote(ws));

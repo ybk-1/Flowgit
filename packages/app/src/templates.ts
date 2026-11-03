@@ -4,6 +4,8 @@ export interface TemplateEntry {
   description: string;
   /** True when the template has demo-replies/ (free canned model answers). */
   demo: boolean;
+  /** How many stages the flow has. */
+  stages: number;
 }
 
 export async function templateIndex(): Promise<TemplateEntry[]> {

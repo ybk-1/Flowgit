@@ -15,7 +15,8 @@
   "dependencies": {
     "@cfworker/json-schema": "^4.1.4",
     "@flowgit/core": "workspace:*",
-    "@flowgit/web": "workspace:*"
+    "@flowgit/web": "workspace:*",
+    "fflate": "^0.8.3"
   },
   "devDependencies": {
     "@playwright/test": "^1.64.1",

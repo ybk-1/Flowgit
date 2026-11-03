@@ -11,36 +11,62 @@
 <body class="web-app home">
   <header class="top">
     <div class="brand-block">
-      <p class="brand">Flowgit</p>
-      <h1 data-i18n-raw="网页版 / Web app">网页版</h1>
-      <p class="tagline" data-i18n-raw="打开一个流程就是一块看板。文件和 key 都留在你的设备上。 / Open a flow and it is a board. Files and keys stay on your device.">打开一个流程就是一块看板。文件和 key 都留在你的设备上。</p>
+      <p class="brand" data-i18n-raw="Flowgit · 网页版 / Flowgit · Web app">Flowgit · 网页版</p>
+      <h1 data-i18n-raw="万物皆可流程化 / Turn anything into a flow">万物皆可流程化</h1>
+      <p class="tagline" data-i18n-raw="选一个模板或打开一个流程，就是一块看板。文件和 key 都留在你的设备上。 / Pick a template or open a flow and it becomes a board. Files and keys stay on your device.">选一个模板或打开一个流程，就是一块看板。文件和 key 都留在你的设备上。</p>
     </div>
     <div class="top-side">
       <div class="lang-switch" role="group" aria-label="语言 / Language">
         <button type="button" data-lang="zh" lang="zh-CN" aria-pressed="true">中文</button>
         <button type="button" data-lang="en" lang="en" aria-pressed="false">EN</button>
       </div>
+      <div class="top-actions">
+        <button id="open-folder" class="btn" type="button" hidden data-i18n-raw="打开电脑上的文件夹 / Open a folder">打开电脑上的文件夹</button>
+        <label class="btn file-button"><span data-i18n-raw="导入 zip / Import a zip">导入 zip</span><input id="zip-input" type="file" accept=".zip,application/zip" hidden /></label>
+      </div>
+      <p id="folders-unsupported" class="hint" hidden data-i18n-raw="打开文件夹需要电脑上的 Chrome 或 Edge / Opening folders needs Chrome or Edge on a computer">打开文件夹需要电脑上的 Chrome 或 Edge</p>
     </div>
   </header>
-  <p id="home-note" class="notice" hidden></p>
+  <p id="home-note" class="banner" hidden></p>
   <main class="home-main">
-    <section aria-labelledby="mine-heading">
-      <h2 id="mine-heading" data-i18n-raw="我的流程 / My flows">我的流程</h2>
-      <p id="mine-empty" class="hint" data-i18n-raw="还没有流程。从下面选一个模板开始。 / No flows yet. Start from a template below.">还没有流程。从下面选一个模板开始。</p>
-      <ul id="mine" class="flow-list"></ul>
+    <section class="home-section" aria-labelledby="mine-heading">
+      <header class="section-head">
+        <span class="section-num">01</span>
+        <h2 id="mine-heading" data-i18n-raw="我的流程 / My flows">我的流程</h2>
+        <p class="hint" data-i18n-raw="存在这个浏览器里，或者是电脑上的文件夹 / Kept in this browser, or a folder on your computer">存在这个浏览器里，或者是电脑上的文件夹</p>
+      </header>
+      <div id="mine-empty" class="empty-well" data-i18n-raw="还没有流程。从下面选一个模板开始，或者打开电脑上的流程文件夹。 / No flows yet. Start from a template below, or open a flow folder on your computer.">还没有流程。从下面选一个模板开始，或者打开电脑上的流程文件夹。</div>
+      <ul id="mine" class="tile-grid mine"></ul>
     </section>
-    <section aria-labelledby="folders-heading">
-      <h2 id="folders-heading" data-i18n-raw="电脑上的文件夹 / Folders on this computer">电脑上的文件夹</h2>
-      <p class="hint" data-i18n-raw="直接打开电脑上的流程文件夹：网页和 flowgit 命令改的是同一份文件。 / Open a flow folder on this computer: the page and the flowgit command work on the same files.">直接打开电脑上的流程文件夹：网页和 flowgit 命令改的是同一份文件。</p>
-      <p id="folders-unsupported" class="hint" hidden data-i18n-raw="这个浏览器不能打开文件夹，请用电脑上的 Chrome 或 Edge。 / This browser can't open folders; use Chrome or Edge on a computer.">这个浏览器不能打开文件夹，请用电脑上的 Chrome 或 Edge。</p>
-      <button id="open-folder" type="button" hidden data-i18n-raw="打开文件夹 / Open a folder">打开文件夹</button>
-      <ul id="folders" class="flow-list"></ul>
+
+    <section class="home-section" aria-labelledby="templates-heading">
+      <header class="section-head">
+        <span class="section-num">02</span>
+        <h2 id="templates-heading" data-i18n-raw="模板 / Templates">模板</h2>
+        <p class="hint" data-i18n-raw="每个模板都按真实的行业做法设计，可以逐步修改、重跑 / Each template follows real professional practice; every step can be edited and re-run">每个模板都按真实的行业做法设计，可以逐步修改、重跑</p>
+      </header>
+      <ul id="templates" class="tile-grid templates"></ul>
     </section>
-    <section aria-labelledby="templates-heading">
-      <h2 id="templates-heading" data-i18n-raw="模板 / Templates">模板</h2>
-      <ul id="templates" class="flow-list templates"></ul>
+
+    <section class="home-section" aria-labelledby="import-heading">
+      <header class="section-head">
+        <span class="section-num">03</span>
+        <h2 id="import-heading" data-i18n-raw="从 GitHub 复制 / Copy from GitHub">从 GitHub 复制</h2>
+        <p class="hint" data-i18n-raw="复制的流程会记下来源；要运行命令的步骤，先确认才会运行 / A copy records where it came from; steps that run commands wait for your confirmation">复制的流程会记下来源；要运行命令的步骤，先确认才会运行</p>
+      </header>
+      <form id="github-form" class="github-form">
+        <label class="field"><span data-i18n-raw="公开的 GitHub 仓库地址 / Public GitHub repository URL">公开的 GitHub 仓库地址</span>
+          <input id="github-url" type="url" placeholder="https://github.com/owner/repo/tree/main/path" spellcheck="false" required /></label>
+        <button id="github-copy" class="btn primary" type="submit" data-i18n-raw="复制成我的流程 / Copy as my flow">复制成我的流程</button>
+      </form>
+      <h3 class="sub-head" data-i18n-raw="社区模板 / Community templates">社区模板</h3>
+      <p id="community-note" class="hint" hidden></p>
+      <ul id="community" class="tile-grid templates community"></ul>
     </section>
   </main>
+  <footer class="home-foot">
+    <p class="hint" data-i18n-raw="开源 · Apache-2.0 · 不收集任何数据 / Open source · Apache-2.0 · No data collected">开源 · Apache-2.0 · 不收集任何数据</p>
+  </footer>
   <script src="/vendor/i18next.js"></script>
   <script type="module" src="/i18n.js"></script>
   <script type="module" src="/home.js"></script>

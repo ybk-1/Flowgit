@@ -1,4 +1,48 @@
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { expect, test, type Page } from "@playwright/test";
+
+const dist = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "dist");
+/** The bundled weekly-report template, as the build wrote it: { files: { rel: base64 } }. */
+function templateFiles(): Record<string, string> {
+  return (JSON.parse(fs.readFileSync(path.join(dist, "templates", "weekly-report.json"), "utf8")) as { files: Record<string, string> }).files;
+}
+
+// Keep tests offline: GitHub answers from fixtures. A test can add its own routes on top.
+test.beforeEach(async ({ page }) => {
+  await page.route("https://raw.githubusercontent.com/cgold9820-dotcom/Flowgit/main/registry/community.json", (route) =>
+    route.fulfill({
+      json: [
+        {
+          id: "weekly-copy",
+          name: { zh: "周报（社区副本）", en: "Weekly report (community copy)" },
+          description: { zh: "测试用", en: "for tests" },
+          git: "https://github.com/someone/flows.git#path=weekly",
+        },
+      ],
+    }),
+  );
+});
+
+/** Answer GitHub's API and raw files for someone/flows with the weekly-report template under weekly/. */
+async function fakeGitHub(page: Page): Promise<void> {
+  const files = templateFiles();
+  await page.route("https://api.github.com/**", (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === "/repos/someone/flows") return route.fulfill({ json: { default_branch: "main" } });
+    if (url.pathname === "/repos/someone/flows/commits/main") return route.fulfill({ json: { sha: "abc123" } });
+    if (url.pathname === "/repos/someone/flows/git/trees/abc123") {
+      return route.fulfill({ json: { tree: Object.keys(files).map((rel) => ({ path: `weekly/${rel}`, type: "blob", size: 100 })) } });
+    }
+    return route.fulfill({ status: 404, body: "" });
+  });
+  await page.route("https://raw.githubusercontent.com/someone/flows/abc123/**", (route) => {
+    const rel = decodeURIComponent(new URL(route.request().url()).pathname.replace("/someone/flows/abc123/weekly/", ""));
+    const b64 = files[rel];
+    return b64 === undefined ? route.fulfill({ status: 404, body: "" }) : route.fulfill({ body: Buffer.from(b64, "base64") });
+  });
+}
 
 function card(page: Page, id: string) {
   return page.locator("article.card").filter({ has: page.locator("p.stage-id", { hasText: new RegExp(`^${id}$`) }) });
@@ -156,4 +200,53 @@ test("首页打开文件夹：不是流程就说明；浏览器不支持就提�
   await other.goto("./");
   await expect(other.locator("#folders-unsupported")).toBeVisible();
   await expect(other.locator("#open-folder")).toBeHidden();
+});
+
+test("导出 zip 再导入，版本都在 / export a zip and import it back, versions included", async ({ page }) => {
+  await page.goto("./");
+  await page.locator('li[data-template="weekly-report"] button').click();
+  await expect(page.locator("#flow-name")).toHaveText("周报（入门示例）");
+  await page.locator('[data-input="name"]').fill("小林");
+  await page.locator("#inputs-save").click();
+  await expect(page.locator("#inputs-status")).toContainText("已保存");
+  await card(page, "notes").locator("button.thumb", { hasText: "notes.md" }).click();
+  await page.locator("#panel textarea").fill("- 导出前写的\n");
+  await page.locator("#panel button.save").click();
+  await expect(page.locator("#panel .save-ok")).toHaveText("已保存");
+  await page.locator("#panel-close").click();
+  await runButton(page, "notes").click();
+  await expect(page.locator("#log")).toContainText("运行结束");
+
+  const download = page.waitForEvent("download");
+  await page.locator("#app-export").click();
+  const zip = await (await download).path();
+  expect((await download).suggestedFilename()).toBe("weekly-report.zip");
+
+  await page.goto("./");
+  await page.locator("#zip-input").setInputFiles(zip);
+  await expect(page).toHaveURL(/board\.html\?flow=weekly-report-2/);
+  await expect(page.locator("#flow-name")).toHaveText("周报（入门示例）");
+  await expect(card(page, "notes").locator("button.thumb .thumb-text")).toContainText("导出前写的");
+  await card(page, "notes").getByRole("button", { name: "历史" }).click();
+  await expect(page.locator("#panel")).toContainText("v1");
+});
+
+test("从 GitHub 和社区模板复制：记下来源，只复制流程文件 / copy from GitHub and the community list: the source is recorded and only flow files are copied", async ({ page }) => {
+  await fakeGitHub(page);
+  await page.goto("./");
+  await page.locator("#github-url").fill("https://github.com/someone/flows/tree/main/weekly");
+  await page.locator("#github-copy").click();
+  await expect(page).toHaveURL(/board\.html\?flow=weekly-report$/);
+  await expect(page.locator("#flow-name")).toHaveText("周报（入门示例）");
+  const flowJson = await page.evaluate(async () => {
+    const root = await (await (await navigator.storage.getDirectory()).getDirectoryHandle("flows")).getDirectoryHandle("weekly-report");
+    return (await (await root.getFileHandle("flow.json")).getFile()).text();
+  });
+  expect(JSON.parse(flowJson)).toMatchObject({ forkedFrom: { source: "https://github.com/someone/flows.git", ref: "main", commit: "abc123" } });
+
+  await page.goto("./");
+  await expect(page.locator('li[data-community="weekly-copy"] h3')).toHaveText("周报（社区副本）");
+  await page.locator('li[data-community="weekly-copy"] button').click();
+  await expect(page).toHaveURL(/board\.html\?flow=weekly-report-2$/);
+  await expect(page.locator("#flow-name")).toHaveText("周报（入门示例）");
 });

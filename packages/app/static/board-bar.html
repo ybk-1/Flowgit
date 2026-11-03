@@ -1,8 +1,9 @@
 <nav class="app-bar" aria-label="网页版 / Web app">
   <a class="app-home" href="/index.html" data-i18n-raw="← 我的流程 / ← My flows">← 我的流程</a>
   <p id="app-note" class="app-note" hidden></p>
-  <button id="app-access" class="app-access" type="button" hidden data-i18n-raw="允许读写这个文件夹 / Allow access to this folder">允许读写这个文件夹</button>
-  <button id="app-keys" class="app-keys" type="button" data-i18n-raw="模型 key / Model key">模型 key</button>
+  <button id="app-access" class="app-access btn small primary" type="button" hidden data-i18n-raw="允许读写这个文件夹 / Allow access to this folder">允许读写这个文件夹</button>
+  <button id="app-export" class="app-export btn small" type="button" data-i18n-raw="导出 zip / Export zip">导出 zip</button>
+  <button id="app-keys" class="app-keys btn small" type="button" data-i18n-raw="模型 key / Model key">模型 key</button>
 </nav>
 <dialog id="keys-dialog" class="keys-dialog">
   <form id="keys-form" method="dialog">
@@ -15,9 +16,9 @@
     <label class="check" id="keys-demo-row" hidden><input id="keys-demo" type="checkbox" /> <span data-i18n-raw="用模板自带的示例回复，不调用模型 / Use the template's demo replies instead of a model">用模板自带的示例回复，不调用模型</span></label>
     <p class="hint" data-i18n-raw="其他厂商（OpenAI、智谱、Kimi、通义）不允许网页直接调用，请在电脑上用 flowgit 命令运行。 / Other vendors (OpenAI, GLM, Kimi, Qwen) don't accept calls from a web page; run those with the flowgit command on a computer.">其他厂商（OpenAI、智谱、Kimi、通义）不允许网页直接调用，请在电脑上用 flowgit 命令运行。</p>
     <div class="dialog-actions">
-      <button id="keys-forget" type="button" data-i18n-raw="清除 key / Clear key">清除 key</button>
-      <button id="keys-cancel" type="button" data-i18n-raw="取消 / Cancel">取消</button>
-      <button id="keys-save" type="submit" data-i18n-raw="保存 / Save">保存</button>
+      <button id="keys-forget" class="btn quiet" type="button" data-i18n-raw="清除 key / Clear key">清除 key</button>
+      <button id="keys-cancel" class="btn" type="button" data-i18n-raw="取消 / Cancel">取消</button>
+      <button id="keys-save" class="btn primary" type="submit" data-i18n-raw="保存 / Save">保存</button>
     </div>
   </form>
 </dialog>

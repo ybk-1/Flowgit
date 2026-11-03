@@ -16,6 +16,8 @@ const templatesDir = path.join(root, "..", "cli", "templates");
 
 /** Hosts a page may call: only the model vendors that accept direct browser calls (checked 2026-11-03). */
 export const MODEL_HOSTS = ["https://api.deepseek.com", "https://api.anthropic.com"];
+/** Public GitHub, read-only: a repository's file list (API) and its files (raw). */
+export const GITHUB_HOSTS = ["https://api.github.com", "https://raw.githubusercontent.com"];
 
 const CSP = [
   "default-src 'none'",
@@ -23,7 +25,7 @@ const CSP = [
   "style-src 'self'",
   "img-src 'self' blob: data:",
   "media-src 'self' blob:",
-  `connect-src 'self' ${MODEL_HOSTS.join(" ")}`,
+  `connect-src 'self' ${[...MODEL_HOSTS, ...GITHUB_HOSTS].join(" ")}`,
   "base-uri 'none'",
   "form-action 'none'",
 ].join("; ");
@@ -75,12 +77,19 @@ for (const id of fs.readdirSync(templatesDir).sort()) {
   }
   let name = id;
   let description = "";
+  let stages = 0;
   if (flowFile === "flow.json") {
     const flow = JSON.parse(fs.readFileSync(path.join(dir, flowFile), "utf8"));
     name = flow.name ?? id;
     description = flow.description ?? "";
+    stages = Array.isArray(flow.stages) ? flow.stages.length : 0;
   }
-  index.push({ id, name, description, demo: Object.keys(files).some((rel) => rel.startsWith("demo-replies/")) });
+  // flow.json names are in the template's own language; the README heading is "中文 / English",
+  // so the home page can show the visitor's language.
+  const readme = path.join(dir, "README.md");
+  const heading = fs.existsSync(readme) ? /^#\s+(.+?)\s*$/m.exec(fs.readFileSync(readme, "utf8"))?.[1] : undefined;
+  if (heading && heading.includes("/ ")) name = heading;
+  index.push({ id, name, description, stages, demo: Object.keys(files).some((rel) => rel.startsWith("demo-replies/")) });
   fs.writeFileSync(path.join(out, "templates", `${id}.json`), JSON.stringify({ id, files }));
 }
 fs.writeFileSync(path.join(out, "templates", "index.json"), JSON.stringify(index));
