@@ -242,6 +242,10 @@ export interface RunRecord {
   /** Short log captured from the executor. */
   log?: string;
   error?: string;
+  /** Who asked for the run, when it was not the CLI or the board: "mcp" for `flowgit serve --mcp`. */
+  via?: "mcp";
+  /** The MCP client that made the call, as it named itself (e.g. "claude-code 2.1.0"). */
+  client?: string;
 }
 
 /**

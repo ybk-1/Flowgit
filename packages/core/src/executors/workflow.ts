@@ -84,6 +84,7 @@ export const workflowExecutor: StageExecutor = {
       env: ctx.options.env,
       model: ctx.options.model,
       force: ctx.options.force,
+      caller: ctx.options.caller,
       flowStack: [...stack, flowFileId(resolved.abs)],
       onEvent: (event) => {
         if (event.type === "stage:log") ctx.log(`${prefix} ${event.line}`);

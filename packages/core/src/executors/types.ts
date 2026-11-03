@@ -58,6 +58,8 @@ export interface RunOptions {
   env?: Record<string, string>;
   /** Re-run stages that are already ok (runAll). */
   force?: boolean;
+  /** Recorded in run.json: who asked for the run (`flowgit serve --mcp` sets via "mcp" and the client's name). */
+  caller?: { via: "mcp"; client?: string };
   /** Progress callback. */
   onEvent?: (event: RunEvent) => void;
   /**

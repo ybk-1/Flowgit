@@ -429,9 +429,9 @@ Restoring (`flowgit restore <stage> <n>`, or "Restore" on the board) copies `run
 
 `flowgit prune [--keep <n>] [--stage <id>] [--dry-run] [--yes]` deletes whole `runs/<stage>/<n>/` folders that are no longer kept. Each stage keeps its newest `--keep` versions (default 5, minimum 1), plus every version whose `executor` is `manual`, the newest version whose output hashes match the current files, and the newest successful version. Version numbers are never reused: the next run is still one past the highest number. `--dry-run` only lists the versions and the space they would free (KB / MB / GB). A terminal asks once `[y/N]`; outside a terminal nothing is deleted unless `--yes` is passed. When `runs/` is over 500 MB, the last line of `flowgit status` points at `flowgit prune`.
 
-`run.json` 的主要字段：`stage`、`n`、`status`、`executor`、`startedAt`、`finishedAt`、`inputHash`、`inputs`（上游产物和它们的 sha256）、`flowInputs`、`outputs`（路径、类型、sha256、大小）、`params`（provider、模型、用量、命令等）、`log`、`error`。
+`run.json` 的主要字段：`stage`、`n`、`status`、`executor`、`startedAt`、`finishedAt`、`inputHash`、`inputs`（上游产物和它们的 sha256）、`flowInputs`、`outputs`（路径、类型、sha256、大小）、`params`（provider、模型、用量、命令等）、`log`、`error`。经过 `flowgit serve --mcp` 的运行还有 `via: "mcp"` 和 `client`（MCP 客户端报的名字和版本）。
 
-Main `run.json` fields: `stage`, `n`, `status`, `executor`, `startedAt`, `finishedAt`, `inputHash`, `inputs` (upstream artifacts and their sha256), `flowInputs`, `outputs` (path, type, sha256, size), `params` (provider, model, usage, command, ...), `log`, `error`.
+Main `run.json` fields: `stage`, `n`, `status`, `executor`, `startedAt`, `finishedAt`, `inputHash`, `inputs` (upstream artifacts and their sha256), `flowInputs`, `outputs` (path, type, sha256, size), `params` (provider, model, usage, command, ...), `log`, `error`. A run made through `flowgit serve --mcp` also has `via: "mcp"` and `client` (the name and version the MCP client reported).
 
 ### 阶段状态 / Stage states
 

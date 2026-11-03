@@ -293,6 +293,12 @@ A `service` stage calls an HTTP endpoint. `POST` sends the flow inputs and text 
 
 An `mcp` stage calls an MCP tool. Servers live in `mcpServers`, the same shape as Claude Desktop and Cursor: `command` / `args` / `env` locally, or `url` (Streamable HTTP) for a remote server. An `env` value must be `${VAR}`; secrets are not written into flow.json. `flowgit mcp tools <server>` lists tools and parameters, and `flowgit doctor` checks that the command is on PATH and the variables are set. A flow copied from a Git URL lists the servers it would start and does not start them until you confirm. See [docs/mcp.md](docs/mcp.md). A runnable example is [`examples/mcp-echo`](examples/mcp-echo).
 
+### 把流程变成 MCP 服务器 / Serve a flow over MCP
+
+`flowgit serve --mcp` 把流程变成本机的 MCP 服务器，Claude Code、Claude Desktop、Cursor 可以直接调用：`run_flow` 的参数就是流程输入，跑到人工阶段会停下并说明要准备什么（客户端支持时直接问你），`get_output` 读产物，`status` 看状态。有 script、agent、service 或 mcp 阶段的流程要加 `--allow-exec`。`--print-config` 打印三种客户端的配置。每次运行在 `run.json` 记下 `via: "mcp"` 和客户端名字。说明见 [docs/mcp.md](docs/mcp.md#把流程变成-mcp-服务器--serve-a-flow-as-an-mcp-server)。
+
+`flowgit serve --mcp` turns a flow into a local MCP server that Claude Code, Claude Desktop and Cursor call directly: `run_flow` takes the flow inputs as parameters and stops at a human stage, saying what to prepare (or asking you, when the client supports it); `get_output` reads outputs and `status` shows the state. A flow with a script, agent, service or mcp stage needs `--allow-exec`. `--print-config` prints the setup for all three clients. Each run records `via: "mcp"` and the client's name in `run.json`. See [docs/mcp.md](docs/mcp.md#把流程变成-mcp-服务器--serve-a-flow-as-an-mcp-server).
+
 ## 子流程 / Sub-flows
 
 `workflow` 阶段在 `engine` 为 `flowgit` 时运行另一份 `flow.json`。`params.inputs` 把父流程的输入传进去（字符串里可以写 `{{inputs.名称}}`），`params.copy` 把子流程的产物复制成这个阶段的产物。子流程用自己的 `runs/`。可以嵌套，最多 5 层；绕回去会报错。示例：[`examples/subflow`](examples/subflow)。
@@ -401,14 +407,14 @@ Everything on GitHub (commit messages, PRs, docs) is bilingual, Chinese first.
 1. **格式 + 命令行**（本仓库现状，0.1.0 准备发布）：Flow 规范 v0.1，JSON 产物可以带 schema；二十一个自带模板（短视频、周报入门、图文、客服 SOP、求职材料、调研报告、电商上架、PPT 演示稿、直播带货、竖屏短剧、老师备课、网文连载、商业计划书、活动策划、招聘、旅行攻略、知识付费课程、落地页、社媒帖子、数据报告、会议纪要）；llm 阶段接任何模型，agent 阶段接 Claude Code、Codex、Cursor、Gemini，service 阶段调用 HTTP 服务，`workflow` 阶段用 `engine: "flowgit"` 运行子流程；script、agent 和 service 阶段可以设超时；`stage add` / `stage rm`、`diff`（版本对比）、`prune`（清理旧版本）、`doctor`、`templates`、`graph`（流程图）等命令。更新记录见 [CHANGELOG.md](CHANGELOG.md)。
 2. **阶段看板**：本机看板已经有了（`flowgit board`）：每张卡能看产物、改、运行、看历史、对比和回退；可以新增和删除阶段，在卡片和流程图之间切换；文件一变就实时刷新（SSE 的 `flow:changed`）。「预演 / Preview」列出每个阶段会跳过、运行、等你还是不能运行，以及最多调用几次模型；全部运行要按住 1 秒，按住时卡片和流程图上先标出预演结果，提前松手就不运行。状态解码、跟着运行滚动、侧栏圆形展开和唱片式的历史版本这些动效，系统打开“减少动态效果”时都会关掉。每张卡显示用过的 token，页面顶部是合计。下一步是网站：在网上打开一个流程就是一块看板。
 3. **发布与复用**：已经能从别人的流程开始（`flowgit init -t <Git 地址>`，默认不带产物，第一次运行前先确认它会做的事），分享前自动去隐私（`flowgit share`）。下一步是画廊。
-4. **更多领域**：落地页已经是自带模板；用 agent 做网页仍见 `examples/agent-page`。接下来让作者把流程变成 MCP 服务供别人调用。
+4. **更多领域**：落地页已经是自带模板；用 agent 做网页仍见 `examples/agent-page`。作者已经可以用 `flowgit serve --mcp` 把流程变成 MCP 服务供别的 AI 工具调用；托管和收费以后再做。
 
 English:
 
 1. **Format + CLI** (this repo today, 0.1.0 getting ready to ship): Flow spec v0.1, with optional schemas for JSON outputs; twenty-one bundled templates (short video, weekly-report starter, article posts, support SOP, job application, research report, e-commerce listing, slide deck, live selling, vertical short drama, lesson prep, web novel serial, business plan, event plan, hiring, travel guide, online course, landing page, social posts, data report, meeting notes); llm stages on any model, agent stages on Claude Code, Codex, Cursor or Gemini, service stages that call HTTP services, and `workflow` stages that run a sub-flow with `engine: "flowgit"`; timeouts for script, agent and service stages; commands such as `stage add` / `stage rm`, `diff` (compare versions), `prune` (delete old versions), `doctor`, `templates` and `graph` (a diagram of the flow). See [CHANGELOG.md](CHANGELOG.md) for details.
 2. **Stage board**: the local board is here (`flowgit board`). Each card lets you see its outputs, edit them, run, browse history, compare and restore; stages can be added and removed, the view switches between cards and a flow graph, and it refreshes as soon as files change (the SSE event `flow:changed`). "预演 / Preview" lists whether each stage would be skipped, run, wait for you or cannot run, and at most how many model calls; Run all is held for a second, the cards and the graph show that preview while you hold, and letting go early runs nothing. The motion (states that decode into place, scrolling to the running stage, a side panel that opens as a circle, and history as a stack of discs) turns off when the system asks for reduced motion. Each card shows the tokens its stage has used, and the top of the page shows the total. Next is the web app: open a flow online and it is a board.
 3. **Publish and reuse**: you can already start from someone else's flow (`flowgit init -t <Git URL>`, without their outputs by default, and confirmed once before its first run) and strip private data before sharing (`flowgit share`). Next is a gallery.
-4. **More domains**: the landing page is now a bundled template; building a page with an agent is still `examples/agent-page`. Next, authors can expose a flow as an MCP service for others to call.
+4. **More domains**: the landing page is now a bundled template; building a page with an agent is still `examples/agent-page`. Authors can now serve a flow over MCP with `flowgit serve --mcp` for other AI tools to call; hosting and fees come later.
 
 ## 许可证 / License
 

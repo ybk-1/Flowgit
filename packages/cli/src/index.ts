@@ -82,6 +82,7 @@ import {
 } from "@flowgit/core";
 import { openBrowser, startBoard } from "@flowgit/web";
 import { runBatch } from "./batch.js";
+import { registerServeMcp } from "./commands/serve-mcp.js";
 import { buildGallery } from "./gallery.js";
 import { bilingualCliError, c, colorizeUnifiedDiff, nextHint, statusBoard, table, width } from "./format.js";
 import { restoreProxyChild, routeThroughProxy } from "./proxy.js";
@@ -271,9 +272,9 @@ program
   .version(VERSION, "-V, --version", "显示版本号 / show the version number")
   .option("-C, --dir <dir>", "流程目录（含 flow.json 或 flow.md）/ flow directory (contains flow.json or flow.md)", ".");
 
-// run, batch and board call models and services: send those through the user's proxy, if there is one.
+// run, batch, board and serve call models and services: send those through the user's proxy, if there is one.
 program.hook("preAction", async (_program, action) => {
-  if (action.name() !== "run" && action.name() !== "batch" && action.name() !== "board") return;
+  if (!["run", "batch", "board", "serve"].includes(action.name())) return;
   const code = await routeThroughProxy();
   if (code !== undefined) process.exit(code);
 });
@@ -1583,5 +1584,7 @@ galleryCmd
       fail(err);
     }
   });
+
+registerServeMcp(program, { version: VERSION, dirOf, fail });
 
 program.parseAsync(process.argv).catch(fail);

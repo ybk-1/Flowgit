@@ -38,6 +38,13 @@ export class UpstreamNotReadyError extends Error {
   }
 }
 
+/** run.json's via and client, only when someone other than the CLI or the board asked for the run. */
+function callerFields(options: RunOptions): Pick<RunRecord, "via" | "client"> {
+  const caller = options.caller;
+  if (!caller) return {};
+  return caller.client ? { via: caller.via, client: caller.client } : { via: caller.via };
+}
+
 function collectInputs(loaded: LoadedFlow, stage: Stage): InputArtifact[] {
   const artifacts: InputArtifact[] = [];
   for (const dep of stage.inputs ?? []) {
@@ -171,6 +178,7 @@ export async function runStage(loaded: LoadedFlow, stageId: string, options: Run
       outputs,
       params: result.params,
       log: truncate(logLines.join("\n"), 20_000),
+      ...callerFields(options),
     };
     writeRunRecord(dir, record);
     emit({ type: "stage:done", stage, n, record });
@@ -194,6 +202,7 @@ export async function runStage(loaded: LoadedFlow, stageId: string, options: Run
       ...(params ? { params } : {}),
       log: truncate(logLines.join("\n"), 20_000),
       error: error.message,
+      ...callerFields(options),
     };
     writeRunRecord(dir, record);
     emit({ type: "stage:error", stage, error, record });
