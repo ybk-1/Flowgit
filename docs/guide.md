@@ -617,3 +617,63 @@ The pull request shallow-clones the URL you wrote (https only, at `ref`, or the 
 `flowgit templates --all` 先读 https://flowgit.dev/registry.json（站点构建把这些文件合并成它），读不到再读本仓库的目录。画廊卡片上的 GitHub 星标是构建时读的，读不到就不显示。详情页的评论来自 `site/config.json` 里的 giscus，没配就不显示。
 
 `flowgit templates --all` reads https://flowgit.dev/registry.json first (the site build merges these files into it), then this repo's directory. GitHub stars on gallery cards are read at build time and hidden when they cannot be read. Comments on a template page come from giscus in `site/config.json` and are hidden when that is not set.
+
+## 给流程写测试 / Test your flow
+
+改了提示词或脚本以后，不用自己重跑再对着屏幕看。在流程目录里放 `tests/<名字>.json`，`flowgit test` 会把流程复制到临时目录，用固定回复跑一遍，再检查产物。原来的目录不会被改。`flowgit init -t weekly-report` 会把模板里的 `tests/` 一起复制过来。
+
+After a prompt or a script changes, you don't have to rerun and read the screen. Put `tests/<name>.json` in the flow directory and `flowgit test` copies the flow to a temporary directory, runs it on canned replies, and checks the outputs. The original directory is left untouched. `flowgit init -t weekly-report` copies the template's `tests/` too.
+
+周报模板自带 `tests/sample.json`：把 `sample-notes.md` 放进随手记，用 `demo-replies/` 里的固定回复，然后检查周报和 `check.json`。
+
+The weekly-report template ships `tests/sample.json`: it puts `sample-notes.md` in place as the notes, uses the canned reply in `demo-replies/`, and checks the report and `check.json`.
+
+```bash
+flowgit init ~/my-report -t weekly-report
+cd ~/my-report
+flowgit test
+```
+
+```text
+✓ 示例周报 (sample)
+```
+
+一个用例长这样（字段的完整说明在[规范的「测试」](spec.md#测试--tests)）：
+
+One case looks like this (the full fields are in the [Tests section of the spec](spec.md#测试--tests)):
+
+```json
+{
+  "name": "示例周报",
+  "inputs": { "name": "小林", "language": "zh" },
+  "files": { "notes.md": "sample-notes.md" },
+  "expect": {
+    "draft": [
+      { "file": "report.md", "contains": ["小林", "本周完成", "下周计划", "需要帮助"] }
+    ],
+    "check": [
+      { "file": "check.json", "json": true },
+      { "file": "check.json", "jsonPath": "ok", "equals": true }
+    ]
+  }
+}
+```
+
+`files` 在运行前把流程里已有的文件放进产物的位置，人工阶段就有东西可记。`replies` 不写时用 `demo-replies/`。`skip` 列出不运行的阶段（例如要花钱或要联网的 service），它们的产物用 `files` 提供，并记成一次手动修改。`inputs` 照流程输入的规则检查，填了 `enum` 以外的值会直接失败。
+
+`files` puts a file that is already in the flow into an output path before the run, so a human stage has something to record. When `replies` is omitted, `demo-replies/` is used. `skip` lists stages that do not run (a service that costs money or needs the network, for example); `files` supplies their outputs, recorded as a manual edit. `inputs` uses the flow-input rules, so a value outside an `enum` fails immediately.
+
+检查没通过时，退出码是 1，并列出阶段、文件、期望，以及实际内容的前 200 个字符。下面是故意要求一句周报里没有的话：
+
+When a check fails, the exit code is 1, and the output lists the stage, the file, what was expected, and the first 200 characters of the actual content. This one asks for a sentence the report does not contain:
+
+```text
+✗ 示例周报 (sample)
+  draft report.md
+    期望 / expected: 包含 / contains "这个句子不在周报里"
+    实际 / actual: # 小林 的周报\n\n## 本周完成\n\n- 上线了注册页的新版表单，提交失败率从 6% 降到 2%。\n- 修好了导出 CSV 时中文乱码的问题。\n- 和设计一起定下了设置页的改版方案。\n\n## 下周计划\n\n- 开始做设置页改版，先做通知设置这一块。\n- 给导出功能补上自动化测试。\n\n## 需要帮助\n\n- 设置页改版需要后端同学帮忙加一个接口，想约 30 分钟对一下。\n
+```
+
+`--json` 打印机器可读的结果。`--live` 才调用真的模型，并先说明这次最多调用几次；`--model` 要和它一起用。`--keep` 留下临时目录，方便打开看。
+
+`--json` prints a machine-readable result. `--live` is what calls a real model, and it first says how many model calls the run may make at most; `--model` is used with it. `--keep` leaves the temporary directory so you can open it.
