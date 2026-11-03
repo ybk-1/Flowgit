@@ -13,6 +13,7 @@ import type {
 } from "./types.js";
 import { requireStage, topoOrder } from "./graph.js";
 import { MAX_SUBFLOW_DEPTH } from "./subflow.js";
+import { mcpServerFingerprint } from "./mcp.js";
 import { copyPath, hashPath, isDirOutput, isSafeRelative, outputRel, sha256String } from "./util.js";
 
 export const RUNS_DIR = "runs";
@@ -132,9 +133,11 @@ export function commandFiles(dir: string, command: string): string[] {
  * the command that is a file in the flow directory, e.g. "node scripts/render.mjs").
  * A flowgit sub-flow also includes that flow.json and the same fingerprint of
  * every stage inside it, so editing its prompt or script marks this stage stale.
+ * An mcp stage also includes `mcpServers[server]` with env values removed, so
+ * changing the command, URL, tool or args marks it stale and rotating a secret does not.
  * `seen` holds sub-flow flow.json paths already entered, to stop a cycle.
  */
-export function stageConfigHash(dir: string, stage: Stage, seen: Set<string> = new Set()): string {
+export function stageConfigHash(dir: string, stage: Stage, seen: Set<string> = new Set(), flow?: Flow): string {
   const files: string[] = [];
   const ex = stage.executor;
   if (ex.type === "llm" || ex.type === "agent") files.push(ex.prompt);
@@ -150,9 +153,9 @@ export function stageConfigHash(dir: string, stage: Stage, seen: Set<string> = n
       next.add(abs);
       if (fs.existsSync(abs) && fs.statSync(abs).isFile()) {
         try {
-          const sub = JSON.parse(fs.readFileSync(abs, "utf8")) as { stages?: Stage[] };
+          const sub = JSON.parse(fs.readFileSync(abs, "utf8")) as Flow;
           const subDir = path.dirname(abs);
-          nested = (sub.stages ?? []).map((child) => stageConfigHash(subDir, child, next));
+          nested = (sub.stages ?? []).map((child) => stageConfigHash(subDir, child, next, sub));
         } catch {
           nested = undefined;
         }
@@ -163,7 +166,8 @@ export function stageConfigHash(dir: string, stage: Stage, seen: Set<string> = n
     const abs = path.join(dir, f);
     return [f, fs.existsSync(abs) ? hashPath(abs).sha256 : null];
   });
-  const payload: { executor: Stage["executor"]; files: (string | null)[][]; nested?: string[] } = { executor: ex, files: fileHashes };
+  const payload: { executor: Stage["executor"]; files: (string | null)[][]; nested?: string[]; mcp?: unknown } = { executor: ex, files: fileHashes };
+  if (ex.type === "mcp") payload.mcp = { tool: ex.tool, args: ex.args ?? null, server: mcpServerFingerprint(flow?.mcpServers?.[ex.server]) };
   if (nested) payload.nested = nested;
   return sha256String(JSON.stringify(payload));
 }
@@ -383,7 +387,7 @@ function localStatus(loaded: LoadedFlow, stageId: string, flowInputs: Record<str
   if (!latest) return { ...base, state: missingUpstream.length ? "waiting-upstream" : "never-run" };
   if (latest.status === "error") return { ...base, state: "error" };
   if (missingUpstream.length) return { ...base, state: "waiting-upstream" };
-  const hash = inputHash(inputRefs(dir, flow, stage), flowInputs, stageConfigHash(dir, stage));
+  const hash = inputHash(inputRefs(dir, flow, stage), flowInputs, stageConfigHash(dir, stage, new Set(), flow));
   if (hash !== latest.inputHash) {
     // Which version the files are only matters with two or more to choose from, and hashing big outputs isn't free.
     const current = runs.filter((r) => r.status === "ok").length > 1 ? outputsVsRuns(dir, stage, runs).current : undefined;

@@ -12,6 +12,7 @@ import {
   subflowEnterProblem,
   subflowStack,
 } from "./subflow.js";
+import { mcpEnvIssues, mcpStageIssues } from "./mcp.js";
 import type { ExecutorWorkflow, Flow, LoadedFlow, Output, ValidationIssue } from "./types.js";
 import { isSafeRelative, linkOutsideError, outputRel, staysInside } from "./util.js";
 import { parseFlowMd, renderFlowMd } from "./flowmd.js";
@@ -154,9 +155,10 @@ export function validateFlow(data: unknown, opts: ValidateOptions = {}): Validat
         });
       }
     } else if (ex.type === "mcp") {
-      issues.push({ level: "warning", path: `${base}/executor`, message: `执行器 "${ex.type}" 在 v0.1 里只是预留，还不能运行 / executor "${ex.type}" is reserved in spec v0.1 and cannot run yet` });
+      issues.push(...mcpStageIssues(flow, stage, base));
     }
   });
+  issues.push(...mcpEnvIssues(flow));
   issues.push(...outputSchemaIssues(flow, opts.dir));
   const cycle = findCycle(flow);
   if (cycle.length) {

@@ -33,13 +33,31 @@ describe("flowActions", () => {
           executor: { type: "service", method: "POST", url: "https://api.example.com/v1", headers: { Authorization: "Bearer {{env.EXAMPLE_TOKEN}}" } },
           outputs: [{ type: "application/json", path: "r.json" }],
         },
+        {
+          id: "echo",
+          name: "echo",
+          executor: { type: "mcp", server: "echo", tool: "echo" },
+          outputs: [{ type: "text/markdown", path: "echo.md" }],
+        },
+        {
+          id: "remote",
+          name: "remote",
+          executor: { type: "mcp", server: "remote", tool: "search" },
+          outputs: [{ type: "application/json", path: "search.json" }],
+        },
       ],
+      mcpServers: {
+        echo: { command: "npx", args: ["-y", "@modelcontextprotocol/server-everything"], env: { API_KEY: "${EXAMPLE_TOKEN}" } },
+        remote: { url: "https://example.com/mcp" },
+      },
     };
     expect(flowActions(flow)).toEqual([
       { stage: "render", kind: "script", detail: "node scripts/render.mjs" },
       { stage: "build", kind: "agent", detail: "claude-code --model x" },
       { stage: "own", kind: "agent", detail: "custom: my-agent {{promptFile}}" },
       { stage: "send", kind: "service", detail: "POST https://api.example.com/v1", env: ["EXAMPLE_TOKEN"] },
+      { stage: "echo", kind: "mcp", detail: "npx -y @modelcontextprotocol/server-everything", env: ["EXAMPLE_TOKEN"] },
+      { stage: "remote", kind: "mcp", detail: "https://example.com/mcp" },
     ]);
   });
 

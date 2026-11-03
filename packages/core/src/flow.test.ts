@@ -140,9 +140,9 @@ describe("validateFlow", () => {
 
   it("warns about reserved executors", () => {
     const flow = baseFlow();
-    flow.stages[3].executor = { type: "mcp", server: "x", tool: "y" };
+    flow.stages[3].executor = { type: "workflow", engine: "comfyui", file: "graph.json" };
     const issues = validateFlow(flow);
-    expect(issues).toContainEqual(expect.objectContaining({ level: "warning", message: expect.stringContaining('"mcp" is reserved') }));
+    expect(issues).toContainEqual(expect.objectContaining({ level: "warning", message: expect.stringContaining("comfyui") }));
     expect(issues.filter((i) => i.level === "error")).toEqual([]);
   });
 });
@@ -408,7 +408,7 @@ describe("planRunAll (run all --dry-run)", () => {
 
   it("stops where a reserved executor would fail the run", () => {
     const flow = baseFlow();
-    flow.stages[3].executor = { type: "mcp", server: "x", tool: "y" };
+    flow.stages[3].executor = { type: "workflow", engine: "comfyui", file: "graph.json" };
     writeProject(flow);
     fs.mkdirSync(path.join(dir, "assets"));
     fs.writeFileSync(path.join(dir, "assets/s1.jpg"), "fake");
@@ -416,6 +416,6 @@ describe("planRunAll (run all --dry-run)", () => {
     fs.writeFileSync(path.join(dir, "flow.json"), JSON.stringify(flow));
     const plan = planRunAll(loadFlow(dir), { inputs, env });
     expect(actions(plan)).toEqual(["script:run", "storyboard:run", "assets:run", "edit:cannot-run", "after:not-reached"]);
-    expect(plan[3].detail).toContain("mcp is reserved");
+    expect(plan[3].detail).toContain("comfyui");
   });
 });

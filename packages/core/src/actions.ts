@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { headerEnvNames } from "./executors/service.js";
+import { isStdioServer, mcpEnvNames, mcpLaunchDetail } from "./mcp.js";
 import { resolveSubflowFile } from "./subflow.js";
 import type { Flow } from "./types.js";
 
@@ -8,15 +9,15 @@ import type { Flow } from "./types.js";
 export interface FlowAction {
   /** Stage id; a stage inside a sub-flow is written `<workflow stage>/<stage>`. */
   stage: string;
-  kind: "script" | "agent" | "service" | "workflow";
-  /** The command, the agent (and its extra arguments), the method and URL, or the sub-flow file, as flow.json has them. */
+  kind: "script" | "agent" | "service" | "workflow" | "mcp";
+  /** The command, the agent (and its extra arguments), the method and URL, the sub-flow file, or the MCP command or URL, as flow.json has them. */
   detail: string;
-  /** Environment variables a service call sends in its headers. */
+  /** Environment variables a service call sends in its headers, or an MCP server reads from `${VAR}`. */
   env?: string[];
 }
 
 /**
- * The commands a flow runs, the agents it starts and the services it calls, in stage order.
+ * The commands a flow runs, the agents it starts, the services it calls and the MCP servers it starts, in stage order.
  * Shown when a flow comes from somewhere else, so people can look before they run it.
  * With `dir`, a flowgit sub-flow's own actions are listed under its workflow stage, since
  * running the parent runs them too.
@@ -35,6 +36,15 @@ export function flowActions(flow: Flow, dir?: string): FlowAction[] {
       } else if (ex.type === "service") {
         const env = headerEnvNames(ex.headers);
         actions.push({ stage: id, kind: "service", detail: `${ex.method ?? "GET"} ${ex.url}`, ...(env.length ? { env } : {}) });
+      } else if (ex.type === "mcp") {
+        const server = current.mcpServers?.[ex.server];
+        const env = server && isStdioServer(server) ? mcpEnvNames(server.env) : [];
+        actions.push({
+          stage: id,
+          kind: "mcp",
+          detail: mcpLaunchDetail(server) ?? ex.server,
+          ...(env.length ? { env } : {}),
+        });
       } else if (ex.type === "workflow" && ex.engine === "flowgit") {
         actions.push({ stage: id, kind: "workflow", detail: `子流程 / sub-flow ${ex.file}` });
         if (!at) continue;

@@ -5,6 +5,7 @@ import { llmExecutor } from "./llm.js";
 import { scriptExecutor } from "./script.js";
 import { serviceExecutor } from "./service.js";
 import { workflowExecutor } from "./workflow.js";
+import { mcpExecutor } from "./mcp.js";
 import { ExecutorNotImplementedError, type StageExecutor } from "./types.js";
 
 export * from "./types.js";
@@ -21,6 +22,7 @@ export {
   type AgentAdapter,
 } from "./agent.js";
 export { workflowExecutor } from "./workflow.js";
+export { mcpExecutor, listMcpTools, renderMcpArgs, renderMcpString, type McpToolDescription } from "./mcp.js";
 export {
   llmExecutor,
   anthropicComplete,
@@ -48,6 +50,7 @@ const registry: Partial<Record<ExecutorType, StageExecutor>> = {
   agent: agentExecutor,
   service: serviceExecutor,
   workflow: workflowExecutor,
+  mcp: mcpExecutor,
 };
 
 export function getExecutor(type: ExecutorType): StageExecutor {

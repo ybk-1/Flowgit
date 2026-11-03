@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { DEFAULT_MODEL } from "./executors/llm.js";
+import { mcpLaunchDetail } from "./mcp.js";
 import { isRunnableExecutor } from "./executors/index.js";
 import { topoOrder } from "./graph.js";
 import { loadFlow } from "./load.js";
@@ -94,6 +95,8 @@ function runDetail(loaded: LoadedFlow, stage: Stage, opts: PlanOptions, env: Nod
       return { detail: `agent ${ex.agent}`, callsModel: false };
     case "service":
       return { detail: `${ex.method ?? "POST"} ${ex.url}`, callsModel: false };
+    case "mcp":
+      return { detail: `MCP ${mcpLaunchDetail(loaded.flow.mcpServers?.[ex.server]) ?? ex.server} → ${ex.tool}`, callsModel: false };
     case "human":
       return { detail: "用已经放好的文件 / uses the files already in place", callsModel: false };
     case "workflow":
