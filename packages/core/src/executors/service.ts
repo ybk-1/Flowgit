@@ -1,7 +1,8 @@
 import { host, path } from "../host/current.js";
+import { proxyHint } from "../proxy-env.js";
+import { errorStatus, isRetryableError, retryDelayMs, retryErrorLine, sleep, type RetryRecord } from "../retry.js";
 import type { ExecutorService } from "../types.js";
 import { bytesToText, isTextType, linkOutsideError, outputRel, wantsJson } from "../util.js";
-import { proxyHint } from "../proxy-env.js";
 import type { ExecContext, ExecResult, InputArtifact, StageExecutor } from "./types.js";
 
 const ENV_REF = /\{\{\s*env\.([A-Za-z_][A-Za-z0-9_]*)\s*\}\}/g;
@@ -76,54 +77,91 @@ export const serviceExecutor: StageExecutor = {
     }
     const started = Date.now();
     ctx.log(`调用 / calling ${method} ${ex.url}`);
-    const signal = AbortSignal.timeout(timeoutSec * 1000);
     const body = method === "POST" ? JSON.stringify({ inputs: ctx.flowInputs, upstream: upstreamText(ctx.inputs) }) : undefined;
-    let response: Response;
-    let bytes: Uint8Array;
-    try {
-      // Redirects are followed by hand: a header can carry a key, so it never goes to another origin.
-      let url = target;
-      let verb: string = method;
-      let payload = body;
-      for (let hop = 0; ; hop++) {
-        response = await host().fetch(url, {
-          method: verb,
-          headers: payload !== undefined ? { "content-type": "application/json", ...headers } : headers,
-          body: payload,
-          redirect: "manual",
-          signal,
-        });
-        const location = response.status >= 300 && response.status < 400 ? response.headers.get("location") : null;
-        if (!location) break;
-        // Like fetch: 303, and 301/302 after a POST, continue as a GET without the body.
-        if (response.status === 303 || ((response.status === 301 || response.status === 302) && verb === "POST")) {
-          verb = "GET";
-          payload = undefined;
-        }
-        const next = new URL(location, url);
-        if (next.origin !== target.origin) {
-          throw new Error(
-            `服务要求跳转到另一个地址 ${next.origin}，为了不把请求头（可能有密钥）发过去，没有跟过去。确认可信后把 url 改成新地址 / the service redirected to another origin, ${next.origin}; it was not followed so the headers (which may hold a key) stay put. If you trust it, put the new address in url`,
-          );
-        }
-        if (hop >= 5) throw new Error(`跳转太多次 / too many redirects`);
-        url = next;
+    const retries = Math.max(0, ex.retries ?? 0);
+    const retryLog: RetryRecord[] = [];
+    const random = ctx.options.random ?? Math.random;
+    const wait = ctx.options.sleep ?? sleep;
+    const stamp = (err: unknown): never => {
+      if (retryLog.length) {
+        const error = err as Error & { params?: Record<string, unknown> };
+        error.params = { ...(error.params ?? {}), url: ex.url, method, timeoutSec, retries: retryLog };
       }
-      bytes = new Uint8Array(await response.arrayBuffer());
-    } catch (err) {
-      const error = err as Error;
-      if (error.name === "TimeoutError" || error.name === "AbortError") {
-        throw new Error(`超时（${timeoutSec} 秒），已停止 / Timed out after ${timeoutSec}s and was stopped`);
+      throw err;
+    };
+
+    let response!: Response;
+    let bytes!: Uint8Array;
+    for (let attempt = 0; ; attempt++) {
+      try {
+        const signal = AbortSignal.timeout(timeoutSec * 1000);
+        // Redirects are followed by hand: a header can carry a key, so it never goes to another origin.
+        let url = target;
+        let verb: string = method;
+        let payload = body;
+        for (let hop = 0; ; hop++) {
+          response = await host().fetch(url, {
+            method: verb,
+            headers: payload !== undefined ? { "content-type": "application/json", ...headers } : headers,
+            body: payload,
+            redirect: "manual",
+            signal,
+          });
+          const location = response.status >= 300 && response.status < 400 ? response.headers.get("location") : null;
+          if (!location) break;
+          // Like fetch: 303, and 301/302 after a POST, continue as a GET without the body.
+          if (response.status === 303 || ((response.status === 301 || response.status === 302) && verb === "POST")) {
+            verb = "GET";
+            payload = undefined;
+          }
+          const next = new URL(location, url);
+          if (next.origin !== target.origin) {
+            throw Object.assign(
+              new Error(
+                `服务要求跳转到另一个地址 ${next.origin}，为了不把请求头（可能有密钥）发过去，没有跟过去。确认可信后把 url 改成新地址 / the service redirected to another origin, ${next.origin}; it was not followed so the headers (which may hold a key) stay put. If you trust it, put the new address in url`,
+              ),
+              { retryable: false },
+            );
+          }
+          if (hop >= 5) throw Object.assign(new Error(`跳转太多次 / too many redirects`), { retryable: false });
+          url = next;
+        }
+        bytes = new Uint8Array(await response.arrayBuffer());
+        if (!response.ok) {
+          const preview = bytesToText(bytes.subarray(0, 500));
+          const status = response.status;
+          throw Object.assign(new Error(`服务返回 ${status} / service returned ${status}${preview ? `\n${preview}` : ""}`), {
+            status,
+            retryable: status === 429 || status >= 500,
+          });
+        }
+        break;
+      } catch (err) {
+        const error = err as Error & { retryable?: boolean; status?: number };
+        let thrown: Error = error;
+        if (error.retryable === undefined && error.status === undefined) {
+          if (error.name === "TimeoutError" || error.name === "AbortError") {
+            thrown = new Error(`超时（${timeoutSec} 秒），已停止 / Timed out after ${timeoutSec}s and was stopped`);
+          } else if (!error.message.includes(" / the service redirected") && !error.message.includes("too many redirects")) {
+            const hint = proxyHint(ctx.options.env ?? host().env, target.href);
+            const cause = (error as Error & { cause?: { message?: string } }).cause?.message;
+            thrown = Object.assign(
+              new Error(`调用服务失败 / service call failed: ${error.message}${cause ? ` (${cause})` : ""}${hint ? `\n${hint.join("\n")}` : ""}`),
+              { retryable: isRetryableError(error) },
+            );
+          }
+        }
+        if (attempt >= retries || !isRetryableError(thrown)) stamp(thrown);
+        const n = attempt + 1;
+        const delayMs = retryDelayMs(n, random());
+        const status = errorStatus(thrown);
+        const rec: RetryRecord = { n, ...(status !== undefined ? { status } : {}), error: retryErrorLine(thrown), delayMs };
+        retryLog.push(rec);
+        ctx.log(`第 ${n}/${retries} 次重试，${delayMs} ms 后 / retry ${n}/${retries} in ${delayMs} ms: ${rec.error}`);
+        await wait(delayMs);
       }
-      if (error.message.includes(" / the service redirected") || error.message.includes("too many redirects")) throw error;
-      const hint = proxyHint(ctx.options.env ?? host().env, target.href);
-      const cause = (error as Error & { cause?: { message?: string } }).cause?.message;
-      throw new Error(`调用服务失败 / service call failed: ${error.message}${cause ? ` (${cause})` : ""}${hint ? `\n${hint.join("\n")}` : ""}`);
     }
-    if (!response.ok) {
-      const preview = bytesToText(bytes.subarray(0, 500));
-      throw new Error(`服务返回 ${response.status} / service returned ${response.status}${preview ? `\n${preview}` : ""}`);
-    }
+
     const output = ctx.stage.outputs[0]!;
     const abs = path.join(ctx.loaded.dir, outputRel(output));
     host().mkdir(path.dirname(abs), { recursive: true });
@@ -132,13 +170,26 @@ export const serviceExecutor: StageExecutor = {
       try {
         data = JSON.parse(bytesToText(bytes)) as unknown;
       } catch {
-        throw new Error(`服务返回的不是 JSON / service response is not JSON`);
+        const error = Object.assign(new Error(`服务返回的不是 JSON / service response is not JSON`), {
+          retryable: false as const,
+          ...(retryLog.length ? { params: { url: ex.url, method, timeoutSec, retries: retryLog } } : {}),
+        });
+        throw error;
       }
       host().writeFile(abs, `${JSON.stringify(data, null, 2)}\n`);
     } else {
       host().writeFile(abs, bytes);
     }
     ctx.log(`已写入 / wrote ${outputRel(output)} (${bytes.length} bytes, ${Date.now() - started} ms)`);
-    return { params: { url: ex.url, method, timeoutSec, status: response.status, durationMs: Date.now() - started } };
+    return {
+      params: {
+        url: ex.url,
+        method,
+        timeoutSec,
+        status: response.status,
+        ...(retryLog.length ? { retries: retryLog } : {}),
+        durationMs: Date.now() - started,
+      },
+    };
   },
 };

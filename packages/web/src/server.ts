@@ -13,6 +13,7 @@ import {
   flowLog,
   planModelCalls,
   planRunAll,
+  TokenBudgetError,
   TrustChangedError,
   TrustNeededError,
   trustFlow,
@@ -672,7 +673,9 @@ function servePlan(res: http.ServerResponse, ctx: HandlerCtx, url: URL): void {
       action: step.action,
       detail: step.detail ?? null,
       callsModel: step.callsModel,
+      together: step.together ?? null,
     })),
+    concurrency: loaded.flow.concurrency ?? 2,
     modelCalls: planModelCalls(steps),
   });
 }
@@ -1085,6 +1088,12 @@ async function postRun(req: http.IncomingMessage, res: http.ServerResponse, ctx:
       publish(ctx, "run:end", payload);
       sendJson(res, 200, payload);
     } catch (err) {
+      if (err instanceof TokenBudgetError) {
+        const payload = { ok: true as const, budget: err.message };
+        publish(ctx, "run:end", payload);
+        sendJson(res, 200, payload);
+        return;
+      }
       if (err instanceof HumanInputNeededError) {
         const payload = {
           ok: true as const,

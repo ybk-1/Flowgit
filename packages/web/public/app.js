@@ -162,8 +162,14 @@ const RUNNING = { icon: "▶", key: "state.running" };
 const HOLD_MS = 1000;
 const TAP_MS = 250;
 
-/** The stage the board's run is on, from the run log: set by stage:start, cleared when it ends. */
-let runningId = "";
+/** Stages the board's run is on. Parallel stages stay in the set together. */
+const runningIds = new Set();
+/** The stage a start event last asked the board to scroll to. */
+let followId = "";
+
+function isRunning(id) {
+  return typeof id === "string" && id !== "" && runningIds.has(id);
+}
 /** Until when the board keeps scrolling to the running stage, even across a repaint. */
 let followUntil = 0;
 /** Dry-run steps by stage id while a preview is shown on the cards; null otherwise. */
@@ -239,7 +245,7 @@ function applyUsage(text) {
 }
 
 function stageLabel(stage) {
-  if (stage.id && stage.id === runningId) return RUNNING;
+  if (isRunning(stage.id)) return RUNNING;
   return stateLabel(stage.state);
 }
 
@@ -264,9 +270,22 @@ function paintBadge(badge, stageId, scope, label) {
   FX.decode(badge, text, { key, animate: before !== undefined && before !== text });
 }
 
+function togetherNames(step, steps) {
+  const all = steps || (planView ? [...planView.values()] : []);
+  if (step.action !== "run" || !step.together) return "";
+  const names = [];
+  for (const other of all) {
+    if (other !== step && other.action === "run" && other.together === step.together) names.push(other.id);
+  }
+  return names.length ? names.join(", ") : "";
+}
+
 function planText(step) {
   const label = `${PLAN_ICON[step.action] || "•"} ${planLabel(step.action)}`;
-  return step.callsModel ? `${label} · ${t("plan.callsModel")}` : label;
+  const model = step.callsModel ? ` · ${t("plan.callsModel")}` : "";
+  const names = togetherNames(step);
+  const side = names ? ` · ${t("plan.together", { names })}` : "";
+  return `${label}${model}${side}`;
 }
 
 /** Adds, updates or removes a card's dry-run chip, just under its badge. */
@@ -297,7 +316,8 @@ function paintPlanNode(node) {
   if (!type) return;
   if (step) {
     node.setAttribute("data-plan", step.action || "");
-    type.textContent = clipLabel(`${PLAN_ICON[step.action] || "•"} ${planLabel(step.action)}`, NODE_W - 16);
+    const side = togetherNames(step) ? " ∥" : "";
+    type.textContent = clipLabel(`${PLAN_ICON[step.action] || "•"} ${planLabel(step.action)}${side}`, NODE_W - 16);
     type.classList.add("is-plan");
   } else {
     node.removeAttribute("data-plan");
@@ -324,38 +344,45 @@ function clearPlan() {
   paintPlan(false);
 }
 
-/** Marks the stage the run is on, decodes its badge to "running", and scrolls the board to it. */
-function setRunning(id) {
-  runningId = id || "";
-  // Only the new stage's badge changes now. A stage that just finished keeps saying "running"
-  // until the refresh brings its new state, so it never flashes its old state in between.
-  const stage = boardStages.find((item) => item.id === runningId);
+/** Marks every stage that is running, and scrolls to the one that just started. */
+function paintRunning() {
   for (const card of boardEl.querySelectorAll(".card")) {
-    const on = runningId !== "" && card.dataset.id === runningId;
+    const id = card.dataset.id || "";
+    const on = isRunning(id);
     card.toggleAttribute("data-running", on);
-    const badge = on ? card.querySelector(".badge") : null;
-    if (badge && stage) paintBadge(badge, runningId, "card", RUNNING);
+    if (on) {
+      const badge = card.querySelector(".badge");
+      if (badge) paintBadge(badge, id, "card", RUNNING);
+    }
   }
   for (const node of boardEl.querySelectorAll(".flow-node")) {
-    node.toggleAttribute("data-running", runningId !== "" && node.getAttribute("data-id") === runningId);
+    const id = node.getAttribute("data-id") || node.dataset.id || "";
+    node.toggleAttribute("data-running", isRunning(id));
   }
   for (const edge of boardEl.querySelectorAll(".flow-edge[data-to]")) {
-    edge.toggleAttribute("data-running", runningId !== "" && edge.getAttribute("data-to") === runningId);
+    edge.toggleAttribute("data-running", isRunning(edge.getAttribute("data-to") || ""));
   }
   const panelBadge = panelMode === "stage" ? panelBody.querySelector(".badge[data-stage]") : null;
-  if (panelBadge && stage && panelBadge.getAttribute("data-stage") === runningId) {
-    paintBadge(panelBadge, runningId, "panel", RUNNING);
-  }
-  if (runningId) {
-    followUntil = performance.now() + 1500;
-    followStage(runningId);
+  if (panelBadge) {
+    const id = panelBadge.getAttribute("data-stage") || "";
+    if (isRunning(id)) paintBadge(panelBadge, id, "panel", RUNNING);
   }
 }
 
-/** The stage finished: its next state comes with a forced refresh, decoding from "running". */
-function clearRunning() {
-  if (!runningId) return;
-  runningId = "";
+function setRunning(id) {
+  if (!id) return;
+  runningIds.add(id);
+  followId = id;
+  paintRunning();
+  followUntil = performance.now() + 1500;
+  followStage(id);
+}
+
+/** One stage finished, or the whole run ended when `id` is omitted. */
+function clearRunning(id) {
+  if (id) runningIds.delete(id);
+  else runningIds.clear();
+  if (!isRunning(followId)) followId = [...runningIds][0] || "";
   void refreshNow();
 }
 
@@ -444,7 +471,7 @@ function paintBoard() {
   syncViewToggle();
   syncRunButtons();
   // Restoring scrollLeft stops a smooth scroll, so a repaint right after a stage starts picks it up again.
-  if (runningId && performance.now() < followUntil) followStage(runningId);
+  if (isRunning(followId) && performance.now() < followUntil) followStage(followId);
 }
 
 function syncViewToggle() {
@@ -657,7 +684,7 @@ function graphEdges(layout, className) {
   svg.append(defs);
   for (const route of layout.routes) {
     const path = svgEl("path", { class: "flow-edge", d: route.d, "marker-end": `url(#flow-arrow-${className})`, "data-to": route.to });
-    if (runningId && route.to === runningId) path.setAttribute("data-running", "");
+    if (isRunning(route.to)) path.setAttribute("data-running", "");
     svg.append(path);
   }
   return svg;
@@ -715,7 +742,7 @@ function drawGraph(payload) {
       "aria-pressed": selected ? "true" : "false",
       "aria-label": labels.aria,
     });
-    if (runningId && node.id === runningId) g.setAttribute("data-running", "");
+    if (isRunning(node.id)) g.setAttribute("data-running", "");
     g.append(svgEl("rect", {
       class: "flow-box",
       x: place.x,
@@ -798,7 +825,7 @@ function drawGraph3d(payload) {
     block.setAttribute("aria-pressed", selected ? "true" : "false");
     block.setAttribute("aria-label", labels.aria);
     block.title = labels.title;
-    if (runningId && node.id === runningId) block.setAttribute("data-running", "");
+    if (isRunning(node.id)) block.setAttribute("data-running", "");
     block.style.left = `${place.x}px`;
     block.style.top = `${place.y}px`;
     block.style.width = `${GRID_3D.w}px`;
@@ -967,7 +994,7 @@ function renderCard(stage) {
   const card = el("article", "card");
   card.dataset.id = stage.id || "";
   card.dataset.state = stage.state || "";
-  if (runningId && stage.id === runningId) card.setAttribute("data-running", "");
+  if (isRunning(stage.id)) card.setAttribute("data-running", "");
 
   const head = el("div", "card-head");
   head.append(elr("h2", null, stage.name || stage.id || ""), cardMenu(stage));
@@ -1428,7 +1455,9 @@ function planLines(data) {
   for (const step of steps) {
     const label = planLabel(step.action);
     const detail = step.detail ? ` · ${I18N.pick(step.detail)}` : "";
-    lines.push(`${I18N.pick(step.name || step.id)} ${step.id} · ${label}${detail}`);
+    const names = togetherNames(step, steps);
+    const side = names ? ` · ${t("plan.together", { names })}` : "";
+    lines.push(`${I18N.pick(step.name || step.id)} ${step.id} · ${label}${detail}${side}`);
   }
   lines.push(t("plan.calls", { count: modelCallCount(data) }));
   return lines;
@@ -2383,24 +2412,25 @@ function onStreamEvent(type, data) {
   if (type === "stage:start") {
     appendLog(`▶ ${I18N.pick(data.name || data.stage)} (${data.stage})`);
     setRunning(data.stage);
-  } else if (type === "stage:log") appendLog(`    ${I18N.pick(data.line ?? "")}`);
+  } else if (type === "stage:log") appendLog(`    [${data.stage}] ${I18N.pick(data.line ?? "")}`);
   else if (type === "stage:done") {
     appendLog(`✓ ${I18N.pick(data.name || data.stage)} → v${data.n}`);
-    if (data.stage === runningId) clearRunning();
+    clearRunning(data.stage);
   } else if (type === "stage:skip") {
     appendLog(`· ${t("run.skipped", { name: I18N.pick(data.name || data.stage), reason: I18N.pick(data.reason ?? "") })}`);
   }
   else if (type === "stage:error") {
     appendLog(`✗ ${I18N.pick(data.name || data.stage)}: ${I18N.pick(data.error ?? "")}`);
-    if (data.stage === runningId) clearRunning();
+    clearRunning(data.stage);
   } else if (type === "run:end") {
     if (data.waiting) {
       const missing = Array.isArray(data.waiting.missing) ? data.waiting.missing.join(", ") : "";
       appendLog(t("run.waiting", { name: I18N.pick(data.waiting.name || data.waiting.stage), missing }));
       if (data.waiting.instructions) appendLog(I18N.pick(data.waiting.instructions));
-    } else if (data.ok) appendLog(t("run.finished"));
+    } else if (data.budget) appendLog(I18N.pick(data.budget));
+    else if (data.ok) appendLog(t("run.finished"));
     else appendLog(data.error ? I18N.pick(data.error) : t("run.failed"));
-    if (runningId) clearRunning();
+    if (runningIds.size) clearRunning();
     else void refresh();
   }
 }

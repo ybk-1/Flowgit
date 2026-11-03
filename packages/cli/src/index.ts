@@ -60,6 +60,7 @@ import {
   saveFlowInputs,
   stageStatus,
   statusAll,
+  TokenBudgetError,
   TrustNeededError,
   trustFlow,
   trustState,
@@ -96,6 +97,20 @@ restoreProxyChild();
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const VERSION = (JSON.parse(fs.readFileSync(path.join(here, "..", "package.json"), "utf8")) as { version: string }).version;
+
+function parseRunConcurrency(raw: string): number {
+  if (!/^[1-9]\d*$/.test(raw)) {
+    throw new Error(`并发必须是不小于 1 的整数，收到 "${raw}" / concurrency must be an integer of at least 1, got "${raw}"`);
+  }
+  return Number(raw);
+}
+
+function parseMaxTokens(raw: string): number {
+  if (!/^(0|[1-9]\d*)$/.test(raw)) {
+    throw new Error(`--max-tokens 必须是不小于 0 的整数，收到 "${raw}" / --max-tokens must be an integer of at least 0, got "${raw}"`);
+  }
+  return Number(raw);
+}
 
 function parseKv(pairs: string[] | undefined): Record<string, string> {
   const out: Record<string, string> = {};
@@ -143,7 +158,7 @@ function printEvent(e: RunEvent): void {
       console.log(`${c.dim("·")} ${e.stage.name} ${c.dim(`(${e.stage.id}) 跳过 / skipped: ${e.reason}`)}`);
       break;
     case "stage:log":
-      console.log(c.dim(`    ${e.line}`));
+      console.log(c.dim(`    [${e.stage.id}] ${e.line}`));
       break;
     case "stage:done": {
       console.log(`${c.green("✓")} ${e.stage.name} ${c.dim(`→ runs/${e.stage.id}/${e.n}/`)}`);
@@ -1046,21 +1061,38 @@ inputs
 
 program
   .command("run")
-  .description("运行一个阶段，或按顺序运行全部 / run one stage, or all stages in order")
+  .description("运行一个阶段，或运行全部（没有依赖的阶段会同时跑） / run one stage, or all stages (independent stages run at the same time)")
   .argument("<stage>", '阶段 id 或 "all" / stage id, or "all"')
   .option("--input <key=value>", "临时覆盖流程输入，可重复 / flow input override (repeatable)", collect)
   .option("--from <path>", "人工阶段：作为产物的文件或文件夹，可重复 / human stage: file/dir to use as an output (repeatable, in output order)", collect)
   .option("--model <model>", "llm 阶段用的模型，可写 provider/model，如 glm/glm-5.3 / model for llm stages, optionally provider/model, e.g. glm/glm-5.3")
   .option("--force", "配合 all：已是最新的阶段也重跑 / with all: re-run stages that are already up to date")
   .option("--dry-run", "配合 all：只说会做什么，不运行、不调用模型 / with all: show what would happen, without running anything or calling a model")
+  .option("--concurrency <n>", "配合 all：同时跑几个阶段（至少 1）。不写时用流程里的 concurrency，再没有就是 2 / with all: how many stages to run at once (at least 1). Unset uses the flow's concurrency, then 2")
+  .option("--max-tokens <n>", "配合 all：这次运行的 token 上限。超过后停在下一个会调用模型的阶段之前，已完成的版本保留 / with all: token budget for this run. Over it, stop before the next stage that calls a model; finished versions are kept")
   .option("-y, --yes", "从 Git 地址复制来的流程：不再询问，确认它会做的事并运行 / for a flow copied from a Git URL: confirm what it does and run, without asking")
-  .action(async (stageId: string, opts: { input?: string[]; from?: string[]; model?: string; force?: boolean; dryRun?: boolean; yes?: boolean }) => {
+  .action(async (stageId: string, opts: { input?: string[]; from?: string[]; model?: string; force?: boolean; dryRun?: boolean; yes?: boolean; concurrency?: string; maxTokens?: string }) => {
     try {
       const loaded = loadFlow(dirOf());
+      const concurrency = opts.concurrency !== undefined ? parseRunConcurrency(opts.concurrency) : undefined;
+      const maxTokens = opts.maxTokens !== undefined ? parseMaxTokens(opts.maxTokens) : undefined;
+      if ((concurrency !== undefined || maxTokens !== undefined) && stageId !== "all") {
+        throw new Error("--concurrency 和 --max-tokens 只能配合 all 使用 / --concurrency and --max-tokens only work with all");
+      }
       if (opts.dryRun) {
         if (stageId !== "all") throw new Error("--dry-run 只能配合 all 使用 / --dry-run only works with all: flowgit run all --dry-run");
-        const again = ["flowgit run all", opts.force && "--force", opts.model && `--model ${opts.model}`, ...(opts.input ?? []).map((kv) => `--input ${/\s/.test(kv) ? `"${kv}"` : kv}`)];
-        printPlan(planRunAll(loaded, { inputs: parseKv(opts.input), model: opts.model, force: opts.force }), again.filter(Boolean).join(" "));
+        const again = [
+          "flowgit run all",
+          opts.force && "--force",
+          concurrency !== undefined && `--concurrency ${concurrency}`,
+          maxTokens !== undefined && `--max-tokens ${maxTokens}`,
+          opts.model && `--model ${opts.model}`,
+          ...(opts.input ?? []).map((kv) => `--input ${/\s/.test(kv) ? `"${kv}"` : kv}`),
+        ];
+        printPlan(
+          planRunAll(loaded, { inputs: parseKv(opts.input), model: opts.model, force: opts.force, concurrency }),
+          again.filter(Boolean).join(" "),
+        );
         return;
       }
       const options: RunOptions = {
@@ -1068,6 +1100,8 @@ program
         from: opts.from,
         model: opts.model,
         force: opts.force,
+        ...(concurrency !== undefined ? { concurrency } : {}),
+        ...(maxTokens !== undefined ? { maxTokens } : {}),
         onEvent: printEvent,
       };
       if (stageId !== "all") requireStage(loaded.flow, stageId);
@@ -1083,6 +1117,11 @@ program
         if (hint) console.log(`\n${hint}`);
       }
     } catch (err) {
+      if (err instanceof TokenBudgetError) {
+        console.log(`\n${c.yellow("!")} ${err.message}`);
+        printUsageTotal(true);
+        return;
+      }
       fail(err, { inputFlags: opts.input });
     }
   });
@@ -1154,6 +1193,16 @@ function printPlan(steps: PlanStep[], runCommand: string): void {
   const rows = [[c.dim("#"), c.dim("阶段 stage"), c.dim("会怎样 action"), c.dim("详情 details")]];
   steps.forEach((s, i) => rows.push([String(i + 1), `${s.stage.name} ${c.dim(s.stage.id)}`, PLAN_LABEL[s.action], s.detail ?? ""]));
   console.log(table(rows));
+  const waves = new Map<number, string[]>();
+  for (const step of steps) {
+    if (step.action !== "run" || step.together === undefined) continue;
+    const ids = waves.get(step.together) ?? [];
+    ids.push(step.stage.id);
+    waves.set(step.together, ids);
+  }
+  for (const ids of waves.values()) {
+    if (ids.length > 1) console.log(`同时运行 / run together: ${ids.join(", ")}`);
+  }
   const calls = planModelCalls(steps);
   console.log(
     `\n${

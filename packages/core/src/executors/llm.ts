@@ -3,6 +3,7 @@ import { DEFAULT_PROVIDER, flowKeyEndpoint, flowKeyEndpointNote, missingKeyMessa
 import { proxyHint } from "../proxy-env.js";
 import type { ExecutorLlm, Flow, Stage } from "../types.js";
 import { schemaFailure, schemaProblems, schemaTexts } from "../schema-check.js";
+import { errorStatus, isRetryableError, retryDelayMs, retryErrorLine, sleep, type RetryRecord } from "../retry.js";
 import { linkOutsideError, outputRel, readFlowText, truncate, wantsJson } from "../util.js";
 import type { ExecContext, ExecResult, InputArtifact, LlmComplete, LlmRequest, LlmResponse, StageExecutor } from "./types.js";
 
@@ -122,7 +123,9 @@ function requestError(err: unknown, p: ResolvedProvider): Error {
     const hint = proxyHint(host().env, p.baseUrl);
     if (hint) lines.push(...hint);
   }
-  return new Error(lines.join("\n"));
+  const status = typeof e?.status === "number" ? e.status : undefined;
+  const retryable = isRetryableError(err);
+  return Object.assign(new Error(lines.join("\n")), { ...(status !== undefined ? { status } : {}), retryable });
 }
 
 /**
@@ -339,7 +342,36 @@ export const llmExecutor: StageExecutor = {
       ctx.log(`effort 只对 Anthropic 官方接口有效，这次不发送 / effort only applies to Anthropic's own API; not sent to ${provider.id}`);
     }
     const started = Date.now();
-    const res = await resolveLlm(ctx.options)(req);
+    const retryLog: RetryRecord[] = [];
+    const retries = Math.max(0, ex.retries ?? 0);
+    const random = ctx.options.random ?? Math.random;
+    const wait = ctx.options.sleep ?? sleep;
+    const complete = async (call: LlmRequest): Promise<LlmResponse> => {
+      let last: unknown;
+      for (let attempt = 0; attempt <= retries; attempt++) {
+        try {
+          return await resolveLlm(ctx.options)(call);
+        } catch (err) {
+          last = err;
+          if (attempt >= retries || !isRetryableError(err)) {
+            if (retryLog.length) {
+              const error = err as Error & { params?: Record<string, unknown> };
+              error.params = { ...(error.params ?? {}), retries: retryLog };
+            }
+            throw err;
+          }
+          const n = attempt + 1;
+          const delayMs = retryDelayMs(n, random());
+          const status = errorStatus(err);
+          const rec: RetryRecord = { n, ...(status !== undefined ? { status } : {}), error: retryErrorLine(err), delayMs };
+          retryLog.push(rec);
+          ctx.log(`第 ${n}/${retries} 次重试，${delayMs} ms 后 / retry ${n}/${retries} in ${delayMs} ms: ${rec.error}`);
+          await wait(delayMs);
+        }
+      }
+      throw last;
+    };
+    const res = await complete(req);
     const ms = Date.now() - started;
     if (res.model !== req.model) ctx.log(`实际由 ${res.model} 回复 / served by ${res.model}`);
     let repair: LlmResponse | undefined;
@@ -379,7 +411,7 @@ export const llmExecutor: StageExecutor = {
           "JSON Schema:",
           truncate(schemaTexts(loaded.dir, stage).join("\n\n"), 8000),
         ].join("\n");
-        repair = await resolveLlm(ctx.options)({
+        repair = await complete({
           ...req,
           repair: true,
           history: [
@@ -427,6 +459,7 @@ export const llmExecutor: StageExecutor = {
         usage: repair ? sumUsage(res.usage, repair.usage) : res.usage,
         ...(repair ? { repairUsage: repair.usage ?? null } : {}),
         llmCalls: repair ? [res.usage ?? null, repair.usage ?? null] : [res.usage ?? null],
+        ...(retryLog.length ? { retries: retryLog } : {}),
         durationMs: ms,
       };
     }

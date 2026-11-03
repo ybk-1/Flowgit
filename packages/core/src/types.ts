@@ -45,6 +45,11 @@ export interface ExecutorLlm {
   model?: string;
   effort?: Effort;
   maxTokens?: number;
+  /**
+   * Extra attempts after a network error, HTTP 429 or 5xx. Default 0.
+   * Other 4xx and schema failures are not retried.
+   */
+  retries?: number;
 }
 
 export interface ExecutorScript {
@@ -103,6 +108,11 @@ export interface ExecutorService {
   headers?: Record<string, string>;
   /** Abort the request after this many seconds. Default 60. */
   timeoutSec?: number;
+  /**
+   * Extra attempts after a network error, HTTP 429 or 5xx. Default 0.
+   * Other 4xx and a body that is not usable are not retried.
+   */
+  retries?: number;
 }
 
 /** A local MCP server started as a child process. Same shape as Claude Desktop / Cursor. */
@@ -225,6 +235,11 @@ export interface Flow {
    * Streamable HTTP entries are `{ url }`. `env` values must be `${VAR}`.
    */
   mcpServers?: Record<string, McpServerConfig>;
+  /**
+   * How many stages `run all` may run at once. Independent stages share a wave,
+   * up to this many. Default 2. `run all --concurrency` overrides it.
+   */
+  concurrency?: number;
   stages: Stage[];
 }
 

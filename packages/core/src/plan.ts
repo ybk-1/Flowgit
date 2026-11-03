@@ -8,7 +8,7 @@ import { DEFAULT_PROVIDER, resolveModel } from "./providers.js";
 import { loadFlowInputs, outputAbs, statusAll } from "./runs.js";
 import { flowFileId, flowgitParams, renderInputTree, resolveSubflowFile, subflowEnterProblem, subflowStack } from "./subflow.js";
 import type { LoadedFlow, Stage, StageState } from "./types.js";
-import { outputRel } from "./util.js";
+import { outputRel, resolveConcurrency } from "./util.js";
 
 /**
  * What `run all` would do with a stage:
@@ -26,6 +26,12 @@ export interface PlanStep {
   detail?: string;
   /** This step calls a real model (an llm stage that runs, without canned replies). */
   callsModel: boolean;
+  /**
+   * Stages with the same number are started together, up to `concurrency`.
+   * Set on steps the run would start (run, wait, cannot-run). Skip and keep-edit
+   * are instant and have no wave.
+   */
+  together?: number;
   /** How many model calls this step would make. A sub-flow counts every llm stage inside it. Defaults to 1 when callsModel is set. */
   modelCalls?: number;
 }
@@ -37,6 +43,8 @@ export interface PlanOptions {
   model?: string;
   /** Same as `run all --force`: re-run stages that are up to date. */
   force?: boolean;
+  /** Same as `run all --concurrency`. Unset uses the flow's `concurrency`, then 2. */
+  concurrency?: number;
   env?: NodeJS.ProcessEnv;
   /** @internal Absolute flow.json chain including the current flow. Set while planning a sub-flow. */
   flowStack?: string[];
@@ -155,5 +163,38 @@ export function planRunAll(loaded: LoadedFlow, opts: PlanOptions = {}): PlanStep
       }
     }
   }
+  assignTogether(steps, resolveConcurrency(opts.concurrency ?? loaded.flow.concurrency));
   return steps;
+}
+
+/**
+ * Number the steps a run would start. A wave takes up to `concurrency` stages
+ * whose upstreams are already skipped, kept, or placed in an earlier wave.
+ * A wait or a cannot-run ends the plan, same as `run all` stopping there.
+ */
+function assignTogether(steps: PlanStep[], concurrency: number): void {
+  const order = steps.map((step) => step.stage.id);
+  const byId = new Map(steps.map((step) => [step.stage.id, step]));
+  const finished = new Set(steps.filter((step) => step.action === "skip" || step.action === "keep-edit").map((step) => step.stage.id));
+  const pending = new Set(steps.filter((step) => step.action === "run" || step.action === "wait" || step.action === "cannot-run").map((step) => step.stage.id));
+  let wave = 0;
+  while (pending.size) {
+    const ready: string[] = [];
+    for (const id of order) {
+      if (!pending.has(id)) continue;
+      const deps = byId.get(id)!.stage.inputs ?? [];
+      if (deps.every((dep) => finished.has(dep))) ready.push(id);
+    }
+    if (!ready.length) break;
+    wave += 1;
+    let blocking = false;
+    for (const id of ready.slice(0, concurrency)) {
+      const step = byId.get(id)!;
+      step.together = wave;
+      pending.delete(id);
+      if (step.action === "run") finished.add(id);
+      else blocking = true;
+    }
+    if (blocking) break;
+  }
 }

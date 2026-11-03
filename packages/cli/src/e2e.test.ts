@@ -107,6 +107,9 @@ describe("flowgit CLI with the short-video template", () => {
     // With --input only, the stop says how to keep the values for the next command.
     const once = flowgit(["run", "all", "--input", "topic=为什么猫喜欢纸箱", "--input", "duration=25"], { FLOWGIT_LLM_MOCK_DIR: path.join(flowDir, "demo-replies") });
     expect(once.code, once.out).toBe(2);
+    expect(once.out).toContain("[script]");
+    expect(once.out).toContain("[voice]");
+    expect(once.out).toContain("[storyboard]");
     expect(once.out).toContain("save it before you continue: flowgit inputs set topic=为什么猫喜欢纸箱 duration=25");
     expect(flowgit(["inputs", "set", "topic=为什么猫喜欢纸箱", "duration=25"]).code).toBe(0);
     const r = flowgit(["run", "all"], { FLOWGIT_LLM_MOCK_DIR: path.join(flowDir, "demo-replies") });
@@ -163,6 +166,7 @@ describe("flowgit CLI with the short-video template", () => {
     const forced = flowgit(["run", "all", "--dry-run", "--force", "--model", "deepseek/deepseek-v4-flash", "--input", "style=very calm"], noMock);
     expect(forced.out).toMatch(/分镜 storyboard\s+▶ 运行 \/ run\s+模型 \/ model deepseek\/deepseek-v4-flash/);
     expect(forced.out).toContain("最多 2 次模型调用 / at most 2 model call(s)");
+    expect(forced.out).toContain("同时运行 / run together: voice, storyboard");
     expect(forced.out).toContain('真的运行 / to run it: flowgit run all --force --model deepseek/deepseek-v4-flash --input "style=very calm"');
     expect(fs.readdirSync(path.join(flowDir, "runs", "script"))).toEqual(["1"]);
     expect(flowgit(["run", "script", "--dry-run"]).out).toContain("--dry-run only works with all");
