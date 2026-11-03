@@ -6,6 +6,7 @@ import { scriptExecutor } from "./script.js";
 import { serviceExecutor } from "./service.js";
 import { workflowExecutor } from "./workflow.js";
 import { mcpExecutor } from "./mcp.js";
+import { imageExecutor } from "./image.js";
 import { pluginExecutor } from "./plugin.js";
 import { ExecutorNotImplementedError, type StageExecutor } from "./types.js";
 
@@ -25,6 +26,7 @@ export {
 export { workflowExecutor } from "./workflow.js";
 export { mcpExecutor, listMcpTools, renderMcpArgs, renderMcpString, type McpToolDescription } from "./mcp.js";
 export { pluginExecutor } from "./plugin.js";
+export { imageExecutor, mockPictures } from "./image.js";
 export {
   llmExecutor,
   anthropicComplete,
@@ -54,6 +56,7 @@ const registry: Partial<Record<ExecutorType, StageExecutor>> = {
   workflow: workflowExecutor,
   mcp: mcpExecutor,
   plugin: pluginExecutor,
+  image: imageExecutor,
 };
 
 export function getExecutor(type: ExecutorType): StageExecutor {

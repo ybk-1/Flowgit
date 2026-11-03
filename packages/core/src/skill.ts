@@ -33,6 +33,8 @@ function executorLine(ex: Executor): string {
       return `调用 MCP 工具 \`${ex.tool}\`（服务器 \`${ex.server}\`）/ call MCP tool \`${ex.tool}\` on server \`${ex.server}\`。`;
     case "plugin":
       return `运行插件 \`${ex.plugin}\` / run plugin \`${ex.plugin}\`。`;
+    case "image":
+      return `按提示词生图 (image)，模型 \`${ex.model}\`。图片写进目录产物，文件名从 001.png 起。`;
   }
 }
 

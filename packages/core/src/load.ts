@@ -12,6 +12,7 @@ import {
   subflowEnterProblem,
   subflowStack,
 } from "./subflow.js";
+import { imageExecutorIssues } from "./image-providers.js";
 import { mcpEnvIssues, mcpStageIssues } from "./mcp.js";
 import { pluginPathProblem } from "./plugins.js";
 import type { ExecutorWorkflow, Flow, LoadedFlow, Output, ValidationIssue } from "./types.js";
@@ -53,7 +54,7 @@ function schemaIssues(errors: ErrorObject[] | null | undefined): ValidationIssue
     if (e.keyword === "additionalProperties") {
       message = `不认识的字段 / unknown property "${(e.params as { additionalProperty: string }).additionalProperty}"`;
     } else if (e.keyword === "discriminator") {
-      message = `executor.type 只能是 human、llm、script、agent、workflow、service、mcp、plugin 之一 / executor.type must be one of human, llm, script, agent, workflow, service, mcp, plugin`;
+      message = `executor.type 只能是 human、llm、script、agent、workflow、service、mcp、plugin、image 之一 / executor.type must be one of human, llm, script, agent, workflow, service, mcp, plugin, image`;
     } else if (e.keyword === "required") {
       message = `缺少必填字段 / missing required property "${(e.params as { missingProperty: string }).missingProperty}"`;
     }
@@ -160,6 +161,9 @@ export function validateFlow(data: unknown, opts: ValidateOptions = {}): Validat
     } else if (ex.type === "plugin") {
       const problem = pluginPathProblem(ex.plugin, opts.dir);
       if (problem) issues.push({ level: "error", path: `${base}/executor/plugin`, message: problem });
+    } else if (ex.type === "image") {
+      issues.push(...imageExecutorIssues(flow, stage, base));
+      checkPrompt(ex.prompt);
     }
   });
   issues.push(...mcpEnvIssues(flow));

@@ -45,7 +45,7 @@ my-flow/
 | `author` | 否 / no | `{ "name": "...", "url": "..." }` | `{ "name": "...", "url": "..." }` |
 | `license` | 否 / no | 流程本身（提示词、脚本）的 SPDX 许可证 | SPDX license of the flow itself (prompts, scripts) |
 | `tags` | 否 / no | 标签数组 | Array of tags |
-| `forkedFrom` | 否 / no | 从 Git 地址 `init` 时记下的来源：`{ "source", "ref"?, "commit"? }`，地址里的账号和密码（令牌）会去掉。从本地目录复制不写这个字段，避免把可能含用户名的本机路径带出去。有这个字段、又会运行命令、启动 agent、调用服务、启动 MCP 服务器、加载插件或运行子流程的流程，第一次运行前要在每台电脑上确认一次（`flowgit trust`、`run` 时的询问或看板弹窗）；确认记在 `~/.flowgit/trusted.json`（或 `$FLOWGIT_HOME/trusted.json`），不在流程目录里，这些动作变了会再问 | Recorded when `init` copies a Git URL: `{ "source", "ref"?, "commit"? }`, with any user name and password (token) removed from the URL. A local directory does not set it, so a path that may contain a user name is never stored. A flow with this field that runs commands, starts agents, calls services, starts MCP servers, loads plugins or runs sub-flows must be confirmed once on each computer before its first run (`flowgit trust`, the prompt in `run`, or the board dialog); the confirmation is stored in `~/.flowgit/trusted.json` (or `$FLOWGIT_HOME/trusted.json`), never in the flow directory, and is asked again when that list changes |
+| `forkedFrom` | 否 / no | 从 Git 地址 `init` 时记下的来源：`{ "source", "ref"?, "commit"? }`，地址里的账号和密码（令牌）会去掉。从本地目录复制不写这个字段，避免把可能含用户名的本机路径带出去。有这个字段、又会运行命令、启动 agent、调用服务、启动 MCP 服务器、加载插件、调用生图接口或运行子流程的流程，第一次运行前要在每台电脑上确认一次（`flowgit trust`、`run` 时的询问或看板弹窗）；确认记在 `~/.flowgit/trusted.json`（或 `$FLOWGIT_HOME/trusted.json`），不在流程目录里，这些动作变了会再问 | Recorded when `init` copies a Git URL: `{ "source", "ref"?, "commit"? }`, with any user name and password (token) removed from the URL. A local directory does not set it, so a path that may contain a user name is never stored. A flow with this field that runs commands, starts agents, calls services, starts MCP servers, loads plugins, calls an image API or runs sub-flows must be confirmed once on each computer before its first run (`flowgit trust`, the prompt in `run`, or the board dialog); the confirmation is stored in `~/.flowgit/trusted.json` (or `$FLOWGIT_HOME/trusted.json`), never in the flow directory, and is asked again when that list changes |
 | `inputs` | 否 / no | 流程级参数，见下 | Flow-level parameters, see below |
 | `mcpServers` | 否 / no | 具名 MCP 服务器，写法和 Claude Desktop / Cursor 一样。stdio 是 `{ command, args?, env? }`，远程是 `{ url }`（Streamable HTTP）。`env` 的每个值必须是 `${变量名}`。见「MCP 执行器」 | Named MCP servers, shaped like Claude Desktop / Cursor. Stdio is `{ command, args?, env? }`; remote is `{ url }` (Streamable HTTP). Every `env` value must be `${VAR}`. See "The MCP executor" |
 | `stages` | 是 / yes | 阶段数组，至少一个 | Array of stages, at least one |
@@ -123,6 +123,7 @@ Stages must not form a cycle. Run order follows `inputs`; ties keep the order in
 | `service` | 能 / yes | `url`, `method?`, `headers?`, `timeoutSec?` | 调用 HTTP 服务。只允许 `http` 和 `https`。`POST` 发送 `{ inputs, upstream }`（只带 1 MB 以内的文本产物），`GET` 把流程输入放进查询参数。`headers` 的值可以写 `{{env.变量名}}`，运行时从环境变量读取，这是传密钥的唯一方式，密钥不写进文件。`timeoutSec` 默认 60。跳转只跟同一个源（最多 5 次）；要跳到别的源时直接失败，免得请求头里的密钥被带过去。非 2xx、返回的 JSON 不合法、或引用的环境变量没设置，都记为失败。`url`、`method` 和 `headers` 的写法（不是取到的值）算进配置哈希 | Calls an HTTP service. Only `http` and `https`. `POST` sends `{ inputs, upstream }` (text outputs up to 1 MB), `GET` puts flow inputs in the query string. Header values may contain `{{env.NAME}}`, read from the environment at run time; this is the only way to pass a key, and keys are never written to a file. `timeoutSec` defaults to 60. Redirects are followed within the same origin only (up to 5); a redirect to another origin fails the run so a key in the headers is never sent there. A non-2xx response, invalid JSON, or an unset env var fails the run. `url`, `method` and the `headers` as written (not the resolved values) count in the config hash |
 | `mcp` | 能 / yes | `server`, `tool`, `args?`, `timeoutSec?` | 调用 `mcpServers` 里的一个工具，把结果写进唯一的产物。见下面的「MCP 执行器」 | Calls one tool on a server named in `mcpServers` and writes the result to the stage's single output. See "The MCP executor" below |
 | `plugin` | 能 / yes | `plugin`, `config?`, `timeoutSec?` | 加载流程目录里的一个插件，由它写出产物。包名只从该目录的 `node_modules` 解析；`./` 路径必须留在流程目录内。见下面的「插件执行器」 | Loads a plugin from the flow directory and lets it write the outputs. A package name resolves only from that directory's `node_modules`; a `./` path must stay inside the flow directory. See "The plugin executor" below |
+| `image` | 能 / yes | `model`, `prompt`, `size?`, `n?`, `each?`, `timeoutSec?` | 按提示词生成图片，写进唯一的、以 `/` 结尾的目录。`model` 写成 `<provider>/<model>`。见下面的「生图执行器」 | Generates pictures from a prompt into the stage's one directory output (the path ends with `/`). `model` is `<provider>/<model>`. See "The image executor" below |
 
 ### MCP 执行器 / The MCP executor
 
@@ -200,6 +201,46 @@ A `plugin` stage loads a plugin in this process and calls its `executor.run`. Th
 - The staleness hash includes `config`. A package plugin also includes the `version` in its `package.json`; a folder plugin hashes that directory (or that one file) instead.
 - `flowgit doctor` and `flowgit plugins` list the plugins in use, the resolved path and version, and any that are missing. `init`, and a flow copied from somewhere else, lists plugin names and where they resolve. A flow copied from a Git URL must confirm that list before its first run; no plugin is loaded until then.
 - Runnable example: [`examples/plugin-echo`](../examples/plugin-echo) (plain JavaScript, no dependencies).
+
+### 生图执行器 / The image executor
+
+`image` 阶段调用图像模型，把图片写进这个阶段唯一的目录产物（`path` 以 `/` 结尾）。自带模板仍然默认用你上传的素材；生图是可选阶段。密钥怎么拿、费用和版权见 [docs/image.md](image.md)。
+
+An `image` stage calls an image model and writes pictures into that stage's one directory output (`path` ends with `/`). Bundled templates still default to assets you upload; image generation is optional. Keys, cost and copyright are in [docs/image.md](image.md).
+
+```json
+{
+  "type": "image",
+  "model": "zhipu/cogview-4",
+  "prompt": "prompts/shots.md",
+  "size": "1024x1024",
+  "n": 1,
+  "each": { "from": "storyboard.json", "path": "shots", "field": "image_prompt" },
+  "timeoutSec": 180
+}
+```
+
+- `model` 写成 `<provider>/<model>`，只按第一个 `/` 拆开。预设有 `openai`（`OPENAI_API_KEY`）、`zhipu`（`GLM_API_KEY`，和对话用的智谱密钥是同一把）、`volcengine`（`ARK_API_KEY`，火山方舟 / 即梦 Seedream）、`dashscope`（`DASHSCOPE_API_KEY`，通义万相）。地址在 `packages/core/src/image-providers.ts`，都来自厂商官方文档。密钥只从 `apiKeyEnv` 指的环境变量读，不写进文件。`flowgit providers` 多一节「生图 / Image」，列出预设、要哪个变量、设没设。
+- `prompt` 是 Markdown 文件。`{{inputs.名称}}` 会换成流程输入。没有 `each` 时，`n` 是这一句提示词出几张图，默认 1，文件名 `001.png`、`002.png`……有 `each` 时，`from` 必须是上游某个 JSON 产物的路径，`path` 是里面的数组（点号分开，例如 `shots`），每一项的 `field` 接在渲染后的提示词后面，一项一张图。这时 `n` 只能是 1 或不写。
+- `size` 默认 `1024x1024`。万相要的是 `1024*1024`，Flowgit 会把 `宽x高` 换成星号再送出。别的写法原样送出。每一张图单独请求一次，所以万相不会用它默认的一次 4 张。万相是异步的：提交后马上查一次，之后每 2 秒再查，成功就下载，失败就停下。`timeoutSec` 是这一张图的上限，含轮询，默认 180 秒。
+- 返回的地址会下载（请求图片时不带密钥）。返回的 base64 会解码。文件名从 `001.png` 起。`run.json` 记下供应商、模型、尺寸、张数，以及每张的文件名和字节数。`flowgit log` 会显示模型、尺寸和张数。
+- 设置 `FLOWGIT_IMAGE_MOCK_DIR=<目录>` 时，从 `<目录>/<阶段 id>/` 按文件名顺序复制图片，张数不够就从头循环，不调用接口，也不需要密钥。
+- 从 Git 地址复制来的流程会把模型和密钥变量名列进确认清单；确认之前不会调用接口。
+- `FLOWGIT_IMAGE_BASE_URL` 会换掉预设地址，只给测试里的本机假服务器用。平时不要设置，否则密钥会发到那个地址。
+- 提示词文件算进是否需要重跑。改了提示词，这个阶段和下游都会变成 `stale`。
+- 接口返回 401 时，报错会用中文和英文点名该用的环境变量。
+- 可运行的例子：[`examples/image-shots`](../examples/image-shots)（用固定图片，不访问网络）。
+
+- `model` is `<provider>/<model>`, split on the first `/` only. Presets: `openai` (`OPENAI_API_KEY`), `zhipu` (`GLM_API_KEY`, the same Zhipu key as chat), `volcengine` (`ARK_API_KEY`, Volcengine Ark / Jimeng Seedream), `dashscope` (`DASHSCOPE_API_KEY`, Tongyi Wanxiang). Endpoints live in `packages/core/src/image-providers.ts` and come from the vendors' official docs. The key is read only from the environment variable `apiKeyEnv` names, never from a file. `flowgit providers` adds a "生图 / Image" section listing the presets, the variable each one needs, and whether it is set.
+- `prompt` is a Markdown file. `{{inputs.name}}` is filled from the flow inputs. Without `each`, `n` is how many pictures that one prompt makes (default 1), named `001.png`, `002.png`, and so on. With `each`, `from` must be the path of an upstream JSON output, `path` is the array inside it (dotted, for example `shots`), and each item's `field` is appended to the rendered prompt, one picture per item. `n` must then be 1 or omitted.
+- `size` defaults to `1024x1024`. Wanxiang wants `1024*1024`; Flowgit rewrites `WIDTHxHEIGHT` to a star before sending it. Anything else is sent as written. Each picture is its own request, so Wanxiang does not use its default of 4 pictures per call. Wanxiang is async: submit, poll once immediately and then every 2 seconds, download on success, stop on failure. `timeoutSec` is the limit for one picture, polling included, default 180 seconds.
+- A returned URL is downloaded (the picture request does not send the key). Returned base64 is decoded. Names start at `001.png`. `run.json` records the provider, model, size, count, and each file's name and byte size. `flowgit log` shows the model, size and count.
+- `FLOWGIT_IMAGE_MOCK_DIR=<dir>` copies pictures from `<dir>/<stage id>/` in name order, cycling if there are too few, and calls nothing. No key is needed.
+- A flow copied from a Git URL lists the model and the key variable in the confirmation; the API is not called until then.
+- `FLOWGIT_IMAGE_BASE_URL` replaces the preset endpoint. It is for a local fake server in tests. Leave it unset; otherwise the key is sent there.
+- The prompt file counts toward staleness. Editing it marks this stage and everything downstream `stale`.
+- A 401 names the environment variable to check, in Chinese and in English.
+- Runnable example: [`examples/image-shots`](../examples/image-shots) (canned pictures, no network).
 
 ### 子流程 / Sub-flows
 
@@ -314,9 +355,9 @@ Note: Zhipu's GLM Coding Plan quota only applies inside the tools Zhipu lists ([
 
 Proxies: when `flowgit run` and `flowgit board` call models and services, they go through a proxy: `HTTPS_PROXY` or `HTTP_PROXY` first (and `ALL_PROXY`, which Node itself doesn't read), otherwise the Windows or macOS system proxy. Local addresses (`localhost`, `127.0.0.1`, `::1`) skip the proxy unless you set `NO_PROXY` yourself. Node can only use http proxies, not `socks5://`. Node 24.14+ switches in-process; Node 22.21+ starts the command once more with `NODE_USE_ENV_PROXY=1`, and script and agent stages still see your own environment. Set `FLOWGIT_PROXY=off` to turn this off. When a request can't connect, the error says which proxy it went through.
 
-`timeoutSec`（可选，整数，至少为 1）在 `script` 和 `agent` 上的行为如下。不写表示不限时。`service`、`mcp` 和 `plugin` 各自的超时见上面的执行器说明。到了这个秒数，Flowgit 停掉整棵进程树，而不是只停掉外壳：macOS 和 Linux 上命令单独成一个进程组，先对进程组发 `SIGTERM`，5 秒后还在就发 `SIGKILL`；Windows 上用 `taskkill /pid <pid> /T /F`。这次运行记为失败，错误是 `超时（N 秒），已停止 / Timed out after Ns and was stopped`。父进程如果收到 `SIGINT`、`SIGTERM` 或 `SIGHUP`，也会把同一个信号转给这个进程组再退出。`timeoutSec` 属于执行器配置，改了它，这个阶段和下游都会变成 `stale`。
+`timeoutSec`（可选，整数，至少为 1）在 `script` 和 `agent` 上的行为如下。不写表示不限时。`service`、`mcp`、`plugin` 和 `image` 各自的超时见上面的执行器说明。到了这个秒数，Flowgit 停掉整棵进程树，而不是只停掉外壳：macOS 和 Linux 上命令单独成一个进程组，先对进程组发 `SIGTERM`，5 秒后还在就发 `SIGKILL`；Windows 上用 `taskkill /pid <pid> /T /F`。这次运行记为失败，错误是 `超时（N 秒），已停止 / Timed out after Ns and was stopped`。父进程如果收到 `SIGINT`、`SIGTERM` 或 `SIGHUP`，也会把同一个信号转给这个进程组再退出。`timeoutSec` 属于执行器配置，改了它，这个阶段和下游都会变成 `stale`。
 
-`timeoutSec` (optional integer, minimum 1) behaves as follows on `script` and `agent`. Unset means no limit. `service`, `mcp` and `plugin` document their own timeouts above. When it elapses, Flowgit stops the whole process tree, not just the shell: on macOS and Linux the command runs in its own process group and gets `SIGTERM`, then `SIGKILL` if it is still alive after 5 seconds; on Windows, `taskkill /pid <pid> /T /F`. The run is recorded as failed with `超时（N 秒），已停止 / Timed out after Ns and was stopped`. If the parent receives `SIGINT`, `SIGTERM`, or `SIGHUP`, it forwards that signal to the process group and then exits. `timeoutSec` is part of the executor config, so changing it marks this stage and everything downstream `stale`.
+`timeoutSec` (optional integer, minimum 1) behaves as follows on `script` and `agent`. Unset means no limit. `service`, `mcp`, `plugin` and `image` document their own timeouts above. When it elapses, Flowgit stops the whole process tree, not just the shell: on macOS and Linux the command runs in its own process group and gets `SIGTERM`, then `SIGKILL` if it is still alive after 5 seconds; on Windows, `taskkill /pid <pid> /T /F`. The run is recorded as failed with `超时（N 秒），已停止 / Timed out after Ns and was stopped`. If the parent receives `SIGINT`, `SIGTERM`, or `SIGHUP`, it forwards that signal to the process group and then exits. `timeoutSec` is part of the executor config, so changing it marks this stage and everything downstream `stale`.
 
 script 和 agent 阶段运行时可以读到这些环境变量 / Environment variables for script and agent stages:
 

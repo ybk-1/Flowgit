@@ -99,6 +99,9 @@ function runDetail(loaded: LoadedFlow, stage: Stage, opts: PlanOptions, env: Nod
       return { detail: `MCP ${mcpLaunchDetail(loaded.flow.mcpServers?.[ex.server]) ?? ex.server} → ${ex.tool}`, callsModel: false };
     case "plugin":
       return { detail: `插件 / plugin ${ex.plugin}`, callsModel: false };
+    case "image":
+      if (env.FLOWGIT_IMAGE_MOCK_DIR) return { detail: "固定图片 / canned pictures", callsModel: false };
+      return { detail: `生图 / image ${ex.model}`, callsModel: false };
     case "human":
       return { detail: "用已经放好的文件 / uses the files already in place", callsModel: false };
     case "workflow":

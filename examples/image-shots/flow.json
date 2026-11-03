@@ -1,0 +1,56 @@
+{
+  "format": "flowgit",
+  "version": "0.1",
+  "id": "image-shots",
+  "name": "分镜出图",
+  "description": "人先写好分镜 JSON，image 阶段按每个镜头的 image_prompt 出一张图。自带模板仍然默认用上传的素材；这是可选的生图阶段。用 FLOWGIT_IMAGE_MOCK_DIR 可以不调用接口跑完。 / A person writes the storyboard JSON, then an image stage makes one picture per shot from image_prompt. Bundled templates still default to uploaded assets; this stage is optional. FLOWGIT_IMAGE_MOCK_DIR runs it without calling a vendor.",
+  "inputs": {
+    "style": {
+      "type": "string",
+      "description": "加在每张图提示词前面的画面风格 / Style prepended to every picture prompt",
+      "default": "干净的插画，柔和的日光"
+    }
+  },
+  "stages": [
+    {
+      "id": "board",
+      "name": "分镜",
+      "description": "人工填写 storyboard.json。shots 是数组，每一项有 image_prompt。",
+      "executor": {
+        "type": "human",
+        "instructions": "按 sample 写好 storyboard.json：shots 数组里每一项要有 image_prompt。 / Fill in storyboard.json. Each item of shots needs image_prompt."
+      },
+      "outputs": [
+        {
+          "type": "application/json",
+          "path": "storyboard.json",
+          "description": "分镜。shots[].image_prompt 是画面描述。 / Storyboard. shots[].image_prompt is the picture description."
+        }
+      ]
+    },
+    {
+      "id": "shots",
+      "name": "画面",
+      "description": "每个镜头一张图，写成 shots/001.png、002.png……",
+      "inputs": ["board"],
+      "executor": {
+        "type": "image",
+        "model": "zhipu/cogview-4",
+        "prompt": "prompts/shots.md",
+        "size": "1024x1024",
+        "each": {
+          "from": "storyboard.json",
+          "path": "shots",
+          "field": "image_prompt"
+        }
+      },
+      "outputs": [
+        {
+          "type": "dir",
+          "path": "shots/",
+          "description": "每个镜头一张 PNG。 / One PNG per shot."
+        }
+      ]
+    }
+  ]
+}

@@ -42,6 +42,8 @@ import {
   providerKeyState,
   loadFlowInputs,
   flowLog,
+  imageKeyState,
+  imagePresetList,
   planModelCalls,
   planPrune,
   planRunAll,
@@ -1177,6 +1179,12 @@ function runDetail(r: RunRecord): string {
   if (r.executor === "script") return String(p.run ?? "");
   if (r.executor === "agent") return `${p.agent ?? ""}${took}`;
   if (r.executor === "workflow") return String(p.file ?? "");
+  if (r.executor === "image") {
+    const model = p.provider && p.model ? `${p.provider}/${p.model}` : String(p.model ?? "");
+    const size = p.size ? ` ${p.size}` : "";
+    const count = p.count ?? "";
+    return `${model}${size} · ${count} 张 / ${count} image(s)${took}`;
+  }
   return String(p.provided ?? "");
 }
 
@@ -1272,6 +1280,19 @@ program
     }
   });
 
+/** The image presets: provider, example model, endpoint, and whether the key variable is set. */
+function printImageProviders(): void {
+  console.log(`\n${c.bold("生图 / Image")}`);
+  const rows = [[c.dim("provider"), c.dim("示例模型 example"), c.dim("地址 baseUrl"), c.dim("密钥 key")]];
+  for (const preset of imagePresetList()) {
+    const state = imageKeyState(preset);
+    const key = `${preset.apiKeyEnv} ${state === "set" ? c.green("✓ 已设置 set") : c.yellow("✗ 未设置 not set")}`;
+    rows.push([preset.id, preset.exampleModel, preset.baseUrl, key]);
+  }
+  console.log(table(rows));
+  console.log(c.dim("用法 / usage: executor.type 为 image，model 写成 provider/model，例如 zhipu/cogview-4。说明见 docs/image.md / type image, model is provider/model, e.g. zhipu/cogview-4. See docs/image.md"));
+}
+
 function parseKeep(raw: string): number {
   if (!/^[1-9]\d*$/.test(raw)) {
     throw new Error(`--keep 至少是 1，收到 "${raw}" / --keep must be at least 1, got "${raw}"`);
@@ -1345,7 +1366,7 @@ program
 
 program
   .command("providers")
-  .description("列出可用的模型供应商，以及密钥有没有设置 / list model providers and whether their keys are set")
+  .description("列出可用的模型供应商和生图供应商，以及密钥有没有设置 / list model and image providers and whether their keys are set")
   .option("--json", "输出 JSON / machine-readable output")
   .action((opts: { json?: boolean }) => {
     try {
@@ -1366,6 +1387,14 @@ program
                 key: providerKeyState(p),
                 source: p.source,
                 docs: p.docs ?? null,
+              })),
+              imageProviders: imagePresetList().map((p) => ({
+                id: p.id,
+                exampleModel: p.exampleModel,
+                baseUrl: p.baseUrl,
+                apiKeyEnv: p.apiKeyEnv,
+                key: imageKeyState(p),
+                docs: p.docs,
               })),
             },
             null,
@@ -1388,6 +1417,7 @@ program
       console.log(c.dim(`\n全局配置 / global config: ${globalFile}${fs.existsSync(globalFile) ? "" : " （还没有 / not created yet）"}`));
       if (inFlow) console.log(c.dim(`本流程配置 / this flow: ${LOCAL_FILE} → providers`));
       console.log(c.dim("用法 / usage: 在 flow.json 的 model 或 --model 里写 provider/model / write provider/model in flow.json \"model\" or --model, e.g. glm/glm-5.3"));
+      printImageProviders();
     } catch (err) {
       fail(err);
     }

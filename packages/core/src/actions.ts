@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { headerEnvNames } from "./executors/service.js";
+import { IMAGE_PRESETS } from "./image-providers.js";
 import { isStdioServer, mcpEnvNames, mcpLaunchDetail } from "./mcp.js";
 import { pluginActionDetail } from "./plugins.js";
 import { resolveSubflowFile } from "./subflow.js";
@@ -10,7 +11,7 @@ import type { Flow } from "./types.js";
 export interface FlowAction {
   /** Stage id; a stage inside a sub-flow is written `<workflow stage>/<stage>`. */
   stage: string;
-  kind: "script" | "agent" | "service" | "workflow" | "mcp" | "plugin";
+  kind: "script" | "agent" | "service" | "workflow" | "mcp" | "plugin" | "image";
   /** The command, the agent (and its extra arguments), the method and URL, the sub-flow file, the MCP command or URL, or the plugin and where it resolved. */
   detail: string;
   /** Environment variables a service call sends in its headers, or an MCP server reads from `${VAR}`. */
@@ -47,6 +48,16 @@ export function flowActions(flow: Flow, dir?: string): FlowAction[] {
           kind: "mcp",
           detail: mcpLaunchDetail(server) ?? ex.server,
           ...(env.length ? { env } : {}),
+        });
+      } else if (ex.type === "image") {
+        const slash = ex.model.indexOf("/");
+        const providerId = slash < 0 ? "" : ex.model.slice(0, slash);
+        const preset = Object.hasOwn(IMAGE_PRESETS, providerId) ? IMAGE_PRESETS[providerId] : undefined;
+        actions.push({
+          stage: id,
+          kind: "image",
+          detail: ex.model,
+          ...(preset ? { env: [preset.apiKeyEnv] } : {}),
         });
       } else if (ex.type === "workflow" && ex.engine === "flowgit") {
         actions.push({ stage: id, kind: "workflow", detail: `子流程 / sub-flow ${ex.file}` });

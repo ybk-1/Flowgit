@@ -152,6 +152,31 @@ export interface ExecutorPlugin {
   timeoutSec?: number;
 }
 
+/** One image per item of an array inside an upstream JSON file. */
+export interface ImageEach {
+  /** Relative path of an upstream JSON output. */
+  from: string;
+  /** Dotted path to the array inside that JSON, e.g. "shots". */
+  path: string;
+  /** Field on each item. Its text is appended to the rendered prompt. */
+  field: string;
+}
+
+export interface ExecutorImage {
+  type: "image";
+  /** "<provider>/<model>", e.g. "zhipu/cogview-4". */
+  model: string;
+  /** Prompt file. {{inputs.key}} is filled in. With `each`, the item's field is appended. */
+  prompt: string;
+  /** e.g. "1024x1024". Default 1024x1024. DashScope receives "1024*1024". */
+  size?: string;
+  /** Pictures of this one prompt. Default 1. Must be 1 or omitted when `each` is set. */
+  n?: number;
+  each?: ImageEach;
+  /** Stop one picture, including DashScope polling, after this many seconds. Default 180. */
+  timeoutSec?: number;
+}
+
 export type Executor =
   | ExecutorHuman
   | ExecutorLlm
@@ -160,7 +185,8 @@ export type Executor =
   | ExecutorWorkflow
   | ExecutorService
   | ExecutorMcp
-  | ExecutorPlugin;
+  | ExecutorPlugin
+  | ExecutorImage;
 
 export type ExecutorType = Executor["type"];
 
