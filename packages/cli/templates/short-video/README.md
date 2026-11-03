@@ -87,25 +87,58 @@ Set `transition.type` to `"none"` to turn transitions off; a clip's `motion` can
 
 ## 配音 / Voiceover
 
-配音阶段（`scripts/tts.mjs`）读 `script.md`，去掉标题、画面说明和其他不念出来的部分，调用语音接口把口播合成 `voice/voice.mp3`。一段太长时会拆开请求，再用 FFmpeg 拼成一条（导出视频本来就要装 FFmpeg）。
+配音阶段（`scripts/tts.mjs`）读 `script.md`，去掉标题、画面说明和其他不念出来的部分，调用语音接口把口播合成 `voice/voice.mp3`。一段太长时按句子拆开请求，再用 FFmpeg 拼成一条（导出视频本来就要装 FFmpeg）。没有 FFmpeg 时，这一步会说明要先安装。
 
-The voice stage (`scripts/tts.mjs`) reads `script.md`, drops headings, visual notes and anything else that is not spoken, and calls a speech API to write `voice/voice.mp3`. A long script is split into several requests and joined with FFmpeg (you already need FFmpeg to export).
+The voice stage (`scripts/tts.mjs`) reads `script.md`, drops headings, visual notes and anything else that is not spoken, and calls a speech API to write `voice/voice.mp3`. A long script is split on sentence boundaries and joined with FFmpeg (you already need FFmpeg to export). With no FFmpeg, the stage says to install it first.
 
-密钥只从环境变量读，不会写进文件。没设置 `FLOWGIT_TTS_API_KEY` 时这一步不失败：它写下 `voice/README.md` 然后继续，你可以之后自己录音。
+密钥只从环境变量读，不会写进文件。下面两种用法：
 
-The key is read only from the environment and never written to a file. With no `FLOWGIT_TTS_API_KEY` the stage does not fail: it writes `voice/README.md` and continues, so you can record the voice later.
+The key is read only from the environment and never written to a file. Two ways to call it:
+
+1. **预设 / Preset.** `FLOWGIT_TTS=<供应商>/<模型或声音>`。`node scripts/tts.mjs --list` 列出预设、要设置的环境变量，以及现在有没有设置（不打印密钥本身）。选了预设却没配密钥，这一步会失败，并在中文和英文里写上变量名。
+2. **OpenAI 兼容接口 / OpenAI-compatible API.** 不设置 `FLOWGIT_TTS`，只设置 `FLOWGIT_TTS_API_KEY`。没设置时这一步不失败：它写下 `voice/README.md` 然后继续，你可以之后自己录音。
+
+1. **Preset.** `FLOWGIT_TTS=<provider>/<model or voice>`. `node scripts/tts.mjs --list` lists the presets, the env vars they need, and whether each one is set (it never prints the secret). A preset with no key fails the stage and names that variable in Chinese and English.
+2. **OpenAI-compatible API.** Leave `FLOWGIT_TTS` unset and set only `FLOWGIT_TTS_API_KEY`. With no key the stage does not fail: it writes `voice/README.md` and continues, so you can record the voice later.
+
+`FLOWGIT_TTS_BASE_URL`、`FLOWGIT_TTS_API_KEY`、`FLOWGIT_TTS_MODEL`、`FLOWGIT_TTS_VOICE` 会覆盖预设。流程语言是 `en` 且没指定声音时，用该预设的英文音色。
+
+`FLOWGIT_TTS_BASE_URL`, `FLOWGIT_TTS_API_KEY`, `FLOWGIT_TTS_MODEL` and `FLOWGIT_TTS_VOICE` override a preset. When the flow language is `en` and you didn't pick a voice, the preset's English voice is used.
+
+| 预设 / Preset | 示例 / Example | 密钥 / Key | 还要 / Also |
+| --- | --- | --- | --- |
+| OpenAI 语音 / OpenAI Audio Speech | `FLOWGIT_TTS=openai/gpt-4o-mini-tts` | `OPENAI_API_KEY` | |
+| 阿里云百炼 CosyVoice / Alibaba DashScope CosyVoice | `FLOWGIT_TTS=dashscope/cosyvoice-v3-flash` | `DASHSCOPE_API_KEY` | `DASHSCOPE_WORKSPACE_ID`（官方地址里的工作空间 ID / workspace id in the official host） |
+| 火山引擎豆包 / Volcengine Doubao | `FLOWGIT_TTS=volcengine/seed-tts-2.0` | `VOLCENGINE_API_KEY` | |
+| MiniMax | `FLOWGIT_TTS=minimax/speech-2.8-hd` | `MINIMAX_API_KEY` | 国际站把 `FLOWGIT_TTS_BASE_URL` 设为 `https://api.minimax.io` / for the international host set `FLOWGIT_TTS_BASE_URL` to `https://api.minimax.io` |
+| Azure 语音 / Azure Speech | `FLOWGIT_TTS=azure/zh-CN-Xiaoxiao:DragonHDFlashLatestNeural` | `SPEECH_KEY` | `SPEECH_REGION`（例如 `eastus` / e.g. `eastus`） |
+
+斜线后面：OpenAI、百炼、豆包、MiniMax 是模型；Azure 是声音。每个预设都带一组文档里的中文和英文音色，请求里带语速，输出 mp3（这些接口也能出 wav，这里用 mp3，好写成 `voice/voice.mp3`）。地址和参数来自各家当前的官方文档，`--list` 里有链接。
+
+After the slash: OpenAI, DashScope, Doubao and MiniMax take a model; Azure takes a voice. Each preset has a few documented Chinese and English voices, sends a speaking rate, and asks for mp3 (those APIs can also return wav; mp3 is what `voice/voice.mp3` needs). The URL and parameters come from each vendor's current docs; `--list` links them.
 
 | 变量 / Variable | 默认 / Default | 说明 | Description |
 | --- | --- | --- | --- |
-| `FLOWGIT_TTS_API_KEY` | （没有 / unset） | 语音合成的密钥 | Speech API key |
-| `FLOWGIT_TTS_BASE_URL` | `https://api.openai.com/v1` | 兼容 OpenAI 语音接口的服务地址，不要自己加上 `/audio/speech` | Base URL of an OpenAI-compatible speech service; do not append `/audio/speech` |
-| `FLOWGIT_TTS_MODEL` | `gpt-4o-mini-tts` | 模型 | Model |
-| `FLOWGIT_TTS_VOICE` | `alloy` | 声音 | Voice |
+| `FLOWGIT_TTS` | （没有 / unset） | `<供应商>/<模型或声音>` | `<provider>/<model or voice>` |
+| `FLOWGIT_TTS_API_KEY` | （没有 / unset） | 覆盖预设的密钥；没选预设时，这是 OpenAI 兼容接口的密钥 | Overrides the preset key; with no preset, this is the OpenAI-compatible key |
+| `FLOWGIT_TTS_BASE_URL` | 预设自己的官方地址；没选预设时是 `https://api.openai.com/v1` | 覆盖服务地址。OpenAI 兼容接口不要自己加上 `/audio/speech`；预设只写协议和主机，不要自己加路径 | Overrides the service URL. For the OpenAI-compatible API, do not append `/audio/speech`; for a preset, set only the scheme and host, not the path |
+| `FLOWGIT_TTS_MODEL` | 预设或 `gpt-4o-mini-tts` | 覆盖模型（Azure 没有模型，这个变量不用） | Overrides the model (Azure has no model; this variable does not apply) |
+| `FLOWGIT_TTS_VOICE` | 预设按语言挑一个；没选预设时是 `alloy` | 覆盖声音 | Overrides the voice |
 
 ```bash
+export FLOWGIT_TTS=openai/gpt-4o-mini-tts
+export OPENAI_API_KEY=...
+# PowerShell: $env:FLOWGIT_TTS = "openai/gpt-4o-mini-tts"; $env:OPENAI_API_KEY = "..."
+node scripts/tts.mjs --list
+
+# 百炼：工作空间 ID 来自控制台，密钥是 DASHSCOPE_API_KEY
+# DashScope: the workspace id is from the console, the key is DASHSCOPE_API_KEY
+export FLOWGIT_TTS=dashscope/cosyvoice-v3-flash
+export DASHSCOPE_API_KEY=...
+export DASHSCOPE_WORKSPACE_ID=...
+
+# 不选预设，走 OpenAI 兼容接口 / no preset: an OpenAI-compatible speech API
 export FLOWGIT_TTS_API_KEY=...
-# PowerShell: $env:FLOWGIT_TTS_API_KEY = "..."
-# 换一家兼容 OpenAI 语音接口的服务 / another OpenAI-compatible speech service
 export FLOWGIT_TTS_BASE_URL=https://example.com/v1
 export FLOWGIT_TTS_MODEL=tts-1
 export FLOWGIT_TTS_VOICE=nova

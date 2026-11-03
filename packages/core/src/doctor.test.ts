@@ -196,6 +196,13 @@ describe("doctor", () => {
       stages: [{ id: "build", name: "build", executor: { type: "script", run: "node build.mjs" }, outputs: [{ type: "text/plain", path: "c.txt" }] }],
     });
     expect(doctor(other, { env: pathEnv() }).some((c) => c.message.includes("FLOWGIT_TTS_API_KEY"))).toBe(false);
+
+    const preset = doctor(voice, { env: { ...pathEnv(), FLOWGIT_TTS: "azure/zh-CN-Xiaoxiao:DragonHDFlashLatestNeural", SPEECH_KEY: "speech-key", SPEECH_REGION: "eastus" } });
+    expect(preset).toContainEqual(expect.objectContaining({ level: "ok", stage: "voice", message: expect.stringContaining("SPEECH_KEY is set") }));
+    const presetMissing = doctor(voice, { env: { ...pathEnv(), FLOWGIT_TTS: "dashscope/cosyvoice-v3-flash" } });
+    expect(presetMissing).toContainEqual(expect.objectContaining({ level: "error", stage: "voice", message: expect.stringContaining("DASHSCOPE_API_KEY") }));
+    const presetNoHost = doctor(voice, { env: { ...pathEnv(), FLOWGIT_TTS: "dashscope/cosyvoice-v3-flash", DASHSCOPE_API_KEY: "dash-key" } });
+    expect(presetNoHost).toContainEqual(expect.objectContaining({ level: "error", message: expect.stringContaining("DASHSCOPE_WORKSPACE_ID") }));
   });
 
   it("reports flow inputs outside their enum as errors", () => {

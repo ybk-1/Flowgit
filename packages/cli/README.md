@@ -55,9 +55,9 @@ flowgit init my-report -t weekly-report
 flowgit -C my-report graph --md   # 画成 Mermaid 流程图贴进 README / a Mermaid diagram for your README
 ```
 
-密钥只从环境变量读（例如 `ANTHROPIC_API_KEY`、`DEEPSEEK_API_KEY`、`FLOWGIT_TTS_API_KEY`），不会写进任何文件。导出视频需要 [FFmpeg](https://ffmpeg.org/download.html)。
+密钥只从环境变量读（例如 `ANTHROPIC_API_KEY`、`DEEPSEEK_API_KEY`、`FLOWGIT_TTS_API_KEY`，或短视频配音预设的 `OPENAI_API_KEY`、`DASHSCOPE_API_KEY`），不会写进任何文件。导出视频需要 [FFmpeg](https://ffmpeg.org/download.html)。
 
-Keys are read only from environment variables (such as `ANTHROPIC_API_KEY`, `DEEPSEEK_API_KEY` or `FLOWGIT_TTS_API_KEY`) and never written to a file. Exporting video needs [FFmpeg](https://ffmpeg.org/download.html).
+Keys are read only from environment variables (such as `ANTHROPIC_API_KEY`, `DEEPSEEK_API_KEY`, `FLOWGIT_TTS_API_KEY`, or a short-video speech preset's `OPENAI_API_KEY` or `DASHSCOPE_API_KEY`) and never written to a file. Exporting video needs [FFmpeg](https://ffmpeg.org/download.html).
 
 完整说明、流程格式和模板见 / Full guide, flow format and templates: https://github.com/cgold9820-dotcom/Flowgit
 
