@@ -10,6 +10,7 @@ import {
   subflowEnterProblem,
   subflowStack,
 } from "../subflow.js";
+import { runComfyui } from "./comfyui.js";
 import type { ExecutorWorkflow } from "../types.js";
 import { copyPath, isSafeRelative, outputRel } from "../util.js";
 import { TokenBudgetError } from "../budget.js";
@@ -63,9 +64,10 @@ function copyOutputs(ctx: ExecContext, subDir: string, copy: Record<string, stri
 export const workflowExecutor: StageExecutor = {
   async run(ctx: ExecContext): Promise<ExecResult> {
     const ex = ctx.stage.executor as ExecutorWorkflow;
+    if (ex.engine === "comfyui") return runComfyui(ctx);
     if (ex.engine !== "flowgit") {
       throw new Error(
-        `执行器 workflow 的引擎 "${ex.engine}" 还不能运行，目前只有 flowgit / workflow engine "${ex.engine}" cannot run yet; only "flowgit" can`,
+        `执行器 workflow 的引擎 "${ex.engine}" 还不能运行，目前只有 flowgit 和 comfyui / workflow engine "${ex.engine}" cannot run yet; only "flowgit" and "comfyui" can`,
       );
     }
     const resolved = resolveSubflowFile(ctx.loaded.dir, ex.file);

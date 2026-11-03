@@ -179,13 +179,13 @@ describe("service executor", () => {
     }
   });
 
-  it("doctor names a missing header env, and dry-run treats service as runnable", () => {
+  it("doctor names a missing header env, and dry-run treats service as runnable", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-svc-doctor-"));
     dirs.push(dir);
     write(dir, "flow.json", JSON.stringify(flow("http://127.0.0.1:9/echo")));
     write(dir, "note.md", "hello\n");
     const loaded = loadFlow(dir);
-    const checks = doctor(loaded, { inputs: { topic: "cats" }, env: {} });
+    const checks = await doctor(loaded, { inputs: { topic: "cats" }, env: {} });
     expect(checks).toContainEqual(expect.objectContaining({ level: "error", stage: "echo", message: expect.stringContaining("ECHO_TOKEN") }));
     const go = planRunAll(loaded, { inputs: { topic: "cats" }, env: {} });
     expect(go.map((s) => `${s.stage.id}:${s.action}`)).toEqual(["note:run", "echo:run"]);

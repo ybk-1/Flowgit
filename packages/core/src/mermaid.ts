@@ -1,9 +1,10 @@
 import type { Flow, Stage, StageState, StageStatus } from "./types.js";
 
-/** Shown under the stage name. A Flowgit sub-flow is labeled sub-flow; other engines stay workflow. */
+/** Shown under the stage name. A Flowgit sub-flow is labeled sub-flow; ComfyUI is labeled comfyui. */
 function executorLabel(stage: Stage): string {
   const ex = stage.executor;
   if (ex.type === "workflow" && ex.engine === "flowgit") return "sub-flow";
+  if (ex.type === "workflow" && ex.engine === "comfyui") return "comfyui";
   return ex.type;
 }
 

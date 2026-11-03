@@ -109,7 +109,7 @@ describe("folder plugin", () => {
     expect(flowActions(loaded.flow, dir)).toEqual([{ stage: "echo", kind: "plugin", detail: "./plugins/echo 1.0.0 → plugins/echo" }]);
     expect(flowActions(loaded.flow)).toEqual([{ stage: "echo", kind: "plugin", detail: "./plugins/echo" }]);
     expect(listPlugins(loaded)).toMatchObject([{ stage: "echo", plugin: "./plugins/echo", missing: false, version: "1.0.0", path: "plugins/echo" }]);
-    const checks = doctor(loaded);
+    const checks = await doctor(loaded);
     expect(checks).toContainEqual(expect.objectContaining({ level: "ok", stage: "echo", message: expect.stringContaining("plugins/echo") }));
     expect(checks.some((check) => check.message.includes("1.0.0"))).toBe(true);
 
@@ -182,7 +182,7 @@ export default {
     await expect(runStage(loadFlow(dir), "work")).rejects.toThrow(/was not found/);
     expect(fs.existsSync(path.join(dir, "out.txt"))).toBe(false);
     expect(fs.existsSync(path.join(root, "node_modules/echo-plugin/leaked.txt"))).toBe(false);
-    const missing = doctor(loadFlow(dir));
+    const missing = await doctor(loadFlow(dir));
     expect(missing).toContainEqual(expect.objectContaining({ level: "error", stage: "work", hint: "npm install echo-plugin" }));
     expect(flowActions(loadFlow(dir).flow, dir)[0]?.detail).toBe(
       "echo-plugin（找不到，npm install echo-plugin / not found, npm install echo-plugin）",

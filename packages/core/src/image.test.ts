@@ -321,7 +321,7 @@ describe("image executor", () => {
     expect(run?.executor).toBe("image");
   });
 
-  it("rejects a bad image stage, and hashes the prompt file", () => {
+  it("rejects a bad image stage, and hashes the prompt file", async () => {
     const dir = tempFlow();
     const bad: Flow = imageFlow("nope/x");
     expect(validateFlow(bad, { dir }).map((issue) => issue.message).join("\n")).toMatch(/unknown image provider "nope"/);
@@ -338,8 +338,8 @@ describe("image executor", () => {
     const before = stageConfigHash(dir, loaded.flow.stages[0]!);
     write(dir, "prompts/shots.md", "changed\n");
     expect(stageConfigHash(dir, loaded.flow.stages[0]!)).not.toBe(before);
-    expect(doctor(loaded, { env: {} }).some((check) => check.level === "error" && check.message.includes("GLM_API_KEY"))).toBe(true);
-    expect(doctor(loaded, { env: { GLM_API_KEY: "set" } }).some((check) => check.level === "ok" && check.message.includes("GLM_API_KEY"))).toBe(true);
+    expect((await doctor(loaded, { env: {} })).some((check) => check.level === "error" && check.message.includes("GLM_API_KEY"))).toBe(true);
+    expect((await doctor(loaded, { env: { GLM_API_KEY: "set" } })).some((check) => check.level === "ok" && check.message.includes("GLM_API_KEY"))).toBe(true);
     const plan = planRunAll(loaded, { env: { FLOWGIT_IMAGE_MOCK_DIR: path.join(dir, "demo") } });
     expect(plan[0]).toMatchObject({ action: "run", callsModel: false });
     expect(plan[0]?.detail).toContain("canned pictures");

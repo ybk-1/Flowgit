@@ -13,6 +13,7 @@ import {
   subflowStack,
 } from "./subflow.js";
 import { imageExecutorIssues } from "./image-providers.js";
+import { comfyuiIssues, reservedWorkflowMessage } from "./executors/comfyui.js";
 import { mcpEnvIssues, mcpStageIssues } from "./mcp.js";
 import { pluginPathProblem } from "./plugins.js";
 import type { ExecutorWorkflow, Flow, LoadedFlow, Output, ValidationIssue } from "./types.js";
@@ -149,11 +150,12 @@ export function validateFlow(data: unknown, opts: ValidateOptions = {}): Validat
       }
     } else if (ex.type === "workflow") {
       if (ex.engine === "flowgit") issues.push(...workflowIssues(flow, stage.outputs, ex, base, opts));
+      else if (ex.engine === "comfyui") issues.push(...comfyuiIssues(flow, stage, base, opts.dir));
       else {
         issues.push({
           level: "warning",
           path: `${base}/executor`,
-          message: `workflow 引擎 "${ex.engine}" 还不能运行，目前只有 flowgit / workflow engine "${ex.engine}" cannot run yet; only "flowgit" can`,
+          message: reservedWorkflowMessage(ex.engine),
         });
       }
     } else if (ex.type === "mcp") {

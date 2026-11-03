@@ -416,7 +416,7 @@ export const flowSchemaJson: Record<string, unknown> = {
     },
     "executorWorkflow": {
       "type": "object",
-      "description": "Run a workflow file. engine \"flowgit\" runs a Flowgit sub-flow (a flow.json). Other engines (ComfyUI, n8n, ...) are reserved; their params stay an arbitrary object.",
+      "description": "Run a workflow file. engine \"flowgit\" runs a Flowgit sub-flow (a flow.json). engine \"comfyui\" runs a ComfyUI API-format workflow on a local ComfyUI server. Other engines (n8n, ...) are reserved; their params stay an arbitrary object.",
       "required": [
         "type",
         "engine",
@@ -437,7 +437,7 @@ export const flowSchemaJson: Record<string, unknown> = {
         },
         "params": {
           "type": "object",
-          "description": "For engine flowgit: { inputs?, copy? }. inputs are passed to the sub-flow (strings may use {{inputs.key}}). copy maps a sub-flow output path to this stage's output path, and must cover every output. Other engines: any object."
+          "description": "For engine flowgit: { inputs?, copy? }. inputs are passed to the sub-flow (strings may use {{inputs.key}}). copy maps a sub-flow output path to this stage's output path, and must cover every output. For engine comfyui: { server?, set?, each?, timeoutSec?, retries? }. Other engines: any object."
         }
       },
       "allOf": [
@@ -467,6 +467,77 @@ export const flowSchemaJson: Record<string, unknown> = {
                       "type": "string",
                       "minLength": 1
                     }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "engine"
+            ],
+            "properties": {
+              "engine": {
+                "const": "comfyui"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "server": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "ComfyUI address. Default http://127.0.0.1:8188. FLOWGIT_COMFYUI_URL is used when this is omitted; this wins. http and https only."
+                  },
+                  "set": {
+                    "type": "object",
+                    "additionalProperties": true,
+                    "description": "Map of \"<node id>.inputs.<field>\" to a value applied before the run. Strings may use {{inputs.name}} and {{upstream.<stage id>.content}}."
+                  },
+                  "each": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "from",
+                      "path",
+                      "field",
+                      "target"
+                    ],
+                    "description": "Run the workflow once per item of an upstream JSON array. from, path and field match an image stage's each. target is \"<node id>.inputs.<field>\".",
+                    "properties": {
+                      "from": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "path": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "field": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "target": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    }
+                  },
+                  "timeoutSec": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Stop the submission, the history poll and the downloads after this many seconds. Default 600."
+                  },
+                  "retries": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Extra attempts after a network error, HTTP 429 or 5xx. Default 0. Same rules as a service stage. A node_errors or execution failure is not retried."
                   }
                 }
               }

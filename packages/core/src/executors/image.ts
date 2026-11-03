@@ -54,17 +54,19 @@ function valueAt(data: unknown, dotted: string): unknown {
   return current;
 }
 
-function promptsFor(dir: string, rendered: string, each: ImageEach | undefined, n: number | undefined): string[] {
-  if (!each) {
-    const prompt = imagePrompt(rendered);
-    return Array.from({ length: n ?? 1 }, () => prompt);
-  }
+/**
+ * Text of `field` on every object in the JSON array at `path` inside `from`.
+ * Shared by the image executor and the ComfyUI workflow engine.
+ */
+export function readEachField(dir: string, each: { from: string; path: string; field: string }, emptyMessage?: string): string[] {
   const data = readJson(dir, each.from);
   const items = valueAt(data, each.path);
   if (!Array.isArray(items)) {
     throw new Error(`${each.from} 里的 ${each.path} 不是数组 / ${each.path} in ${each.from} is not an array`);
   }
-  if (!items.length) throw new Error(`${each.path} 是空的，没有要生成的图片 / ${each.path} is empty, so there is nothing to generate`);
+  if (!items.length) {
+    throw new Error(emptyMessage ?? `${each.path} 是空的，没有要生成的图片 / ${each.path} is empty, so there is nothing to generate`);
+  }
   return items.map((item, index) => {
     if (!item || typeof item !== "object" || Array.isArray(item)) {
       throw new Error(`第 ${index + 1} 项不是对象，读不到 ${each.field} / item ${index + 1} is not an object, so ${each.field} cannot be read`);
@@ -73,8 +75,16 @@ function promptsFor(dir: string, rendered: string, each: ImageEach | undefined, 
     if (typeof value !== "string" || !value.trim()) {
       throw new Error(`第 ${index + 1} 项没有 ${each.field} / item ${index + 1} has no ${each.field}`);
     }
-    return imagePrompt(rendered, value);
+    return value;
   });
+}
+
+function promptsFor(dir: string, rendered: string, each: ImageEach | undefined, n: number | undefined): string[] {
+  if (!each) {
+    const prompt = imagePrompt(rendered);
+    return Array.from({ length: n ?? 1 }, () => prompt);
+  }
+  return readEachField(dir, each).map((value) => imagePrompt(rendered, value));
 }
 
 /** Pictures in `<mockDir>/<stageId>/`, sorted by name. Too few and they repeat from the start. */

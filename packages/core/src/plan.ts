@@ -1,6 +1,7 @@
 import { host, path } from "./host/current.js";
 import { DEFAULT_MODEL } from "./executors/llm.js";
 import { mcpLaunchDetail } from "./mcp.js";
+import { comfyuiParams, comfyuiServer } from "./executors/comfyui.js";
 import { isRunnableExecutor } from "./executors/index.js";
 import { topoOrder } from "./graph.js";
 import { loadFlow } from "./load.js";
@@ -55,10 +56,24 @@ export function planModelCalls(steps: PlanStep[]): number {
   return steps.reduce((n, step) => n + (step.modelCalls ?? (step.callsModel ? 1 : 0)), 0);
 }
 
-/** What a flowgit sub-flow would do, without running it. Other engines are not runnable. */
-function describeWorkflow(loaded: LoadedFlow, stage: Stage, opts: PlanOptions): { detail?: string; callsModel: boolean; modelCalls?: number; action?: PlanAction } {
+/** What a flowgit sub-flow or a ComfyUI workflow would do, without running it. */
+function describeWorkflow(
+  loaded: LoadedFlow,
+  stage: Stage,
+  opts: PlanOptions,
+  env: NodeJS.ProcessEnv,
+): { detail?: string; callsModel: boolean; modelCalls?: number; action?: PlanAction } {
   const ex = stage.executor;
-  if (ex.type !== "workflow" || ex.engine !== "flowgit") return { callsModel: false };
+  if (ex.type !== "workflow") return { callsModel: false };
+  if (ex.engine === "comfyui") {
+    try {
+      const server = comfyuiServer(comfyuiParams(ex), env);
+      return { detail: `ComfyUI ${server.href.replace(/\/$/, "")}`, callsModel: false };
+    } catch (err) {
+      return { action: "cannot-run", detail: (err as Error).message, callsModel: false };
+    }
+  }
+  if (ex.engine !== "flowgit") return { callsModel: false };
   const stack = subflowStack(loaded.file, opts.flowStack);
   const resolved = resolveSubflowFile(loaded.dir, ex.file);
   if ("error" in resolved) return { action: "cannot-run", detail: resolved.error, callsModel: false };
@@ -112,7 +127,7 @@ function runDetail(loaded: LoadedFlow, stage: Stage, opts: PlanOptions, env: Nod
     case "human":
       return { detail: "用已经放好的文件 / uses the files already in place", callsModel: false };
     case "workflow":
-      return describeWorkflow(loaded, stage, opts);
+      return describeWorkflow(loaded, stage, opts, env);
     default:
       return { callsModel: false };
   }
@@ -141,7 +156,7 @@ export function planRunAll(loaded: LoadedFlow, opts: PlanOptions = {}): PlanStep
     else if (!isRunnableExecutor(stage.executor)) {
       const reserved =
         stage.executor.type === "workflow"
-          ? `workflow 引擎 "${stage.executor.engine}" 还不能运行，目前只有 flowgit / workflow engine "${stage.executor.engine}" cannot run yet; only "flowgit" can`
+          ? `workflow 引擎 "${stage.executor.engine}" 还不能运行，目前只有 flowgit 和 comfyui / workflow engine "${stage.executor.engine}" cannot run yet; only "flowgit" and "comfyui" can`
           : `${stage.executor.type} 是预留的执行器，还不能运行 / ${stage.executor.type} is reserved and can't run yet`;
       step("cannot-run", reserved);
       stopped = true;

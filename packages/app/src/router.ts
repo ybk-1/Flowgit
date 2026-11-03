@@ -48,7 +48,7 @@ import {
 import { flowBoard, putFlow } from "../../web/src/routes/flow.js";
 import { flowGraph } from "../../web/src/routes/graph.js";
 import { EventHub } from "./events.js";
-import { COMPUTER_EXECUTORS } from "./handoff.js";
+import { needsComputer } from "./handoff.js";
 
 /**
  * The local board's HTTP API, answered inside the page. The board's api.js sends every request
@@ -455,7 +455,7 @@ export class BrowserBoard {
     const trust = trustState(loaded);
     if (trust.needed) return json(409, { error: new TrustNeededError(loaded, trust).message, trust: trustPayload(trust) });
     const target = stage === "all" ? undefined : loaded.flow.stages.find((item) => item.id === stage);
-    const remote = target && COMPUTER_EXECUTORS.includes(target.executor.type) ? this.options.remote?.() : undefined;
+    const remote = target && needsComputer(target.executor) ? this.options.remote?.() : undefined;
     if (target && remote) return this.runRemote(remote, target, model);
     this.running = true;
     this.hub.history = [];
