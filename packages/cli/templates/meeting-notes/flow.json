@@ -1,0 +1,169 @@
+{
+  "format": "flowgit",
+  "version": "0.1",
+  "id": "meeting-notes",
+  "name": "会议纪要",
+  "description": "把一场会的记录整理成纪要和待办：转录（人）→ 按发言人合并并保留起始时间 → 纪要（议题、要点、决定，每条决定标出处时间）→ 待办（一人、一事、日期、出处）→ 检查 → 会后邮件。 / Turn a meeting record into minutes and actions: transcript (person) → merge by speaker and keep each block's start time → minutes (topics, points, decisions, each decision cited to a time) → actions (one owner, one task, a date, a source time) → check → follow-up email.",
+  "language": "zh",
+  "author": {
+    "name": "Flowgit"
+  },
+  "license": "Apache-2.0",
+  "tags": [
+    "meeting",
+    "notes",
+    "writing"
+  ],
+  "inputs": {
+    "meeting": {
+      "type": "string",
+      "description": "会议名称，例如：轻杯 Mini 产品周会 / Meeting name",
+      "required": true
+    },
+    "date": {
+      "type": "string",
+      "description": "会议日期，YYYY-MM-DD / Meeting date, YYYY-MM-DD",
+      "required": true
+    },
+    "attendees": {
+      "type": "string",
+      "description": "出席的人，可选。不填就从记录里的发言人写 / Who attended, optional. Leave empty to use the speakers in the transcript",
+      "default": ""
+    },
+    "style": {
+      "type": "string",
+      "enum": [
+        "brief",
+        "formal"
+      ],
+      "default": "brief",
+      "description": "纪要体例：brief 简要，formal 正式 / Minutes style: brief or formal"
+    },
+    "language": {
+      "type": "string",
+      "enum": [
+        "zh",
+        "en"
+      ],
+      "default": "zh",
+      "description": "输出语言：zh 中文，en English / Output language: zh or en"
+    }
+  },
+  "stages": [
+    {
+      "id": "transcript",
+      "name": "转录",
+      "description": "把会议记录放进 transcript/，可以是 .txt、.srt 或 .vtt，UTF-8 或 GBK 都行。示例是一场虚构的 30 分钟产品周会，中英各一份 .srt。 / Put the record in transcript/ as .txt, .srt, or .vtt, in UTF-8 or GBK. The sample is a fictional 30-minute product weekly, one .srt in Chinese and one in English.",
+      "executor": {
+        "type": "human",
+        "instructions": "把你的记录放进 transcript/，扩展名用 .txt、.srt 或 .vtt。.txt 可以一行一句（[00:07:30] 林夏：……），也可以一行「姓名 时间」、下面几行是这段话。模板里有 weekly-zh.srt 和 weekly-en.srt，是虚构的南枝日用、轻杯 Mini 产品周会。文件名不带 zh 或 en 时，整理阶段只用你的文件；否则按 language 选用带 zh 或 en 的那一份。转录里常有姓名和发言，分享前先自己看一遍。 / Put your record in transcript/ as .txt, .srt, or .vtt. A .txt can have one utterance per line ([00:07:30] Lin Xia: …) or a line with a name and a time followed by the words. weekly-zh.srt and weekly-en.srt are a fictional Nanzhi Household weekly for Lightcup Mini. A file whose name has no zh or en tag is the one that gets cleaned; otherwise the file tagged for language is used. Transcripts often name people and what they said; read them yourself before you share."
+      },
+      "outputs": [
+        {
+          "type": "dir",
+          "path": "transcript/"
+        }
+      ]
+    },
+    {
+      "id": "clean",
+      "name": "整理",
+      "description": "去掉字里的时间码，把同一人连续的发言并成一段（超过两分钟另起一段），每段保留起始时间，例如 [12:30]。 / Strip timecodes from the words, merge consecutive lines from the same speaker (a new block after two minutes), and keep each block's start, for example [12:30].",
+      "inputs": [
+        "transcript"
+      ],
+      "executor": {
+        "type": "script",
+        "run": "node scripts/clean.mjs"
+      },
+      "outputs": [
+        {
+          "type": "text/markdown",
+          "path": "clean.md"
+        }
+      ]
+    },
+    {
+      "id": "summary",
+      "name": "纪要",
+      "description": "按议题写要点和决定。每条决定后面标整理稿里的起始时间，例如 [12:30]。 / Minutes by topic: points and decisions. Each decision is followed by its block start from the cleaned transcript, for example [12:30].",
+      "inputs": [
+        "clean"
+      ],
+      "executor": {
+        "type": "llm",
+        "prompt": "prompts/summary.md",
+        "effort": "medium"
+      },
+      "outputs": [
+        {
+          "type": "text/markdown",
+          "path": "minutes.md"
+        }
+      ]
+    },
+    {
+      "id": "actions",
+      "name": "待办",
+      "description": "每条待办一个负责人、一件具体的事、一个不早于会议的日期，以及整理稿里的出处时间。会上没说负责人或日期就留空，不编。 / One owner, one concrete task, a date on or after the meeting, and a source time from the cleaned transcript. An owner or date the meeting didn't name stays empty instead of being invented.",
+      "inputs": [
+        "clean",
+        "summary"
+      ],
+      "executor": {
+        "type": "llm",
+        "prompt": "prompts/actions.md",
+        "effort": "low"
+      },
+      "outputs": [
+        {
+          "type": "application/json",
+          "path": "actions.json",
+          "schema": "schemas/actions.schema.json"
+        }
+      ]
+    },
+    {
+      "id": "check",
+      "name": "检查",
+      "description": "要补上的负责人或日期，负责人是否出现在记录里、日期是否有效且不早于会议、出处时间是否存在、有没有重复。只提醒，不拦；actions.json 格式不对才停下。 / Owners or dates to fill in, whether each owner appears in the transcript, each due date is valid and not before the meeting, each source time exists, and nothing is duplicated. Warnings only, except a format error in actions.json, which stops the stage.",
+      "inputs": [
+        "transcript",
+        "clean",
+        "summary",
+        "actions"
+      ],
+      "executor": {
+        "type": "script",
+        "run": "node scripts/check.mjs"
+      },
+      "outputs": [
+        {
+          "type": "text/markdown",
+          "path": "check-report.md"
+        }
+      ]
+    },
+    {
+      "id": "email",
+      "name": "跟进邮件",
+      "description": "一封可转发的会后邮件：决定和待办，不贴整份转录。 / A follow-up note people can forward: decisions and actions, not the raw transcript.",
+      "inputs": [
+        "summary",
+        "actions",
+        "check"
+      ],
+      "executor": {
+        "type": "llm",
+        "prompt": "prompts/email.md",
+        "effort": "low"
+      },
+      "outputs": [
+        {
+          "type": "text/markdown",
+          "path": "follow-up.md"
+        }
+      ]
+    }
+  ]
+}

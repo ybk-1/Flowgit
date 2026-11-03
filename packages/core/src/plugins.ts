@@ -300,16 +300,25 @@ export function listPlugins(loaded: LoadedFlow): PluginReport[] {
   return reports;
 }
 
-/** One line for init: the plugin name and where it resolved, or that it is missing. */
+/** One line for init. Words are "中文 / English"; a path or package name is the same on both sides. */
 export function pluginActionDetail(dir: string | undefined, spec: string): string {
   if (!dir) return spec;
   const report = inspectPlugin(dir, spec);
   if (report.missing) {
-    const hint = report.hint ? `，${report.hint}` : "";
-    return `${spec}（找不到 / not found${hint}）`;
+    const hint = missingActionHint(spec);
+    return `${spec}（${hint.zh} / ${hint.en}）`;
   }
   const version = report.version ? ` ${report.version}` : "";
   return `${spec}${version} → ${report.path ?? report.resolved}`;
+}
+
+/** The two halves of a missing-plugin line, so the board can show one language. */
+function missingActionHint(spec: string): { zh: string; en: string } {
+  if (isPackageName(spec)) {
+    const cmd = installHint(spec);
+    return { zh: `找不到，${cmd}`, en: `not found, ${cmd}` };
+  }
+  return { zh: "找不到，确认这个路径是对的", en: "not found, check that path" };
 }
 
 function showApiVersion(value: unknown): string {

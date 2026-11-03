@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  TrustNeededError,
   doctor,
   flowActions,
   listPlugins,
@@ -11,6 +12,7 @@ import {
   loadFlow,
   parseFlowMd,
   renderFlowMd,
+  runAll,
   runStage,
   stageConfigHash,
   stageStatus,
@@ -182,7 +184,9 @@ export default {
     expect(fs.existsSync(path.join(root, "node_modules/echo-plugin/leaked.txt"))).toBe(false);
     const missing = doctor(loadFlow(dir));
     expect(missing).toContainEqual(expect.objectContaining({ level: "error", stage: "work", hint: "npm install echo-plugin" }));
-    expect(flowActions(loadFlow(dir).flow, dir)[0]?.detail).toContain("npm install echo-plugin");
+    expect(flowActions(loadFlow(dir).flow, dir)[0]?.detail).toBe(
+      "echo-plugin（找不到，npm install echo-plugin / not found, npm install echo-plugin）",
+    );
 
     writePackagePlugin(dir, "echo-plugin", "1.2.3", childSource);
     const loaded = loadFlow(dir);
@@ -259,4 +263,52 @@ export default {
     expect(fs.readFileSync(path.join(dir, "signal.txt"), "utf8")).toBe("aborted");
     expect(listRuns(dir, "work").at(-1)?.status).toBe("error");
   }, 15_000);
+});
+
+describe("confirming a copied flow before a plugin loads", () => {
+  it("throws TrustNeededError and loads nothing when the flow was copied from Git", async () => {
+    const home = tempDir("flowgit-plugin-home-");
+    const previousHome = process.env.FLOWGIT_HOME;
+    process.env.FLOWGIT_HOME = home;
+    try {
+      const dir = tempDir("flowgit-plugin-trust-");
+      writeFolderPlugin(
+        dir,
+        "plugins/mark",
+        `import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+fs.writeFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "loaded.txt"), "loaded\\n");
+export default {
+  flowgitPlugin: 1,
+  name: "mark",
+  executor: { run(ctx) { ctx.writeOutput("out.txt", "ran"); } },
+};
+`,
+      );
+      const flow = pluginFlow("./plugins/mark");
+      flow.name = "copied";
+      flow.forkedFrom = { source: "https://example.com/someone/flow.git", commit: "abc123" };
+      writeFlow(dir, flow);
+      const loaded = loadFlow(dir);
+      const actions = flowActions(loaded.flow, dir);
+      expect(actions).toEqual([{ stage: "work", kind: "plugin", detail: "./plugins/mark 1.0.0 → plugins/mark" }]);
+      expect(flowActions(pluginFlow("./missing"), dir)).toEqual([
+        { stage: "work", kind: "plugin", detail: "./missing（找不到，确认这个路径是对的 / not found, check that path）" },
+      ]);
+
+      const refused = await runStage(loaded, "work").catch((err: unknown) => err);
+      expect(refused).toBeInstanceOf(TrustNeededError);
+      expect((refused as TrustNeededError).message).toContain("flowgit trust");
+      expect((refused as TrustNeededError).state.actions).toEqual(actions);
+      await expect(runAll(loaded)).rejects.toBeInstanceOf(TrustNeededError);
+      expect(fs.existsSync(path.join(dir, "plugins/mark/loaded.txt"))).toBe(false);
+      expect(fs.existsSync(path.join(dir, "out.txt"))).toBe(false);
+      expect(listRuns(dir, "work")).toEqual([]);
+      expect(fs.existsSync(path.join(home, "trusted.json"))).toBe(false);
+    } finally {
+      if (previousHome === undefined) delete process.env.FLOWGIT_HOME;
+      else process.env.FLOWGIT_HOME = previousHome;
+    }
+  });
 });

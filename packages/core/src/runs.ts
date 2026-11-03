@@ -336,21 +336,44 @@ export function outputsEdited(dir: string, stage: Stage, run: RunRecord | undefi
 }
 
 /**
+ * Compares the outputs on disk with the successful runs, hashing each output
+ * once however many runs there are. Missing outputs do not count. `current` is
+ * the newest run whose snapshot matches every output that exists; with no match
+ * the files are a hand edit.
+ */
+function outputsVsRuns(dir: string, stage: Stage, runs: RunRecord[]): { handEdited: boolean; current?: RunRecord } {
+  const ok = runs.filter((r) => r.status === "ok");
+  if (!ok.length) return { handEdited: false };
+  const present: Array<[string, string]> = [];
+  for (const o of stage.outputs) {
+    const abs = outputAbs(dir, o);
+    if (fs.existsSync(abs)) present.push([outputRel(o), hashPath(abs).sha256]);
+  }
+  if (!present.length) return { handEdited: false };
+  for (let i = ok.length - 1; i >= 0; i--) {
+    const run = ok[i]!;
+    if (present.every(([rel, sha]) => run.outputs.find((r) => r.path === rel)?.sha256 === sha)) return { handEdited: false, current: run };
+  }
+  return { handEdited: true };
+}
+
+/**
  * True when the outputs on disk are a hand edit: they match no successful run,
  * so a restored older version does not count. Missing outputs do not count.
  * Hashes each output once, however many runs there are.
  */
 export function outputsHandEdited(dir: string, stage: Stage, runs: RunRecord[] = listRuns(dir, stage.id)): boolean {
-  const ok = runs.filter((r) => r.status === "ok");
-  if (!ok.length) return false;
-  const current: Array<[string, string]> = [];
-  for (const o of stage.outputs) {
-    const abs = outputAbs(dir, o);
-    if (fs.existsSync(abs)) current.push([outputRel(o), hashPath(abs).sha256]);
-  }
-  if (!current.length) return false;
-  const matches = (run: RunRecord) => current.every(([rel, sha]) => run.outputs.find((r) => r.path === rel)?.sha256 === sha);
-  return !ok.some(matches);
+  return outputsVsRuns(dir, stage, runs).handEdited;
+}
+
+/**
+ * The successful run the outputs on disk are: the newest one whose snapshot
+ * matches every output that exists. After a restore this is the restored run,
+ * not the latest. Undefined when no output is on disk or the files are a hand
+ * edit that matches no run.
+ */
+export function currentRun(dir: string, stage: Stage, runs: RunRecord[] = listRuns(dir, stage.id)): RunRecord | undefined {
+  return outputsVsRuns(dir, stage, runs).current;
 }
 
 /** State of one stage judged on its own: its runs, its inputs and its outputs. */
@@ -368,10 +391,15 @@ function localStatus(loaded: LoadedFlow, stageId: string, flowInputs: Record<str
   if (!latest) return { ...base, state: missingUpstream.length ? "waiting-upstream" : "never-run" };
   if (latest.status === "error") return { ...base, state: "error" };
   if (missingUpstream.length) return { ...base, state: "waiting-upstream" };
-  const current = inputHash(inputRefs(dir, flow, stage), flowInputs, stageConfigHash(dir, stage, new Set(), flow));
-  if (current !== latest.inputHash) return { ...base, state: "stale" };
-  if (outputsHandEdited(dir, stage, runs)) return { ...base, state: "edited" };
-  return { ...base, state: "ok" };
+  const hash = inputHash(inputRefs(dir, flow, stage), flowInputs, stageConfigHash(dir, stage, new Set(), flow));
+  if (hash !== latest.inputHash) {
+    // Which version the files are only matters with two or more to choose from, and hashing big outputs isn't free.
+    const current = runs.filter((r) => r.status === "ok").length > 1 ? outputsVsRuns(dir, stage, runs).current : undefined;
+    return current ? { ...base, current: current.n, state: "stale" } : { ...base, state: "stale" };
+  }
+  const outputs = outputsVsRuns(dir, stage, runs);
+  if (outputs.handEdited) return { ...base, state: "edited" };
+  return outputs.current ? { ...base, current: outputs.current.n, state: "ok" } : { ...base, state: "ok" };
 }
 
 /**

@@ -25,3 +25,6 @@ packages/cli/templates/*/skill/
 packages/*/LICENSE
 # Tarballs from pnpm pack
 *.tgz
+
+# Static template gallery (`flowgit gallery build`). Not deployed.
+gallery-dist/

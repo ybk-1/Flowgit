@@ -47,6 +47,14 @@ export function table(rows: string[][]): string {
   return rows.map((r) => r.map((cell, i) => (i === r.length - 1 ? cell : pad(cell, widths[i]))).join("  ")).join("\n");
 }
 
+/** "v3 /3", or "v2（回退 / restored） /3" when the files on disk are an older run than the latest. */
+export function versionCell(s: StageStatus): string {
+  if (!s.latest) return "-";
+  const total = s.runs > 1 ? c.dim(` /${s.runs}`) : "";
+  if (s.current !== undefined && s.current !== s.latest.n) return `v${s.current}${c.yellow("（回退 / restored）")}${total}`;
+  return `v${s.latest.n}${total}`;
+}
+
 export function statusBoard(statuses: StageStatus[]): string {
   const rows = [[c.dim("#"), c.dim("阶段 stage"), c.dim("执行 executor"), c.dim("状态 state"), c.dim("版本 runs"), c.dim("产物 outputs")]];
   statuses.forEach((s, i) => {
@@ -55,7 +63,7 @@ export function statusBoard(statuses: StageStatus[]): string {
       `${s.stage.name} ${c.dim(s.stage.id)}`,
       s.stage.executor.type,
       stateLabel(s.state),
-      s.latest ? `v${s.latest.n}${s.runs > 1 ? c.dim(` /${s.runs}`) : ""}` : "-",
+      versionCell(s),
       s.stage.outputs.map((o) => outputRel(o)).join(", "),
     ]);
   });

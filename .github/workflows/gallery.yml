@@ -1,0 +1,34 @@
+# 生成静态模板画廊，并校验社区模板登记。不部署，也不打开 GitHub Pages。
+# Build the static template gallery and validate the community registry. No deploy, and GitHub Pages stays off.
+
+name: Gallery
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  gallery:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: 编译并生成画廊 / Build and generate the gallery
+        run: pnpm build && node packages/cli/dist/index.js gallery build
+      - name: 校验社区模板登记 / Validate the community registry
+        run: node scripts/check-registry.mjs
+      - name: 上传画廊产物 / Upload the gallery artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gallery-dist
+          path: gallery-dist/
+          if-no-files-found: error

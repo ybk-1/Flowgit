@@ -4,7 +4,40 @@
 
 What changed in each version. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/). `@flowgit/core`, `@flowgit/web` and `flowgit` share one version number.
 
-## [0.1.0] - 未发布 / Unreleased
+## [未发布 / Unreleased]
+
+### 命令行 / CLI
+
+- `flowgit prune` 清理旧版本：每个阶段默认保留最新 5 个，并留下所有手动修改、和当前文件一致的最新版本，以及最近一次成功的运行。`--dry-run` 只列出能腾出的空间；不在终端里必须加 `--yes` 才会删除。删掉的版本号不会再被使用。`runs/` 超过 500 MB 时，`flowgit status` 最后一行会提示可以清理。
+- `batch <file.csv>`：用一份 CSV 一次做很多份。表头是流程输入的名字，每一行复制一份流程（不带产物、`runs/`、`flowgit.local.json`、`.env*`）再跑完。空单元格用默认值；必填是空的，这一行失败，其他行继续。停在人工阶段记为等待。结束时列出每行的状态和 token，以及合计。退出码：全部完成是 0，有等待且没有失败是 2，有失败是 1。再跑一次不会重新复制已有的文件夹。`--concurrency` 默认 1、最大 4；`--rows a-b` 只跑其中几行。输出目录在流程里面时（默认 `batch/`），复制会跳过它。从 Git 地址复制来的流程先确认一次（`--yes` 不问），做的事一样的副本沿用这次确认。
+- `templates --all` 在自带模板之外列出社区模板（`registry/community.json`：在仓库里就用这份文件，否则读 GitHub 上的 raw 地址，`FLOWGIT_REGISTRY` 可以换成别的网址或本地文件），读不到时仍列出自带模板并提示一行。`init -t <社区 id>` 按登记的 Git 地址复制；Git 地址末尾的 `#path=子目录` 和 `--path` 一样。`gallery build` 把静态模板画廊生成到 `gallery-dist/`（每个模板一页：README、阶段图、`init` 命令、依据和 SKILL.md 下载），不部署。
+- 回退以后，`flowgit status` 的“版本”一栏显示现在的文件是哪一版，例如 `v2（回退 / restored） /3`；`status --json` 和看板的 `GET /api/flow` 多了 `current`。
+- `flowgit prune` deletes old versions: each stage keeps its newest 5, every manual edit, the newest version matching the current files, and the newest successful run. `--dry-run` only lists how much space that frees; outside a terminal nothing is deleted unless `--yes` is set. Deleted version numbers are never reused. When `runs/` is over 500 MB, the last line of `flowgit status` says so.
+- `batch <file.csv>` runs many copies from one CSV. The header row names the flow inputs; each data row is a copy of the flow (without outputs, `runs/`, `flowgit.local.json` or `.env*`) that then runs. Empty cells use defaults; an empty required input fails that row and the others still run. A row that stops at a human stage is waiting. The command ends with each row's state and tokens, then a total. Exit 0 when all are done, 2 when some are waiting and none failed, 1 when any failed. Running it again does not recopy folders that already exist. `--concurrency` defaults to 1 and is at most 4; `--rows a-b` runs only that range. When the output directory is inside the flow (the default `batch/`), the copy skips it. A flow copied from a Git URL is confirmed once first (`--yes` skips the question), and copies that do the same things run under that confirmation.
+- `templates --all` lists community templates as well as the bundled ones (`registry/community.json`: the file in a checkout, otherwise the raw file on GitHub; `FLOWGIT_REGISTRY` can point at another URL or a local file), and still prints the bundled ones with one note when that list can't be read. `init -t <community id>` copies the registered Git URL, and `#path=<subdir>` at the end of a Git URL works like `--path`. `gallery build` writes a static template gallery to `gallery-dist/` (a page per template: README, stage graph, `init` command, sources and a SKILL.md download) and does not deploy.
+- After a restore, the runs column of `flowgit status` shows which version the files are, e.g. `v2（回退 / restored） /3`; `status --json` and the board's `GET /api/flow` gain `current`.
+
+### 看板 / Board
+
+- 看板界面一次只显示一种语言：右上角「中文 / EN」切换，选择记在浏览器里；第一次打开跟着浏览器语言（中文浏览器显示简体中文，其他显示英文）。文案在 `public/i18n.js`，用开源翻译库 [i18next](https://www.i18next.com)；服务器和流程文件里的双语提示（“中文 / English”）也只显示当前语言那一半。
+- The board shows one language at a time: switch with "中文 / EN" at the top right, remembered in the browser; the first visit follows the browser language (Simplified Chinese for a Chinese browser, English otherwise). Strings live in `public/i18n.js` on the open-source [i18next](https://www.i18next.com) library, and bilingual messages from the server and from flow files ("中文 / English") show only the current language's half.
+- 看板更有立体感：卡片有分层阴影，高度表示状态（可以运行的浮得最高，等上游的凹下去），编号是立体字，按钮像键帽一样能按下去；用鼠标时，卡片会朝鼠标倾斜，里面的内容分层浮起。流程图默认是 2.5D：阶段是倾斜地面上的方块，可以运行的方块轻轻浮动，通向正在运行阶段的连线会流动；流程图右上角可以切回平面图，选择记在浏览器里。系统打开“减少动态效果”时，倾斜和浮动都会关掉。
+- The board has depth: cards have layered shadows and their height shows their state (ready to run floats highest, waiting for upstream sits recessed), stage numbers are extruded, and buttons press down like keys; with a mouse, the card under it tilts toward it and its contents float at different depths. The graph is 2.5D by default: stages are blocks on a tilted floor, a stage that is ready bobs gently, and the edge into the running stage flows; switch back to the flat graph at the top right of the graph, remembered in the browser. Tilting and bobbing turn off when the system asks for reduced motion.
+- 回退以后，卡片和阶段面板显示现在的文件是哪一版，例如“v2 · 已回退（最新是 v3）”；历史里这一版标着“当前”，也不再提供“回退到这个版本”。
+- After a restore, the card and the stage panel show which version the files are, e.g. "v2 · restored (latest is v3)"; the history marks that version "current" and no longer offers to restore it.
+
+### 模板和示例 / Templates and examples
+
+- `social-posts`：多平台帖子。3 到 5 个角度（人挑选）→ 按小红书、微博、X、抖音、LinkedIn、微信朋友圈已公布的长度和话题规则写帖 → 检查绝对化用语、医疗用语、导流痕迹和占位符（只提醒）→ 导出 `posts.md`。规则会变，发出去之前要再核对。
+- `data-report`：数据报告。表格（人，任何带表头的 CSV，中文表头和 Excel 默认的 GBK 编码也行；示例是虚构的销售表）→ 列画像（类型、缺失、唯一值、最小/最大/平均/中位数、日期范围）→ 模型只写柱状、折线或表格的规格，不写代码 → 脚本汇总并手写浅色深色都能看的 SVG → 结论在前、每条发现都引用图 → 合成报告，分析里对不上画像或汇总的数字只警告、不拦截。
+- `meeting-notes`：会议纪要。转录（人，`.txt` / `.srt` / `.vtt`，UTF-8 或 GBK）→ 按发言人合并并保留起始时间 → 纪要（每条决定标 `[12:30]`）→ 待办（一人、一事、日期、出处；会上没说负责人或日期就留空，检查会提醒补上）→ 检查（只提醒，格式不对才停下）→ 会后邮件。转录可能有个人信息，分享前要自己看一遍。
+- `landing-page`（落地页）按研究加深：简报写上访问者从哪里来、证据、表单和隐私；表单字段有标签、类型、自动填充和必填标记，表单下写明谁收集、做什么用、存多久、怎么撤回，可选的 `privacyUrl` 加上隐私政策链接，同意框不预先勾选；推荐语只用简报里的真实原话；图片带宽和高。检查分成“必须修”（会失败：WCAG 2.2、收集告知、预先勾选、占位、对比度）和“上线前确认”（只提醒：紧迫感、绝对化用语、推荐语原话、简报里没有的数字等）。依据写在模板 README 的“参考资料”里。
+- `social-posts`: posts for several platforms. 3 to 5 angles (a person picks) → posts written to the published length and hashtag rules of Xiaohongshu, Weibo, X, Douyin, LinkedIn and WeChat Moments → checks for absolute claims, medical claims, diversion traces and placeholders (warnings only) → export to `posts.md`. Rules change; check them again before posting.
+- `data-report`: a data report. A table (person; any CSV with a header row, including Chinese headers and the GBK files Excel saves by default; the sample is fictional sales) → a column profile (type, missing, distinct, min/max/mean/median, date range) → the model writes a bar, line or table spec and no code → a script aggregates and draws SVG that stays readable in light and dark → the answer comes first and each finding cites a chart → the report is assembled, and a number in the analysis that is in neither the profile nor the aggregates only warns, it does not block.
+- `meeting-notes`: meeting minutes. Transcript (person; `.txt` / `.srt` / `.vtt`, UTF-8 or GBK) → merge by speaker and keep each block's start time → minutes (every decision cited as `[12:30]`) → actions (one owner, one task, a date, a source time; an owner or date nobody named stays empty and the check asks for it) → check (warnings only, unless the file is the wrong shape) → follow-up note. A transcript can hold personal information; read it yourself before sharing.
+- `landing-page` is deepened from research: the brief covers where visitors come from, proof, and form and privacy; form fields get a label, a type, autocomplete and a required marker, the form says who collects the data, what for, how long and how to withdraw, an optional `privacyUrl` adds a privacy policy link, and consent is never pre-ticked; testimonials use only real quotes from the brief; images carry width and height. The check has two tiers: "must fix" (fails the stage: WCAG 2.2, notice at collection, pre-ticked boxes, placeholders, contrast) and "confirm before going live" (warnings: urgency, absolute claims, testimonial quotes, numbers not in the brief and more). Sources are under "References" in the template README.
+
+## [0.1.0] - 2026-11-02
 
 第一个版本。/ The first release.
 
@@ -62,10 +95,12 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 - 看板上可以新增和删除阶段。校验不通过就什么都不写，并返回双语错误列表；llm / agent 没有提示词文件时会建骨架，已有文件不覆盖。删除不碰产物和 `runs/`，还有依赖时会说明并可以一起断开。运行中不能改阶段。
 - 看板上可以在「卡片 / Cards」和「流程图 / Graph」之间切换，选择记在浏览器里。流程图按依赖从左到右分列，阶段是圆角框，颜色和卡片一样表示状态；点一个阶段，侧栏里可以看产物、运行和历史。布局来自 `GET /api/graph`（`layoutFlow`）。
 - 看板上有「预演 / Preview」：在日志里列出每个阶段会跳过、运行、等你还是不能运行，最后写最多调用几次模型，什么都不运行。全部运行前，如果这次会调用真实模型（`FLOWGIT_LLM_MOCK_DIR` 的固定回复不算），会先确认。每张卡片和流程图方框的提示显示这个阶段用过的 token，页面顶部显示合计。`GET /api/plan` 和 `GET /api/usage`。
+- 看板加了五个动效（拆解自 Awwwards 上的作品；系统打开“减少动态效果”时全部关掉）：状态变化时，新状态像解码一样逐字显出来；「全部运行」要按住 1 秒，按住时每张卡片和流程图方框上先标出这个阶段会跳过、运行、等你还是不能运行，按满才运行，提前松手什么都不运行（轻点和以前一样，会调用真实模型时先确认），「预演」的结果也会标在卡片和流程图上（Esc 收起）；运行时正在跑的阶段标成「运行中」，看板自动滚到它；侧栏从点的位置圆形展开，关闭时收回同一个点；历史版本排成一叠唱片，可以拖、甩或用方向键翻，最前面那张可以看产物、和当前文件对比或回退。
 - `run all --dry-run` 预演：每个阶段会跳过、运行还是停下等你，最多调用几次模型，什么都不运行。`doctor` 通过后和导出的 `SKILL.md` 里都会提到它。
 - `inputs set` 保存前就检查名字和值（数字、`true`/`false`、可选值），写错了不会存进去。
 - `board` 打印和打开的链接带着令牌（`?token=…`）。直接打开 `http://127.0.0.1:4747/` 只会看到提示、拿不到令牌，所以同一台电脑上的其他账号或程序没法操作你的看板。
-- 从 Git 地址或别的文件夹 `init` 时，会列出这个流程要运行的命令、要启动的 agent、要调用的服务（以及请求头里带的环境变量）和要启动的 MCP 服务器（命令或 URL），运行前先看一眼。
+- 从 Git 地址或别的文件夹 `init` 时，会列出这个流程要运行的命令、要启动的 agent、要调用的服务（以及请求头里带的环境变量）、要启动的 MCP 服务器（命令或 URL）、要加载的插件和要调用的生图模型，运行前先看一眼。
+- 从 Git 地址复制来的流程，第一次运行前要在这台电脑上确认一次它会做的事（包括子流程里的命令、要启动的 MCP 服务器、要加载的插件和要调用的生图接口）：`run` 会列出来再问，`flowgit trust` 可以先确认，`run --yes` 不问直接确认，看板上会弹窗。确认记在 `~/.flowgit/trusted.json`，不在流程目录里；这些命令变了会再问。确认之前不会启动 MCP 服务器，不会加载插件，也不会调用生图接口。
 - 提示词文件，以及要发给模型或服务的上游产物，如果是指向流程目录外面的链接，就不读取（`validate` 也会报出来），免得下载来的流程把 `~/.ssh` 这类文件发出去。脚本和 agent 阶段不受影响。
 - 流程自己的 `flowgit.local.json` 改了某个带密钥的模型服务的地址时，`doctor` 会警告，运行日志也会写出来，因为密钥会发到那个地址。
 - 提示、报错和 `--help` 都是中英双语（包括输错命令、少写参数这类报错，会提示“是不是想输入 …”），并针对余额不足、限流、连不上（包括代理）给出具体建议。
@@ -85,10 +120,12 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 - Stages can be added and removed on the board. A stage that fails validation is not written, and the error list is bilingual; an llm or agent stage without a prompt file gets a skeleton, and an existing file is left as it is. Removing a stage leaves outputs and `runs/` in place, names any stages that still depend on it, and can detach those links. Stages cannot be changed while a run is in progress.
 - The board switches between "卡片 / Cards" and "流程图 / Graph", and the choice is remembered in the browser. The graph lays stages out left to right by dependency, as rounded boxes colored the same way as the cards; click a stage for its outputs, run, and history in the side panel. Layout comes from `GET /api/graph` (`layoutFlow`).
 - The board has "预演 / Preview": the log lists whether each stage would be skipped, run, wait for you or cannot run, and ends with at most how many model calls, without running anything. Run all asks first when the run would call a real model (canned replies from `FLOWGIT_LLM_MOCK_DIR` do not count). Each card and the graph box tooltip show the tokens that stage has used, and the top of the page shows the total. `GET /api/plan` and `GET /api/usage`.
+- The board has five motion effects (taken apart from Awwwards sites; all of them turn off when the system asks for reduced motion): a new state decodes into place letter by letter; "全部运行 Run all" is held for one second, and while you hold it every card and graph box shows whether that stage would be skipped, run, wait for you or cannot run, the run starts when the hold completes, and letting go early runs nothing (a quick tap works as before and asks first when it would call a real model), and "预演 / Preview" marks the cards and the graph the same way (Escape clears them); the running stage is marked "运行中 running" and the board scrolls to it; the side panel opens as a circle from where you clicked and closes back into the same point; and a stage's history is a stack of discs you drag, flick or flip with the arrow keys, with the front one ready to open, compare with the current files, or restore.
 - `run all --dry-run` shows whether each stage would be skipped, run or stop for you, and at most how many model calls it would make, without running anything. `doctor` points to it when nothing blocks, and so does the exported `SKILL.md`.
 - `inputs set` checks names and values (numbers, `true`/`false`, allowed values) before saving, so a typo is never stored.
 - The link `board` prints and opens carries the token (`?token=…`). Opening `http://127.0.0.1:4747/` by itself shows a note and no token, so other accounts or programs on the same computer can't drive your board.
-- `init` from a Git URL or another folder lists the commands the flow runs, the agents it starts, the services it calls (with the environment variables their headers send) and the MCP servers it would start (command or URL), so you can look before you run it.
+- `init` from a Git URL or another folder lists the commands the flow runs, the agents it starts, the services it calls (with the environment variables their headers send), the MCP servers it would start (command or URL), the plugins it would load and the image models it would call, so you can look before you run it.
+- A flow copied from a Git URL must be confirmed once on each computer before its first run, with what it does (sub-flow commands, MCP servers, plugins and image APIs included) listed: `run` lists it and asks, `flowgit trust` confirms ahead of time, `run --yes` confirms without asking, and the board asks in a dialog. The confirmation lives in `~/.flowgit/trusted.json`, never in the flow directory, and is asked again when those commands change. An MCP server is not started, a plugin is not loaded, and an image API is not called until that confirmation.
 - A prompt file, or an upstream output on its way to a model or a service, that is a link to a file outside the flow directory is not read (`validate` reports it too), so a downloaded flow can't send files like `~/.ssh` anywhere. Script and agent stages are not affected.
 - When a flow's own `flowgit.local.json` changes the address of a model provider that sends a key, `doctor` warns and the run log says so, because the key goes to that address.
 - Messages, errors and `--help` are bilingual (including typos in commands and missing arguments, with a “did you mean …”), with specific advice for an empty balance, rate limits and connection problems (including proxies).
@@ -114,6 +151,7 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 - `travel-guide`：旅行攻略。备选地点（标出要预约和要核实的信息）→ 按区域排的每日行程（交通、留白、雨天备选）→ 攻略笔记 → 检查节奏、时间衔接、预算和出发前核实清单。
 - `online-course`：知识付费课程，按 ADDIE。学员和学习成果 → 大纲（每段视频 6 分钟以内、每课有练习）→ 试听课逐字稿和课程介绍页（并行）→ 检查成果覆盖、分段长度，以及介绍页里的效果承诺、学员证言和价格比较。
 - 每个新模板的 README 都列出参考资料。
+- `landing-page`：落地页。简报（人）→ 结构 → 文案 → 照片（可空）→ 生成 `site/index.html` 和 `site/style.css` → 检查。缺图用色块加说明，页面不访问网络，用户写的文字都会转义。
 - `examples/agent-page`：用 agent 做一页介绍网页（只在仓库里）。
 - `examples/subflow`：题目（人）→ 子流程（模型和脚本）→ 摘要（脚本）。演示 `workflow` 执行器。
 - `short-video` (default): script → voiceover → storyboard → assets → edit → export. FFmpeg renders a vertical video with zoom, blurred fill, gradient text cards, a title, transitions, background music and voiceover (clips follow the voice); the output language is Chinese or English.
@@ -135,6 +173,7 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 - `travel-guide`: a travel guide. Candidate places (flagging bookings and facts to verify) → a day-by-day itinerary by area (transfers, free time, rainy-day backups) → the guide → checks on pace, timing, budget and the check-before-you-go list.
 - `online-course`: an online course with ADDIE. Learners and outcomes → syllabus (video segments of six minutes or less, practice in every lesson) → the trial lesson script and the course page (in parallel) → checks on outcome coverage, segment length, and promised results, testimonials and price comparisons on the page.
 - Every new template's README lists its references.
+- `landing-page`: a landing page. Brief (person) → structure → copy → photos (optional) → build `site/index.html` and `site/style.css` → check. A missing image becomes a color block with a caption, the page loads nothing from the network, and user text is escaped.
 - `examples/agent-page`: a one-page explainer made by an agent (repo only).
 - `examples/subflow`: topic (person) → sub-flow (model and script) → summary (script). Shows the `workflow` executor.
 
@@ -145,4 +184,5 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 - CI on Linux and Windows, including the render test, a pack-and-install smoke test, and the README's PowerShell quick start run as written.
 - A release workflow using npm Trusted Publishing; see [docs/releasing.md](docs/releasing.md).
 
-[0.1.0]: https://github.com/cgold9820-dotcom/Flowgit/commits/main
+[未发布 / Unreleased]: https://github.com/cgold9820-dotcom/Flowgit/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/cgold9820-dotcom/Flowgit/releases/tag/v0.1.0

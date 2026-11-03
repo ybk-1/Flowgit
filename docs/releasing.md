@@ -17,17 +17,29 @@ npm can only set up Trusted Publishing for a package that already exists, so the
 3. **手动发布**（在最新的 `main` 上，工作区要干净）：
    **Publish by hand** (on the latest `main`, with a clean working tree):
 
+   每行单独运行，Windows PowerShell 5.1 也能照抄（它不认 `&&`）。
+   Run one line at a time; this also works as is in Windows PowerShell 5.1, which has no `&&`.
+
    ```bash
    npm login
-   pnpm install && pnpm build && pnpm test
-   node scripts/pack-smoke.mjs          # 先确认装得起来 / make sure it installs
-   cd packages/core && pnpm publish --access public
-   cd ../web && pnpm publish --access public
-   cd ../cli && pnpm publish --access public
+   npm whoami
+   pnpm install --frozen-lockfile
+   pnpm build
+   pnpm test
+   node scripts/pack-smoke.mjs
+   cd packages/core
+   pnpm publish --access public
+   cd ../web
+   pnpm publish --access public
+   cd ../cli
+   pnpm publish --access public
+   cd ../..
+   git tag v0.1.0
+   git push origin v0.1.0
    ```
 
-   一定要用 `pnpm publish`，它会把 `"workspace:*"` 换成真正的版本号。按 core、web、cli 的顺序发。
-   Use `pnpm publish`: it replaces `"workspace:*"` with the real version. Publish core, then web, then the CLI.
+   `npm whoami` 应该显示你的 npm 用户名。`--frozen-lockfile` 不会改 `pnpm-lock.yaml`，工作区不干净时 `pnpm publish` 会停下。`pack-smoke` 先确认打出来的包装得起来。一定要用 `pnpm publish`，它会把 `"workspace:*"` 换成真正的版本号。按 core、web、cli 的顺序发。最后推的 tag 会触发 `release.yml`，它看到三个版本都已经在 npm 上就会跳过发布，只留下 tag 记录这一版。
+   `npm whoami` should print your npm username. `--frozen-lockfile` leaves `pnpm-lock.yaml` alone; `pnpm publish` stops when the working tree isn't clean. `pack-smoke` first makes sure the packed packages install. Use `pnpm publish`: it replaces `"workspace:*"` with the real version. Publish core, then web, then the CLI. The tag pushed at the end triggers `release.yml`, which finds all three versions already on npm and skips publishing, so the tag just marks the release.
 
 4. **设置 Trusted Publishing**：在 npmjs.com 打开每个包的 Settings → Trusted Publisher → GitHub Actions，填：
    **Set up Trusted Publishing**: on npmjs.com, open each package's Settings → Trusted Publisher → GitHub Actions and fill in:

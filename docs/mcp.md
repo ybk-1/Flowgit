@@ -101,9 +101,9 @@ The hash includes that server's `mcpServers` entry with env values removed (the 
 
 ## 运行前看一眼 / Look before you run
 
-`flowgit doctor` 检查 stdio 的 `command` 在不在 PATH 上，以及每个 `${变量名}` 有没有设置。从别处 `init` 来的流程会列出将要启动的命令或 URL。
+`flowgit doctor` 检查 stdio 的 `command` 在不在 PATH 上，以及每个 `${变量名}` 有没有设置。从别处 `init` 来的流程会列出将要启动的命令或 URL。从 Git 地址复制来的流程，第一次运行前要确认这份清单（`flowgit trust`，或 `run` 时的询问）；确认之前不会启动服务器。
 
-`flowgit doctor` checks that a stdio `command` is on PATH and that every `${VAR}` is set. A flow you `init` from somewhere else lists the command or URL it would start.
+`flowgit doctor` checks that a stdio `command` is on PATH and that every `${VAR}` is set. A flow you `init` from somewhere else lists the command or URL it would start. A flow copied from a Git URL must confirm that list before its first run (`flowgit trust`, or the question `run` asks); no server starts until then.
 
 ```bash
 flowgit doctor

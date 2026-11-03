@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Aggregated chart values",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["charts"],
+  "properties": {
+    "charts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "title", "type", "x", "y", "agg", "filter", "file", "usedRows", "skippedRows", "points"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "title": { "type": "string", "minLength": 1 },
+          "type": { "enum": ["bar", "line", "table"] },
+          "x": { "type": "string" },
+          "y": { "type": "string" },
+          "agg": { "enum": ["sum", "mean", "count", "median"] },
+          "filter": { "type": "string" },
+          "file": { "type": "string", "minLength": 1 },
+          "usedRows": { "type": "integer", "minimum": 0 },
+          "skippedRows": { "type": "integer", "minimum": 0 },
+          "points": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["x", "y"],
+              "properties": {
+                "x": { "type": "string" },
+                "y": { "type": "number" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
