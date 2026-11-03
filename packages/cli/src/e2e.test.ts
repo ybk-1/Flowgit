@@ -981,33 +981,75 @@ describe("landing-page template", () => {
     for (const block of Object.values(copy.blocks)) {
       if (block.heading) expect(html).toContain(block.heading);
     }
+    expect(html).toContain('<html lang="zh-Hans">');
+    expect(html).toContain("<title>箱栖：一块纸板，折一下就是猫窝</title>");
+    expect(html).toContain('<meta name="description" content="箱栖是一块瓦楞纸');
     expect(html).toContain('name="viewport"');
+    // a labelled email field with autocomplete, marked required, tied to the notice under it
+    expect(html).toContain('<label for="f-email">邮箱<span class="req">（必填）</span></label>');
+    expect(html).toContain('<input id="f-email" type="email" autocomplete="email" required aria-describedby="form-note">');
+    expect(html).toContain('<p id="form-note" class="note">邮箱由箱栖工作室（hello@boxnest.example）收集');
+    expect(html).not.toMatch(/\bchecked\b/);
     // the placeholder form sends nothing: its input has no name
-    expect(html).toMatch(/<input id="reply"/);
     expect(html).not.toMatch(/<input[^>]*\bname=/);
     expect(html).not.toMatch(/<script/i);
     expect(html).not.toMatch(/\b(?:src|href)\s*=\s*["']\s*https?:/i);
     const css = fs.readFileSync(path.join(pageDir, "site", "style.css"), "utf8");
     expect(css).toMatch(/max-width:\s*40rem/);
     expect(css).toContain("prefers-color-scheme: dark");
+    expect(css).toContain("--field-line: #78716c;");
     expect(css).not.toMatch(/https?:\/\//);
     expect(css).not.toMatch(/url\s*\(/);
     const report = fs.readFileSync(path.join(pageDir, "check-report.md"), "utf8");
-    expect(report).toContain("缺少替代文本的图片");
-    expect(report).toContain("没有问题。");
+    expect(report).toContain("没有必须修的问题；上线前确认 2 项。");
+    expect(report).toContain("| 必须修 | 缺少替代文本的图片 | WCAG 1.1.1 | 通过 |");
+    expect(report).toContain("| 必须修 | 颜色对比度不够 | WCAG 1.4.3, 1.4.11 | 通过 |");
+    expect(report).toContain("| 上线前确认 | 推荐语 |");
+    expect(report).toContain("### 隐私政策链接");
+    expect(report).toContain("还没有图片，页面上显示的是「图片待补」：hero.jpg、features.jpg、testimonial.jpg、faq.jpg、cta.jpg");
 
     const en = run(["run", "check", "--input", "language=en"]);
     expect(en.code, en.out).toBe(0);
-    expect(fs.readFileSync(path.join(pageDir, "check-report.md"), "utf8")).toContain("No problems.");
+    expect(fs.readFileSync(path.join(pageDir, "check-report.md"), "utf8")).toContain("Nothing to fix; 2 to confirm before going live.");
 
+    // a privacy policy link goes in the notice; anything but http(s) is ignored
+    const linked = run(["run", "build", "--input", "privacyUrl=https://boxnest.example/privacy?a=1&b=2"]);
+    expect(linked.code, linked.out).toBe(0);
+    expect(fs.readFileSync(htmlPath, "utf8")).toContain('我们马上删除。<a href="https://boxnest.example/privacy?a=1&amp;b=2" rel="privacy-policy">隐私政策</a></p>');
+    const sneaky = run(["run", "build", "--input", "privacyUrl=javascript:alert(1)"]);
+    expect(sneaky.code, sneaky.out).toBe(0);
+    expect(sneaky.out).toContain("privacyUrl 不是 http(s) 链接，已忽略");
+    expect(fs.readFileSync(htmlPath, "utf8")).not.toContain("javascript:");
+
+    // photos: an unreadable file gets no size, a PNG and a rotated JPEG get theirs
     fs.writeFileSync(path.join(pageDir, "images", "hero.jpg"), "not-a-real-jpeg");
+    const png = Buffer.alloc(33);
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(png, 0);
+    png.writeUInt32BE(13, 8);
+    png.write("IHDR", 12, "latin1");
+    png.writeUInt32BE(1200, 16);
+    png.writeUInt32BE(800, 20);
+    fs.writeFileSync(path.join(pageDir, "images", "features.jpg"), png);
+    const exif = Buffer.concat([
+      Buffer.from("Exif\0\0", "latin1"),
+      Buffer.from([0x4d, 0x4d, 0x00, 0x2a, 0x00, 0x00, 0x00, 0x08]), // big-endian TIFF, first IFD at 8
+      Buffer.from([0x00, 0x01, 0x01, 0x12, 0x00, 0x03, 0x00, 0x00, 0x00, 0x01, 0x00, 0x06, 0x00, 0x00]), // orientation 6
+      Buffer.from([0x00, 0x00, 0x00, 0x00]),
+    ]);
+    const app1 = Buffer.concat([Buffer.from([0xff, 0xe1, 0x00, exif.length + 2]), exif]);
+    const sof = Buffer.from([0xff, 0xc0, 0x00, 0x11, 0x08, 0x01, 0x2c, 0x01, 0x90, 0x03, ...new Array(9).fill(0)]); // 400 x 300
+    fs.writeFileSync(path.join(pageDir, "images", "cta.jpg"), Buffer.concat([Buffer.from([0xff, 0xd8]), app1, sof, Buffer.from([0xff, 0xd9])]));
     const withPhoto = run(["run", "build"]);
     expect(withPhoto.code, withPhoto.out).toBe(0);
-    expect(withPhoto.out).toContain("1 张图片，4 个色块");
+    expect(withPhoto.out).toContain("3 张图片，2 个色块");
     const htmlPhoto = fs.readFileSync(htmlPath, "utf8");
-    expect(htmlPhoto).toContain('src="images/hero.jpg"');
-    expect(htmlPhoto).toContain('alt="给猫一个它自己的纸箱"');
+    expect(htmlPhoto).toContain('<img src="images/hero.jpg" alt="一只猫钻进折好的纸板窝，只露出头" fetchpriority="high">');
+    expect(htmlPhoto).toContain('<img src="images/features.jpg" alt="一块摊开的纸板和一个折好的猫窝并排放着" width="1200" height="800" loading="lazy">');
+    expect(htmlPhoto).toContain('<img src="images/cta.jpg" alt="折好的纸板窝放在沙发旁边" width="300" height="400" loading="lazy">');
     expect(fs.readFileSync(path.join(pageDir, "site", "images", "hero.jpg"), "utf8")).toBe("not-a-real-jpeg");
+    const checked = run(["run", "check"]);
+    expect(checked.code, checked.out).toBe(0);
+    expect(fs.readFileSync(path.join(pageDir, "check-report.md"), "utf8")).toContain("images/hero.jpg：没写 width 和 height，图片加载时页面会跳");
 
     const edited = JSON.parse(fs.readFileSync(path.join(pageDir, "copy.json"), "utf8")) as { blocks: { hero: { heading: string } } };
     edited.blocks.hero.heading = "Hello <script>alert(1)</script>";
@@ -1055,6 +1097,93 @@ describe("landing-page template", () => {
     expect(report).toContain("文案里有、页面上没有的区块");
     expect(report).toContain("- gone");
     expect(report).not.toContain("没有问题。");
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  it("fails on form, consent and contrast problems and warns about wording the brief does not back", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-landing-form-"));
+    fs.mkdirSync(path.join(root, "site"));
+    fs.writeFileSync(
+      path.join(root, "site", "index.html"),
+      [
+        '<!DOCTYPE html><html lang="en"><head><title>Join</title></head><body>',
+        '<section id="cta" data-block="cta"><h1>Join the list</h1>',
+        '<form action="#cta"><input id="mail" type="email" placeholder="Email">',
+        '<input id="news" type="checkbox" checked><label for="news">Send me news</label>',
+        '<button type="submit">Submit</button></form></section>',
+        '<section data-block="testimonial"><h2>What people say</h2></section>',
+        '<a href="https://elsewhere.example/">Learn more</a>',
+        "</body></html>",
+      ].join("\n"),
+    );
+    fs.writeFileSync(path.join(root, "site", "style.css"), ":root { --bg: #ffffff; --text: #999999; --card: #ffffff; --field-line: #eeeeee; }\n");
+    fs.writeFileSync(
+      path.join(root, "copy.json"),
+      JSON.stringify({
+        blocks: {
+          cta: { heading: "Join the list", body: "Limited time: the best bed, only 3 left. No countdown here. To add: who we are", button: "Submit" },
+          testimonial: { heading: "What people say", body: '"Best bed ever, my cat loves it" - Anna', button: "" },
+        },
+      }),
+    );
+    fs.writeFileSync(path.join(root, "brief.md"), '# Bed\n\n## Proof\n\nNo quotes yet.\n\n## Do not say\n\n- Never say "vet recommended" or "limited time".\n');
+    const script = path.join(here, "..", "templates", "landing-page", "scripts", "check.mjs");
+    const r = spawnSync(process.execPath, [script], {
+      cwd: root,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        FLOWGIT_PROJECT_DIR: root,
+        FLOWGIT_FLOW_INPUTS: JSON.stringify({ language: "en" }),
+        FLOWGIT_OUTPUTS: JSON.stringify([{ path: "check-report.md" }]),
+      },
+    });
+    expect(r.status).toBe(1);
+    const report = fs.readFileSync(path.join(root, "check-report.md"), "utf8");
+    const must = report.slice(report.indexOf("## Must fix"), report.indexOf("## Confirm before going live"));
+    const confirm = report.slice(report.indexOf("## Confirm before going live"), report.indexOf("## What was checked"));
+    expect(must).toContain("### Inputs without a label (WCAG 1.3.1, 3.3.2)\n\n- #mail");
+    expect(must).toContain('#mail: type="email" needs autocomplete="email"');
+    expect(must).toContain("### Pre-ticked boxes (CJEU C-673/17 Planet49; GDPR recital 32)\n\n- Send me news");
+    expect(must).toContain("### Fields without a notice at collection");
+    expect(must).toContain("cta.body: Limited time");
+    expect(must).toContain("Light: --text (#999999) on --bg (#ffffff) is 2.85:1; it needs at least 4.5:1");
+    expect(must).toContain("Light: --field-line (#eeeeee) on --card (#ffffff) is 1.16:1; it needs at least 3:1");
+    expect(confirm).toContain("There is no privacy policy link near the form.");
+    expect(confirm).toContain('"Submit": say the action and what happens');
+    expect(confirm).toContain('"Learn more": say the action and what happens');
+    expect(confirm).toContain("Learn more → https://elsewhere.example/");
+    expect(confirm).toContain('"limited time": the brief states no real deadline or stock');
+    expect(confirm).toContain('"limited time": the brief says not to say this');
+    expect(confirm).toContain('"the best": remove it unless you can prove it');
+    expect(confirm).toContain('"Best bed ever, my cat loves it" is not in the brief.');
+    expect(confirm).toContain("3: not in the brief; verify before going live");
+    // "No countdown" is not urgency, and the copy never mentions a vet
+    expect(confirm).not.toContain('"countdown"');
+    expect(confirm).not.toContain("vet recommended");
+    expect(report).toContain("| Must fix | Low color contrast | WCAG 1.4.3, 1.4.11 | 4 |");
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  it("fails a page whose lang does not match its text", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-landing-lang-"));
+    fs.mkdirSync(path.join(root, "site"));
+    const zh = "一块纸板，折一下就是猫窝。沿压痕折好就能让猫钻进去，不用工具，也没有塑料零件。现在还不能下单。";
+    fs.writeFileSync(path.join(root, "site", "index.html"), `<!DOCTYPE html><html lang="en"><head><title>BoxNest</title></head><body>\n<section data-block="hero"><h1>箱栖</h1><p>${zh}</p></section>\n</body></html>\n`);
+    fs.writeFileSync(path.join(root, "copy.json"), JSON.stringify({ blocks: { hero: { heading: "箱栖", body: zh, button: "" } } }));
+    const script = path.join(here, "..", "templates", "landing-page", "scripts", "check.mjs");
+    const r = spawnSync(process.execPath, [script], {
+      cwd: root,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        FLOWGIT_PROJECT_DIR: root,
+        FLOWGIT_FLOW_INPUTS: JSON.stringify({ language: "en" }),
+        FLOWGIT_OUTPUTS: JSON.stringify([{ path: "check-report.md" }]),
+      },
+    });
+    expect(r.status).toBe(1);
+    expect(fs.readFileSync(path.join(root, "check-report.md"), "utf8")).toContain('The page says lang="en" but most of its text is Chinese');
     fs.rmSync(root, { recursive: true, force: true });
   });
 });
