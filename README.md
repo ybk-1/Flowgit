@@ -178,6 +178,7 @@ flowgit new "把一周的笔记整理成周报" ~/my-report --yes
 | `flowgit graph [--status] [--md] [-o 文件]` | 把流程画成 Mermaid 流程图（GitHub、Obsidian 能直接显示），`--status` 按状态上色，`-o` 写成 UTF-8 文件 | Draw the flow as a Mermaid diagram (GitHub and Obsidian render it); `--status` colors it by state, `-o` writes a UTF-8 file |
 | `flowgit export-skill [-o SKILL.md]` | 生成 `SKILL.md`，给 AI 工具用 | Generate a `SKILL.md` for AI tools |
 | `flowgit gallery build [--out gallery-dist]` | 生成静态模板画廊（不部署） | Write a static template gallery (does not deploy) |
+| `flowgit site build [--out site-dist]` | 生成官网（首页、文档、画廊、schema、网页版）并检查站内死链 | Write the website (home, docs, gallery, schema, web app) and check internal links |
 
 所有命令都接受 `-C <dir>` 指定流程目录。`run` 还接受 `--input k=v`（只对这次运行生效）、`--model`、`--force` 和 `--dry-run`。`diff` 对文本和 JSON 按行输出 unified diff（`+` 绿色、`-` 红色，尊重 `NO_COLOR`），二进制只比较 sha256，文件夹列出新增、删除和改动的文件。
 
@@ -232,6 +233,21 @@ flowgit gallery build                                # 静态页面写到 galler
 在这个仓库里运行时，命令用仓库里的 `registry/community.json`。找不到这份文件时（例如从 npm 装的命令行），改读 GitHub 上的 raw 地址。`FLOWGIT_REGISTRY` 可以换成别的网址或一个本地文件；读不到时，`templates --all` 仍列出自带模板，并只提示一行。
 
 When you run it inside this repo, the command uses the repo's `registry/community.json`. When that file is not there (for example a CLI installed from npm), it reads the raw file on GitHub. `FLOWGIT_REGISTRY` can point at another URL or a local file; if the list cannot be read, `templates --all` still prints the bundled templates and one note.
+
+## 官网 / Website
+
+`flowgit site build` 把官网写到 `site-dist/`（`--out` 可以换目录）。首页来自 [`site/index.html`](site/index.html)，可以切换中英文，`flowgit init` 可以一键复制。`/docs/` 是 `docs/*.md`，左边是目录。`/gallery/` 复用 `flowgit gallery build`。`/schema/flow/0.1.json` 是 flow.json 的 schema。`/app/` 是 `pnpm build` 生成的网页版；还没构建时那里是一页“即将上线”，命令会打印一行说明。
+
+`flowgit site build` writes the website to `site-dist/` (`--out` picks another directory). The home page is [`site/index.html`](site/index.html), with a Chinese / English switch and a copyable `flowgit init`. `/docs/` is `docs/*.md` with a table of contents on the left. `/gallery/` reuses `flowgit gallery build`. `/schema/flow/0.1.json` is the flow.json schema. `/app/` is the web app from `pnpm build`; when that build is missing, the page says it is coming soon and the command prints one line.
+
+Pull Request 上的 [GitHub Action](.github/workflows/site.yml) 只构建并检查死链。推到 `main` 时，仓库配了 `CLOUDFLARE_API_TOKEN` 和 `CLOUDFLARE_ACCOUNT_ID` 就部署到 Cloudflare Pages（flowgit.dev）；没有这两个密钥就跳过，并打印一行。仓库里不写任何账号信息。
+
+On pull requests the [GitHub Action](.github/workflows/site.yml) only builds the site and checks dead links. A push to `main` deploys to Cloudflare Pages (flowgit.dev) when `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` are set, and skips the deploy with one line when they are not. No account details are stored in the repo.
+
+```bash
+pnpm build
+flowgit site build
+```
 
 ## 接任何模型 / Any model
 

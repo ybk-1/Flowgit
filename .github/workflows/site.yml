@@ -1,0 +1,51 @@
+# Pull requests build the site and fail on dead internal links.
+# Pushes to main also deploy to Cloudflare Pages (flowgit.dev) when the two
+# secrets exist. Direct Upload, from Cloudflare's docs:
+# https://developers.cloudflare.com/pages/how-to/use-direct-upload-with-continuous-integration/
+# https://developers.cloudflare.com/workers/wrangler/commands/pages/#pages-deploy
+# CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID:
+# https://developers.cloudflare.com/workers/wrangler/system-environment-variables/
+# The Pages project attached to flowgit.dev is named "flowgit". No account id
+# or token is stored in this repository.
+name: Site
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Read-only token; the deploy uses the Cloudflare secrets, not GitHub's.
+permissions:
+  contents: read
+
+# One deploy at a time on main; a newer push waits instead of racing an older upload.
+concurrency:
+  group: site-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  site:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: 构建官网并检查死链 / Build the site and check dead links
+        run: node packages/cli/dist/index.js site build --out site-dist
+      - name: 部署到 Cloudflare Pages / Deploy to Cloudflare Pages
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "没有 Cloudflare 密钥，跳过部署到 flowgit.dev / No Cloudflare secrets, skipping the deploy to flowgit.dev"
+            exit 0
+          fi
+          # https://developers.cloudflare.com/pages/how-to/use-direct-upload-with-continuous-integration/
+          npx --yes wrangler@4 pages deploy site-dist --project-name=flowgit --commit-dirty=true

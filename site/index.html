@@ -70,7 +70,21 @@ a:focus-visible, button:focus-visible, [tabindex]:focus-visible { outline: 2px s
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 /* Header */
-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 22px 0; }
+header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 22px 0; flex-wrap: wrap; }
+.header-tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 12px 16px; }
+.lang-switch { display: flex; border: 1px solid var(--ink); border-radius: 8px; overflow: hidden; }
+.lang-switch button { border: 0; border-radius: 0; background: transparent; color: var(--ink); min-height: 40px; padding: 6px 12px; }
+.lang-switch button[aria-pressed="true"] { background: var(--ink); color: var(--card); }
+html[data-site-lang="zh"] .en { display: none !important; }
+html[data-site-lang="en"] .en { color: inherit; }
+.init-row {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px;
+  margin-top: 18px; max-width: 520px;
+  background: var(--code-bg); color: var(--code-fg);
+  border-radius: 10px; padding: 12px 14px;
+}
+.init-row code { background: transparent; border: 0; color: inherit; padding: 0; font-size: 15px; }
+.init-row button { background: var(--card); color: var(--ink); }
 .mark { display: flex; align-items: center; gap: 10px; font: 600 18px var(--font-mono); text-decoration: none; letter-spacing: -0.01em; }
 .mark svg { width: 28px; height: 28px; }
 .mark .third { fill: var(--signal); }
@@ -465,7 +479,8 @@ footer { margin-top: 64px; padding: 28px 0 40px; border-top: 1px solid var(--rul
   .lanes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .stage:not(:last-child)::after { display: none; }
   .split { grid-template-columns: 1fr; }
-  nav { display: none; }
+  .header-tools { width: 100%; justify-content: flex-start; }
+  nav { display: flex; flex-wrap: wrap; gap: 10px 14px; }
   .rw-head .tag { margin-left: 0; width: 100%; }
 }
 @media (max-width: 480px) {
@@ -492,18 +507,24 @@ footer { margin-top: 64px; padding: 28px 0 40px; border-top: 1px solid var(--rul
 
 <div class="wrap" lang="zh-CN">
   <header>
-    <a class="mark" href="#top" aria-label="Flowgit">
+    <a class="mark" href="/" aria-label="Flowgit">
       <svg viewBox="0 0 28 28" aria-hidden="true"><rect x="1" y="5" width="7" height="18" rx="2" fill="currentColor"/><rect x="10.5" y="5" width="7" height="18" rx="2" fill="currentColor" opacity=".55"/><rect class="third" x="20" y="5" width="7" height="18" rx="2"/></svg>
       Flowgit
     </a>
-    <nav aria-label="页面导航 / Page">
-      <a href="#how" data-fx-scramble>怎么用 / How</a>
-      <a href="#flow" data-fx-scramble>跑一遍 / Run</a>
-      <a href="#board" data-fx-scramble>看板 / Board</a>
-      <a href="#templates" data-fx-scramble>模板 / Templates</a>
-      <a href="#share" data-fx-scramble>分享 / Share</a>
-      <a href="https://github.com/cgold9820-dotcom/Flowgit" data-fx-scramble>GitHub</a>
-    </nav>
+    <div class="header-tools">
+      <nav aria-label="页面导航 / Page">
+        <a href="/docs/">文档 / Docs</a>
+        <a href="/gallery/">画廊 / Gallery</a>
+        <a href="/app/">网页版 / App</a>
+        <a href="/schema/flow/0.1.json">Schema</a>
+        <a href="#how" data-fx-scramble>怎么用 / How</a>
+        <a href="https://github.com/cgold9820-dotcom/Flowgit" data-fx-scramble>GitHub</a>
+      </nav>
+      <div class="lang-switch" role="group" aria-label="中文 / English">
+        <button type="button" data-site-lang-btn="zh" aria-pressed="true">中文</button>
+        <button type="button" data-site-lang-btn="en" aria-pressed="false">English</button>
+      </div>
+    </div>
   </header>
 
   <main id="top">
@@ -514,6 +535,10 @@ footer { margin-top: 64px; padding: 28px 0 40px; border-top: 1px solid var(--rul
       <p class="lede">把一件事拆成一步一张卡片：每一步有自己的产物和版本，可以由模型、脚本、agent、HTTP 服务或你自己来做。改了其中一步，后面需要重跑的地方会自动标出来，你手改过的内容永远不会被覆盖。
         <span class="en">Break any piece of work into stages, one card each. Every stage keeps its own outputs and versions, and a model, a script, an agent, an HTTP service or you can do it. Change one stage and the ones that need a re-run are marked for you; your hand edits are never overwritten.</span>
       </p>
+      <div class="init-row">
+        <code>flowgit init</code>
+        <button type="button" data-copy="flowgit init">复制 <span class="en">Copy</span></button>
+      </div>
     </div>
 
     <div class="board" id="hero-board" aria-label="示例看板 / Example board">
@@ -1375,5 +1400,49 @@ FX.decode(document.getElementById("kicker"));
     deck.go(Number(d.dataset.i));
   });
   window.addEventListener("resize", () => deck.refresh());
+})();
+
+/* Language switch and the copyable `flowgit init`. The choice is remembered; storage is never cleared. */
+(() => {
+  const KEY = "flowgit-site-lang";
+  function apply(lang) {
+    const next = lang === "en" ? "en" : "zh";
+    document.documentElement.setAttribute("data-site-lang", next);
+    document.documentElement.lang = next === "en" ? "en" : "zh-CN";
+    document.querySelectorAll("[data-site-lang-btn]").forEach((btn) => {
+      btn.setAttribute("aria-pressed", btn.getAttribute("data-site-lang-btn") === next ? "true" : "false");
+    });
+    try { localStorage.setItem(KEY, next); } catch (e) {}
+  }
+  let saved = /^zh(-|$)/i.test(navigator.language || "") ? "zh" : "en";
+  try { saved = localStorage.getItem(KEY) || saved; } catch (e) {}
+  apply(saved === "en" ? "en" : "zh");
+  document.addEventListener("click", (ev) => {
+    const target = ev.target && ev.target.closest ? ev.target : null;
+    if (!target || !target.closest) return;
+    const langBtn = target.closest("[data-site-lang-btn]");
+    if (langBtn) apply(langBtn.getAttribute("data-site-lang-btn"));
+    const copy = target.closest("[data-copy]");
+    if (!copy) return;
+    const text = copy.getAttribute("data-copy") || "";
+    const done = () => {
+      copy.classList.add("copied");
+      setTimeout(() => copy.classList.remove("copied"), 1200);
+    };
+    const fallback = () => {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.left = "-9999px";
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand("copy"); } catch (e) {}
+      ta.remove();
+      done();
+    };
+    if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(done, fallback);
+    else fallback();
+  });
 })();
 </script>

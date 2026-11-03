@@ -32,3 +32,5 @@ packages/*/LICENSE
 
 # Static template gallery (`flowgit gallery build`). Not deployed.
 gallery-dist/
+# Website (`flowgit site build`). Deployed by .github/workflows/site.yml, not committed.
+site-dist/
