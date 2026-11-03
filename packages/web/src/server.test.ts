@@ -417,6 +417,7 @@ describe("read-only board", () => {
     expect(app.body).toContain('stage.state === "waiting-upstream"');
     expect(app.body).toContain("stage.instructions");
     expect(app.body).toContain("上传文件 / Upload a file");
+    expect(app.body).toContain("uploadControl(stage, dir, options)");
     expect(app.body).toContain("provider/model");
     expect(app.body).toContain("必填 required");
     expect(app.body).toContain("/api/events?token=");

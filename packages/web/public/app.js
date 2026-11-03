@@ -1117,7 +1117,7 @@ function renderFileList(dir, files, stage, options) {
   if (stage && stage.executor === "human" && stage.instructions) {
     panelBody.append(el("p", "instructions", stage.instructions));
   }
-  if (stage && stage.executor === "human") panelBody.append(uploadControl(stage, dir));
+  if (stage && stage.executor === "human") panelBody.append(uploadControl(stage, dir, options));
   if (!files.length) {
     panelBody.append(el("p", null, "空文件夹 / empty folder"));
     return;
