@@ -1,5 +1,4 @@
-import fs from "node:fs";
-import path from "node:path";
+import { host, path } from "./host/current.js";
 import type {
   Flow,
   FlowInput,
@@ -36,14 +35,14 @@ export function outputAbs(dir: string, output: Output): string {
 /** All recorded runs of a stage, oldest first. */
 export function listRuns(dir: string, stageId: string): RunRecord[] {
   const base = runsDir(dir, stageId);
-  if (!fs.existsSync(base)) return [];
+  if (!host().exists(base)) return [];
   const runs: RunRecord[] = [];
-  for (const name of fs.readdirSync(base)) {
+  for (const name of host().readdir(base)) {
     if (!/^\d+$/.test(name)) continue;
     const file = path.join(base, name, RUN_FILE);
-    if (!fs.existsSync(file)) continue;
+    if (!host().exists(file)) continue;
     try {
-      runs.push(JSON.parse(fs.readFileSync(file, "utf8")) as RunRecord);
+      runs.push(JSON.parse(host().readFile(file, "utf8")) as RunRecord);
     } catch {
       // a half-written run is ignored rather than breaking the whole flow
     }
@@ -63,9 +62,9 @@ export function latestOkRun(dir: string, stageId: string): RunRecord | undefined
 
 export function nextRunNumber(dir: string, stageId: string): number {
   const base = runsDir(dir, stageId);
-  if (!fs.existsSync(base)) return 1;
+  if (!host().exists(base)) return 1;
   let max = 0;
-  for (const name of fs.readdirSync(base)) {
+  for (const name of host().readdir(base)) {
     if (/^\d+$/.test(name)) max = Math.max(max, Number(name));
   }
   return max + 1;
@@ -87,7 +86,7 @@ export function hashOutputs(dir: string, stage: Stage): RunOutputRecord[] {
   const records: RunOutputRecord[] = [];
   for (const out of stage.outputs) {
     const abs = outputAbs(dir, out);
-    if (!fs.existsSync(abs)) {
+    if (!host().exists(abs)) {
       missing.push(out.path);
       continue;
     }
@@ -109,7 +108,7 @@ export function inputRefs(dir: string, flow: Flow, stage: Stage): RunInputRef[] 
     const up = requireStage(flow, dep);
     for (const out of up.outputs) {
       const abs = outputAbs(dir, out);
-      if (!fs.existsSync(abs)) continue;
+      if (!host().exists(abs)) continue;
       refs.push({ stage: dep, path: outputRel(out), sha256: hashPath(abs).sha256 });
     }
   }
@@ -123,7 +122,7 @@ export function commandFiles(dir: string, command: string): string[] {
     const clean = word.replace(/^['"]|['"]$/g, "");
     if (!clean || clean.startsWith("-") || path.isAbsolute(clean) || clean.includes("..")) continue;
     const abs = path.join(dir, clean);
-    if (fs.existsSync(abs) && fs.statSync(abs).isFile()) files.push(clean);
+    if (host().exists(abs) && host().stat(abs).isFile()) files.push(clean);
   }
   return files;
 }
@@ -154,9 +153,9 @@ export function stageConfigHash(dir: string, stage: Stage, seen: Set<string> = n
     if (!seen.has(abs) && seen.size < MAX_SUBFLOW_DEPTH) {
       const next = new Set(seen);
       next.add(abs);
-      if (fs.existsSync(abs) && fs.statSync(abs).isFile()) {
+      if (host().exists(abs) && host().stat(abs).isFile()) {
         try {
-          const sub = JSON.parse(fs.readFileSync(abs, "utf8")) as Flow;
+          const sub = JSON.parse(host().readFile(abs, "utf8")) as Flow;
           const subDir = path.dirname(abs);
           nested = (sub.stages ?? []).map((child) => stageConfigHash(subDir, child, next, sub));
         } catch {
@@ -167,7 +166,7 @@ export function stageConfigHash(dir: string, stage: Stage, seen: Set<string> = n
   }
   const fileHashes = files.map((f) => {
     const abs = path.join(dir, f);
-    return [f, fs.existsSync(abs) ? hashPath(abs).sha256 : null];
+    return [f, host().exists(abs) ? hashPath(abs).sha256 : null];
   });
   const payload: { executor: Stage["executor"]; files: (string | null)[][]; nested?: string[]; mcp?: unknown; plugin?: unknown } = { executor: ex, files: fileHashes };
   if (ex.type === "mcp") payload.mcp = { tool: ex.tool, args: ex.args ?? null, server: mcpServerFingerprint(flow?.mcpServers?.[ex.server]) };
@@ -198,9 +197,9 @@ export function snapshotOutputs(dir: string, stage: Stage, n: number): void {
 
 export function writeRunRecord(dir: string, record: RunRecord): string {
   const d = runDir(dir, record.stage, record.n);
-  fs.mkdirSync(d, { recursive: true });
+  host().mkdir(d, { recursive: true });
   const file = path.join(d, RUN_FILE);
-  fs.writeFileSync(file, `${JSON.stringify(record, null, 2)}\n`);
+  host().writeFile(file, `${JSON.stringify(record, null, 2)}\n`);
   return file;
 }
 
@@ -220,9 +219,9 @@ export function restoreRun(dir: string, flow: Flow, stageId: string, n: number):
   for (const out of stage.outputs) {
     const rel = outputRel(out);
     const from = path.join(src, rel);
-    if (!fs.existsSync(from)) throw new Error(`v${n} 里没有 ${rel} 的快照 / Run #${n} has no snapshot of ${rel}`);
+    if (!host().exists(from)) throw new Error(`v${n} 里没有 ${rel} 的快照 / Run #${n} has no snapshot of ${rel}`);
     const to = outputAbs(dir, out);
-    fs.rmSync(to, { recursive: true, force: true });
+    host().rm(to, { recursive: true, force: true });
     copyPath(from, to);
   }
   return run;
@@ -249,8 +248,8 @@ export function resolveFlowInputs(
     if (def.default !== undefined) values[k] = def.default;
   }
   const localFile = path.join(dir, LOCAL_FILE);
-  if (fs.existsSync(localFile)) {
-    const local = JSON.parse(fs.readFileSync(localFile, "utf8")) as { inputs?: Record<string, unknown> };
+  if (host().exists(localFile)) {
+    const local = JSON.parse(host().readFile(localFile, "utf8")) as { inputs?: Record<string, unknown> };
     assignInputs(values, local.inputs);
   }
   assignInputs(values, overrides);
@@ -312,11 +311,11 @@ export function loadFlowInputs(
 
 export function saveFlowInputs(dir: string, inputs: Record<string, unknown>): void {
   const localFile = path.join(dir, LOCAL_FILE);
-  const existing = fs.existsSync(localFile)
-    ? (JSON.parse(fs.readFileSync(localFile, "utf8")) as Record<string, unknown>)
+  const existing = host().exists(localFile)
+    ? (JSON.parse(host().readFile(localFile, "utf8")) as Record<string, unknown>)
     : {};
   const merged = { ...existing, inputs: { ...((existing.inputs as Record<string, unknown>) ?? {}), ...inputs } };
-  fs.writeFileSync(localFile, `${JSON.stringify(merged, null, 2)}\n`);
+  host().writeFile(localFile, `${JSON.stringify(merged, null, 2)}\n`);
 }
 
 /* ---------- status ---------- */
@@ -329,7 +328,7 @@ export function outputsEdited(dir: string, stage: Stage, run: RunRecord | undefi
   if (!run || run.status !== "ok") return false;
   return stage.outputs.some((o) => {
     const abs = outputAbs(dir, o);
-    if (!fs.existsSync(abs)) return false;
+    if (!host().exists(abs)) return false;
     const rec = run.outputs.find((r) => r.path === outputRel(o));
     return !rec || rec.sha256 !== hashPath(abs).sha256;
   });
@@ -347,7 +346,7 @@ function outputsVsRuns(dir: string, stage: Stage, runs: RunRecord[]): { handEdit
   const present: Array<[string, string]> = [];
   for (const o of stage.outputs) {
     const abs = outputAbs(dir, o);
-    if (fs.existsSync(abs)) present.push([outputRel(o), hashPath(abs).sha256]);
+    if (host().exists(abs)) present.push([outputRel(o), hashPath(abs).sha256]);
   }
   if (!present.length) return { handEdited: false };
   for (let i = ok.length - 1; i >= 0; i--) {
@@ -385,7 +384,7 @@ function localStatus(loaded: LoadedFlow, stageId: string, flowInputs: Record<str
   const missingUpstream = (stage.inputs ?? []).filter((dep) => {
     const ok = latestOkRun(dir, dep);
     if (!ok) return true;
-    return requireStage(flow, dep).outputs.some((o) => !fs.existsSync(outputAbs(dir, o)));
+    return requireStage(flow, dep).outputs.some((o) => !host().exists(outputAbs(dir, o)));
   });
   const base = { stage, latest, runs: runs.length, missingUpstream };
   if (!latest) return { ...base, state: missingUpstream.length ? "waiting-upstream" : "never-run" };

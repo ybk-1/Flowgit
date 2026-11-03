@@ -5,7 +5,6 @@ import { llmExecutor } from "./llm.js";
 import { scriptExecutor } from "./script.js";
 import { serviceExecutor } from "./service.js";
 import { workflowExecutor } from "./workflow.js";
-import { mcpExecutor } from "./mcp.js";
 import { imageExecutor } from "./image.js";
 import { pluginExecutor } from "./plugin.js";
 import { ExecutorNotImplementedError, type StageExecutor } from "./types.js";
@@ -24,7 +23,6 @@ export {
   type AgentAdapter,
 } from "./agent.js";
 export { workflowExecutor } from "./workflow.js";
-export { mcpExecutor, listMcpTools, renderMcpArgs, renderMcpString, type McpToolDescription } from "./mcp.js";
 export { pluginExecutor } from "./plugin.js";
 export { imageExecutor, mockPictures } from "./image.js";
 export {
@@ -54,10 +52,18 @@ const registry: Partial<Record<ExecutorType, StageExecutor>> = {
   agent: agentExecutor,
   service: serviceExecutor,
   workflow: workflowExecutor,
-  mcp: mcpExecutor,
   plugin: pluginExecutor,
   image: imageExecutor,
 };
+
+/**
+ * Add or replace the executor for `type`. The Node entry registers `mcp`, which starts
+ * local servers and so is not part of the shared core; the browser entry registers a
+ * stand-in that says the stage needs a computer.
+ */
+export function registerExecutor(type: ExecutorType, executor: StageExecutor): void {
+  registry[type] = executor;
+}
 
 export function getExecutor(type: ExecutorType): StageExecutor {
   const ex = registry[type];

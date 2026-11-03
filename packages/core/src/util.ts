@@ -1,23 +1,20 @@
-import { createHash } from "node:crypto";
-import fs from "node:fs";
-import path from "node:path";
+import { host, path } from "./host/current.js";
+import type { HostEnv } from "./host/types.js";
 import type { Output } from "./types.js";
 
 export function sha256String(s: string): string {
-  return createHash("sha256").update(s).digest("hex");
+  return host().hash().update(s).digest();
 }
 
 export function sha256File(abs: string): string {
-  const h = createHash("sha256");
-  h.update(fs.readFileSync(abs));
-  return h.digest("hex");
+  return host().hash().update(host().readFile(abs)).digest();
 }
 
 /** Sorted relative file list of a directory (files only, posix separators). */
 export function listFiles(absDir: string): string[] {
   const out: string[] = [];
   const walk = (dir: string, rel: string) => {
-    for (const entry of fs.readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+    for (const entry of host().readdir(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
       const abs = path.join(dir, entry.name);
       const r = rel ? `${rel}/${entry.name}` : entry.name;
       if (entry.isDirectory()) walk(abs, r);
@@ -36,23 +33,23 @@ export interface PathHash {
 
 /** Hash a file, or a directory (hash of its sorted "relpath\0filehash" lines). */
 export function hashPath(abs: string): PathHash {
-  const stat = fs.statSync(abs);
+  const stat = host().stat(abs);
   if (stat.isDirectory()) {
-    const h = createHash("sha256");
+    const h = host().hash();
     let bytes = 0;
     for (const rel of listFiles(abs)) {
       const fileAbs = path.join(abs, rel);
       h.update(`${rel}\0${sha256File(fileAbs)}\n`);
-      bytes += fs.statSync(fileAbs).size;
+      bytes += host().stat(fileAbs).size;
     }
-    return { sha256: h.digest("hex"), bytes, isDir: true };
+    return { sha256: h.digest(), bytes, isDir: true };
   }
   return { sha256: sha256File(abs), bytes: stat.size, isDir: false };
 }
 
 export function copyPath(src: string, dst: string): void {
-  fs.mkdirSync(path.dirname(dst), { recursive: true });
-  fs.cpSync(src, dst, { recursive: true, force: true });
+  host().mkdir(path.dirname(dst), { recursive: true });
+  host().copy(src, dst);
 }
 
 export function isDirOutput(output: Output): boolean {
@@ -100,8 +97,8 @@ export function staysInside(dir: string, abs: string): boolean {
   let root: string;
   let real: string;
   try {
-    root = fs.realpathSync(dir);
-    real = fs.realpathSync(abs);
+    root = host().realpath(dir);
+    real = host().realpath(abs);
   } catch {
     return true; // missing: there is nothing to read
   }
@@ -120,11 +117,28 @@ export function linkOutsideError(rel: string): Error {
 export function readFlowText(dir: string, rel: string): string {
   const abs = path.join(dir, rel);
   if (!staysInside(dir, abs)) throw linkOutsideError(rel);
-  return fs.readFileSync(abs, "utf8");
+  return host().readFile(abs, "utf8");
+}
+
+/** Bytes from base64 (standard or URL-safe), skipping whitespace and other stray characters like Node's Buffer does. */
+export function base64ToBytes(b64: string): Uint8Array {
+  const clean = b64.replace(/=.*$/s, "").replace(/-/g, "+").replace(/_/g, "/").replace(/[^A-Za-z0-9+/]/g, "");
+  const usable = clean.length % 4 === 1 ? clean.slice(0, -1) : clean;
+  const bin = atob(usable + "=".repeat((4 - (usable.length % 4)) % 4));
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+const utf8 = new TextDecoder();
+
+/** UTF-8 text from bytes, replacing invalid sequences like Node's Buffer does. */
+export function bytesToText(bytes: Uint8Array): string {
+  return utf8.decode(bytes);
 }
 
 export function nowIso(): string {
-  return new Date().toISOString();
+  return host().now().toISOString();
 }
 
 export function truncate(s: string, max: number): string {
@@ -133,30 +147,13 @@ export function truncate(s: string, max: number): string {
 }
 
 /** An environment variable, matched case-insensitively on Windows (where PATH is often "Path"). */
-export function envValue(env: NodeJS.ProcessEnv, name: string): string | undefined {
-  if (env[name] !== undefined || process.platform !== "win32") return env[name];
+export function envValue(env: HostEnv, name: string): string | undefined {
+  if (env[name] !== undefined || host().platform !== "win32") return env[name];
   const key = Object.keys(env).find((k) => k.toUpperCase() === name.toUpperCase());
   return key === undefined ? undefined : env[key];
 }
 
 /** Where a program is on PATH (trying PATHEXT, e.g. ".CMD", on Windows), or undefined. */
-export function findOnPath(program: string, env: NodeJS.ProcessEnv = process.env): string | undefined {
-  const win = process.platform === "win32";
-  const dirs = (envValue(env, "PATH") ?? "").split(path.delimiter).filter(Boolean);
-  const exts = (envValue(env, "PATHEXT") ?? ".COM;.EXE;.BAT;.CMD").split(";").filter(Boolean);
-  const hasExt = exts.some((e) => program.toUpperCase().endsWith(e.toUpperCase()));
-  const names = win && !hasExt ? exts.map((e) => `${program}${e.toLowerCase()}`) : [program];
-  for (const dir of dirs) {
-    for (const name of names) {
-      const abs = path.join(dir.replace(/^"|"$/g, ""), name);
-      try {
-        if (!fs.statSync(abs).isFile()) continue;
-        if (!win) fs.accessSync(abs, fs.constants.X_OK);
-        return abs;
-      } catch {
-        // not here
-      }
-    }
-  }
-  return undefined;
+export function findOnPath(program: string, env: HostEnv = host().env): string | undefined {
+  return host().which(program, env);
 }

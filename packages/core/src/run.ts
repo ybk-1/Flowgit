@@ -1,4 +1,4 @@
-import fs from "node:fs";
+import { host } from "./host/current.js";
 import type { LoadedFlow, RunRecord, Stage } from "./types.js";
 import { requireStage, topoOrder } from "./graph.js";
 import {
@@ -51,13 +51,13 @@ function collectInputs(loaded: LoadedFlow, stage: Stage): InputArtifact[] {
     const up = requireStage(loaded.flow, dep);
     for (const output of up.outputs) {
       const absPath = outputAbs(loaded.dir, output);
-      const exists = fs.existsSync(absPath);
-      const isDir = exists && fs.statSync(absPath).isDirectory();
+      const exists = host().exists(absPath);
+      const isDir = exists && host().stat(absPath).isDirectory();
       const a: InputArtifact = { stage: dep, stageName: up.name, output, absPath, exists, isDir };
       if (exists && isDir) a.files = listFiles(absPath);
       else if (exists && !staysInside(loaded.dir, absPath)) a.outside = true;
       else if (exists && (isDirOutput(output) === false) && isTextType(output.type, output.path)) {
-        a.text = fs.readFileSync(absPath, "utf8");
+        a.text = host().readFile(absPath, "utf8");
       }
       artifacts.push(a);
     }
@@ -131,7 +131,7 @@ export async function runStage(loaded: LoadedFlow, stageId: string, options: Run
 
   const missingUpstream = (stage.inputs ?? []).filter((dep) => {
     if (!latestOkRun(dir, dep)) return true;
-    return requireStage(flow, dep).outputs.some((o) => !fs.existsSync(outputAbs(dir, o)));
+    return requireStage(flow, dep).outputs.some((o) => !host().exists(outputAbs(dir, o)));
   });
   if (missingUpstream.length) throw new UpstreamNotReadyError(stage, missingUpstream);
 

@@ -1,5 +1,4 @@
-import fs from "node:fs";
-import path from "node:path";
+import { host, path } from "../host/current.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
@@ -84,7 +83,7 @@ function upstreamContent(ctx: ExecContext, id: string): string {
   }
   const rel = outputRel(output);
   const abs = path.join(ctx.loaded.dir, rel);
-  if (!fs.existsSync(abs)) throw new Error(`上游产物还不存在：${rel} / upstream output does not exist yet: ${rel}`);
+  if (!host().exists(abs)) throw new Error(`上游产物还不存在：${rel} / upstream output does not exist yet: ${rel}`);
   if (!isTextType(output.type, output.path)) {
     throw new Error(`{{upstream.${id}.content}} 只能读取文本，${rel} 不是文本 / {{upstream.${id}.content}} only reads text, and ${rel} is not text`);
   }
@@ -155,8 +154,8 @@ function writeToolResult(ctx: ExecContext, result: McpToolResult): void {
   const output = ctx.stage.outputs[0]!;
   const abs = path.join(ctx.loaded.dir, outputRel(output));
   if (isDirOutput(output)) {
-    fs.rmSync(abs, { recursive: true, force: true });
-    fs.mkdirSync(abs, { recursive: true });
+    host().rm(abs, { recursive: true, force: true });
+    host().mkdir(abs, { recursive: true });
     const texts: string[] = [];
     let n = 0;
     for (const item of content) {
@@ -168,25 +167,25 @@ function writeToolResult(ctx: ExecContext, result: McpToolResult): void {
       n += 1;
       const ext = fileExt(item.mimeType, item.type);
       const name = `${String(n).padStart(3, "0")}.${ext}`;
-      fs.writeFileSync(path.join(abs, name), decodeBase64(item.data, item.type));
+      host().writeFile(path.join(abs, name), decodeBase64(item.data, item.type));
     }
-    if (texts.length) fs.writeFileSync(path.join(abs, "result.md"), texts.join("\n\n"));
+    if (texts.length) host().writeFile(path.join(abs, "result.md"), texts.join("\n\n"));
     if (n === 0 && texts.length === 0) {
       throw new Error("工具没有返回可以保存的内容 / the tool returned nothing to save");
     }
     ctx.log(`已写入 / wrote ${outputRel(output)}/`);
     return;
   }
-  fs.mkdirSync(path.dirname(abs), { recursive: true });
+  host().mkdir(path.dirname(abs), { recursive: true });
   if (wantsJson(output.type, output.path)) {
     const data = result.structuredContent !== undefined ? result.structuredContent : content;
-    fs.writeFileSync(abs, `${JSON.stringify(data, null, 2)}\n`);
+    host().writeFile(abs, `${JSON.stringify(data, null, 2)}\n`);
   } else {
     const text = textOf(content);
     if (!content.some((item) => item.type === "text")) {
       throw new Error("工具没有返回文本 / the tool returned no text");
     }
-    fs.writeFileSync(abs, text);
+    host().writeFile(abs, text);
   }
   ctx.log(`已写入 / wrote ${outputRel(output)}`);
 }
@@ -275,7 +274,7 @@ export async function listMcpTools(
   dir: string,
   servers: Record<string, McpServerConfig> | undefined,
   serverName: string,
-  env: NodeJS.ProcessEnv = process.env,
+  env: NodeJS.ProcessEnv = host().env,
   timeoutSec = 60,
 ): Promise<McpToolDescription[]> {
   const server = requireServer(servers, serverName);
@@ -303,7 +302,7 @@ export const mcpExecutor: StageExecutor = {
     const result = await withMcpClient(
       server,
       ctx.loaded.dir,
-      ctx.options.env ?? process.env,
+      ctx.options.env ?? host().env,
       timeoutSec,
       ctx.log,
       async (client) => {

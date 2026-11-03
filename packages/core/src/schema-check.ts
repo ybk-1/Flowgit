@@ -1,5 +1,4 @@
-import fs from "node:fs";
-import path from "node:path";
+import { host, path } from "./host/current.js";
 import { Ajv, type ErrorObject } from "ajv";
 import { Ajv2019 } from "ajv/dist/2019.js";
 import { Ajv2020 } from "ajv/dist/2020.js";
@@ -48,10 +47,10 @@ function problemPath(error: ErrorObject): string {
 
 function readSchema(dir: string, schemaPath: string): { schema?: unknown; problem?: string } {
   const abs = path.join(dir, schemaPath);
-  if (!fs.existsSync(abs)) return { problem: `找不到 schema 文件 / schema file not found: ${schemaPath}` };
+  if (!host().exists(abs)) return { problem: `找不到 schema 文件 / schema file not found: ${schemaPath}` };
   let schema: unknown;
   try {
-    schema = JSON.parse(fs.readFileSync(abs, "utf8")) as unknown;
+    schema = JSON.parse(host().readFile(abs, "utf8")) as unknown;
   } catch (err) {
     return { problem: `schema 不是合法的 JSON / schema is not valid JSON: ${(err as Error).message}` };
   }
@@ -69,7 +68,7 @@ export function schemaTexts(dir: string, stage: Stage): string[] {
   for (const out of stage.outputs) {
     if (!out.schema) continue;
     const abs = path.join(dir, out.schema);
-    if (fs.existsSync(abs)) texts.push(fs.readFileSync(abs, "utf8").trim());
+    if (host().exists(abs)) texts.push(host().readFile(abs, "utf8").trim());
   }
   return texts;
 }
@@ -86,13 +85,13 @@ export function schemaProblems(dir: string, stage: Stage): SchemaProblem[] {
       continue;
     }
     const abs = path.join(dir, rel);
-    if (!fs.existsSync(abs) || !fs.statSync(abs).isFile()) {
+    if (!host().exists(abs) || !host().stat(abs).isFile()) {
       problems.push({ file: rel, path: "/", message: "文件不存在 / file is missing" });
       continue;
     }
     let data: unknown;
     try {
-      data = JSON.parse(fs.readFileSync(abs, "utf8")) as unknown;
+      data = JSON.parse(host().readFile(abs, "utf8")) as unknown;
     } catch {
       problems.push({ file: rel, path: "/", message: "不是合法的 JSON / is not valid JSON" });
       continue;

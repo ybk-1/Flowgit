@@ -1,5 +1,4 @@
-import fs from "node:fs";
-import path from "node:path";
+import { host, path } from "./host/current.js";
 import { requireStage } from "./graph.js";
 import { outputAbs, runDir, runsDir } from "./runs.js";
 import type { Flow, RunRecord, Stage } from "./types.js";
@@ -42,16 +41,16 @@ function resolveKeep(keep: number | undefined): number {
 
 /** Bytes of files under abs. Symlinks are not followed. Missing path is 0. */
 function pathBytes(abs: string): number {
-  if (!fs.existsSync(abs)) return 0;
+  if (!host().exists(abs)) return 0;
   let total = 0;
   const walk = (current: string) => {
-    const stat = fs.lstatSync(current);
+    const stat = host().lstat(current);
     if (stat.isSymbolicLink()) {
       total += stat.size;
       return;
     }
     if (stat.isDirectory()) {
-      for (const name of fs.readdirSync(current)) walk(path.join(current, name));
+      for (const name of host().readdir(current)) walk(path.join(current, name));
       return;
     }
     if (stat.isFile()) total += stat.size;
@@ -86,14 +85,14 @@ export function runsPruneHint(bytes: number): string | undefined {
 /** Recorded runs, oldest first. The version number is the folder name, which is what `nextRunNumber` uses. */
 function loadStageRuns(dir: string, stageId: string): RunRecord[] {
   const base = runsDir(dir, stageId);
-  if (!fs.existsSync(base)) return [];
+  if (!host().exists(base)) return [];
   const runs: RunRecord[] = [];
-  for (const name of fs.readdirSync(base)) {
+  for (const name of host().readdir(base)) {
     if (!/^[1-9]\d*$/.test(name)) continue;
     const file = path.join(base, name, "run.json");
-    if (!fs.existsSync(file)) continue;
+    if (!host().exists(file)) continue;
     try {
-      const record = JSON.parse(fs.readFileSync(file, "utf8")) as RunRecord;
+      const record = JSON.parse(host().readFile(file, "utf8")) as RunRecord;
       runs.push({ ...record, stage: stageId, n: Number(name) });
     } catch {
       // a half-written run is ignored, and its folder is left in place
@@ -108,7 +107,7 @@ function currentHashes(dir: string, stage: Stage): Map<string, string> | undefin
   const hashes = new Map<string, string>();
   for (const output of stage.outputs) {
     const abs = outputAbs(dir, output);
-    if (!fs.existsSync(abs)) return undefined;
+    if (!host().exists(abs)) return undefined;
     hashes.set(outputRel(output), hashPath(abs).sha256);
   }
   return hashes;
@@ -130,7 +129,7 @@ function versionDir(dir: string, stageId: string, n: number): string | undefined
   const rel = path.relative(path.resolve(dir), target);
   const expected = path.join("runs", stageId, String(n));
   if (rel !== expected) return undefined;
-  if (!fs.existsSync(path.join(target, "run.json"))) return undefined;
+  if (!host().exists(path.join(target, "run.json"))) return undefined;
   return target;
 }
 
@@ -175,7 +174,7 @@ export function prune(dir: string, flow: Flow, opts: PruneOptions = {}): PrunePl
   const plan = planPrune(dir, flow, opts);
   for (const item of plan.delete) {
     const folder = versionDir(dir, item.stage, item.n);
-    if (folder) fs.rmSync(folder, { recursive: true, force: true });
+    if (folder) host().rm(folder, { recursive: true, force: true });
   }
   return plan;
 }

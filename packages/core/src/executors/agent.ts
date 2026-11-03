@@ -1,8 +1,6 @@
-import fs from "node:fs";
-import path from "node:path";
+import { host, path } from "../host/current.js";
 import type { AgentName, ExecutorAgent, Flow, Stage } from "../types.js";
 import { outputRel, readFlowText, truncate } from "../util.js";
-import { runCommand } from "./command.js";
 import { renderTemplate } from "./llm.js";
 import type { ExecContext, ExecResult, InputArtifact, StageExecutor } from "./types.js";
 
@@ -76,7 +74,7 @@ export const AGENT_ADAPTERS: Readonly<Record<Exclude<AgentName, "custom">, Agent
 };
 
 /** Quote one argument for the platform shell that spawn({ shell: true }) uses. */
-export function shellQuote(arg: string, platform: NodeJS.Platform = process.platform): string {
+export function shellQuote(arg: string, platform: string = host().platform): string {
   if (/^[A-Za-z0-9_\-./:=@%+,]+$/.test(arg)) return arg;
   if (platform === "win32") return `"${arg.replace(/"/g, '\\"')}"`;
   return `'${arg.replace(/'/g, `'\\''`)}'`;
@@ -92,7 +90,7 @@ export function agentCommandLine(
   ex: ExecutorAgent,
   promptFile: string,
   promptRel: string,
-  platform: NodeJS.Platform = process.platform,
+  platform: string = host().platform,
 ): string {
   const extra = (ex.args ?? []).map((a) => shellQuote(a, platform));
   if (ex.agent === "custom") {
@@ -153,13 +151,13 @@ const SKIP_DIRS = new Set(["runs", "node_modules", ".git"]);
 function snapshot(dir: string): Map<string, string> {
   const out = new Map<string, string>();
   const walk = (abs: string, rel: string) => {
-    for (const e of fs.readdirSync(abs, { withFileTypes: true })) {
+    for (const e of host().readdir(abs, { withFileTypes: true })) {
       if (!rel && SKIP_DIRS.has(e.name)) continue;
       const a = path.join(abs, e.name);
       const r = rel ? `${rel}/${e.name}` : e.name;
       if (e.isDirectory()) walk(a, r);
       else if (e.isFile()) {
-        const st = fs.statSync(a);
+        const st = host().stat(a);
         out.set(r, `${st.size}:${st.mtimeMs}`);
       }
     }
@@ -199,11 +197,11 @@ export const agentExecutor: StageExecutor = {
     const prompt = buildAgentPrompt(template, loaded.flow, stage, ctx.inputs, ctx.flowInputs);
     const promptRel = agentPromptRel(stage.id);
     const promptFile = path.join(loaded.dir, ...promptRel.split("/"));
-    fs.mkdirSync(path.dirname(promptFile), { recursive: true });
-    fs.writeFileSync(promptFile, prompt);
+    host().mkdir(path.dirname(promptFile), { recursive: true });
+    host().writeFile(promptFile, prompt);
     const commandLine = agentCommandLine(ex, promptFile, promptRel);
     const env: NodeJS.ProcessEnv = {
-      ...process.env,
+      ...host().env,
       ...(ctx.options.env ?? {}),
       FLOWGIT_PROJECT_DIR: loaded.dir,
       FLOWGIT_STAGE: stage.id,
@@ -219,7 +217,7 @@ export const agentExecutor: StageExecutor = {
     const started = Date.now();
     let result: { code: number; output: string };
     try {
-      result = await runCommand({
+      result = await host().exec({
         command: commandLine,
         cwd: loaded.dir,
         env,
@@ -229,9 +227,10 @@ export const agentExecutor: StageExecutor = {
         onLine: (line) => ctx.log(line),
       });
     } finally {
-      fs.rmSync(promptFile, { force: true });
+      host().rm(promptFile, { force: true });
       try {
-        fs.rmdirSync(path.dirname(promptFile));
+        const promptDir = path.dirname(promptFile);
+        if (host().readdir(promptDir).length === 0) host().rm(promptDir, { recursive: true });
       } catch {
         // other agent stages may still have prompts there
       }
@@ -246,7 +245,7 @@ export const agentExecutor: StageExecutor = {
       throw new Error(`agent 失败，退出码 ${code} / Agent exited with code ${code}: ${shown}\n${truncate(output, 2000)}`);
     }
     const outputs = stage.outputs.map(outputRel);
-    const missing = outputs.filter((o) => !fs.existsSync(path.join(loaded.dir, o)));
+    const missing = outputs.filter((o) => !host().exists(path.join(loaded.dir, o)));
     const { own, others } = diffSnapshots(before, snapshot(loaded.dir), outputs);
     const wroteNothing = missing.length > 0 || own.length === 0;
     if (wroteNothing && ex.agent === "cursor" && !(ex.args ?? []).some((a) => ["--force", "-f", "--yolo"].includes(a))) {

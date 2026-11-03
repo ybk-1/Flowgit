@@ -1,7 +1,4 @@
-import crypto from "node:crypto";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
+import { host, path } from "./host/current.js";
 import { flowActions, type FlowAction } from "./actions.js";
 import type { LoadedFlow } from "./types.js";
 
@@ -53,28 +50,28 @@ interface TrustStore {
 }
 
 /** ~/.flowgit/trusted.json, or $FLOWGIT_HOME/trusted.json. */
-export function trustFile(env: NodeJS.ProcessEnv = process.env): string {
-  return path.join(env.FLOWGIT_HOME || path.join(os.homedir(), ".flowgit"), "trusted.json");
+export function trustFile(env: NodeJS.ProcessEnv = host().env): string {
+  return path.join(env.FLOWGIT_HOME || path.join(host().homedir(), ".flowgit"), "trusted.json");
 }
 
 /** The key a flow is stored under: its real directory, so a symlink or `..` points at the same entry. */
 function flowKey(dir: string): string {
   let real: string;
   try {
-    real = fs.realpathSync(dir);
+    real = host().realpath(dir);
   } catch {
     real = path.resolve(dir);
   }
   // Windows paths are case-insensitive
-  return process.platform === "win32" ? real.toLowerCase() : real;
+  return host().platform === "win32" ? real.toLowerCase() : real;
 }
 
 function readStore(env: NodeJS.ProcessEnv): TrustStore {
   const file = trustFile(env);
-  if (!fs.existsSync(file)) return { version: 1, flows: {} };
+  if (!host().exists(file)) return { version: 1, flows: {} };
   let data: unknown;
   try {
-    data = JSON.parse(fs.readFileSync(file, "utf8"));
+    data = JSON.parse(host().readFile(file, "utf8"));
   } catch {
     throw new Error(`${file} 不是有效的 JSON，修好或删掉它再试 / ${file} is not valid JSON; fix or delete it and try again`);
   }
@@ -85,11 +82,11 @@ function readStore(env: NodeJS.ProcessEnv): TrustStore {
 
 export function trustFingerprint(actions: FlowAction[]): string {
   const canonical = actions.map((a) => ({ stage: a.stage, kind: a.kind, detail: a.detail, env: a.env ?? [] }));
-  return `sha256:${crypto.createHash("sha256").update(JSON.stringify(canonical)).digest("hex")}`;
+  return `sha256:${host().hash().update(JSON.stringify(canonical)).digest()}`;
 }
 
 /** Whether this flow must be confirmed before it runs, and what would be confirmed. */
-export function trustState(loaded: LoadedFlow, env: NodeJS.ProcessEnv = process.env): TrustState {
+export function trustState(loaded: LoadedFlow, env: NodeJS.ProcessEnv = host().env): TrustState {
   const actions = flowActions(loaded.flow, loaded.dir);
   const fingerprint = trustFingerprint(actions);
   const source = loaded.flow.forkedFrom?.source;
@@ -107,7 +104,7 @@ export function trustState(loaded: LoadedFlow, env: NodeJS.ProcessEnv = process.
  * Pass the fingerprint of the list they were shown: if the flow changed since,
  * nothing is recorded and an error says to look again.
  */
-export function trustFlow(loaded: LoadedFlow, fingerprint?: string, env: NodeJS.ProcessEnv = process.env): TrustState {
+export function trustFlow(loaded: LoadedFlow, fingerprint?: string, env: NodeJS.ProcessEnv = host().env): TrustState {
   const state = trustState(loaded, env);
   if (fingerprint !== undefined && fingerprint !== state.fingerprint) {
     throw new TrustChangedError(loaded, state);
@@ -120,10 +117,10 @@ export function trustFlow(loaded: LoadedFlow, fingerprint?: string, env: NodeJS.
     trustedAt: new Date().toISOString(),
   };
   const file = trustFile(env);
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  const tmp = `${file}.${process.pid}.tmp`;
-  fs.writeFileSync(tmp, `${JSON.stringify(store, null, 2)}\n`);
-  fs.renameSync(tmp, file);
+  host().mkdir(path.dirname(file), { recursive: true });
+  const tmp = `${file}.${host().pid}.tmp`;
+  host().writeFile(tmp, `${JSON.stringify(store, null, 2)}\n`);
+  host().rename(tmp, file);
   return { ...state, needed: false, reason: "trusted" };
 }
 
@@ -155,7 +152,7 @@ export class TrustChangedError extends Error {
 }
 
 /** Throws TrustNeededError when the flow must be confirmed first. */
-export function assertTrusted(loaded: LoadedFlow, env: NodeJS.ProcessEnv = process.env): void {
+export function assertTrusted(loaded: LoadedFlow, env: NodeJS.ProcessEnv = host().env): void {
   const state = trustState(loaded, env);
   if (state.needed) throw new TrustNeededError(loaded, state);
 }

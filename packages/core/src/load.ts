@@ -1,7 +1,7 @@
-import fs from "node:fs";
-import path from "node:path";
+import { host, path } from "./host/current.js";
 import { Ajv2020 } from "ajv/dist/2020.js";
 import type { ErrorObject } from "ajv";
+import { flowSchemaJson } from "./flow-schema.generated.js";
 import { findCycle } from "./graph.js";
 import { outputSchemaIssues } from "./schema-check.js";
 import {
@@ -24,8 +24,8 @@ export const FLOW_FILE = "flow.json";
 export const FLOW_MD_FILE = "flow.md";
 export const FLOW_FILES = [FLOW_FILE, FLOW_MD_FILE] as const;
 
-const schemaUrl = new URL("../schema/flow.schema.json", import.meta.url);
-export const flowSchema = JSON.parse(fs.readFileSync(schemaUrl, "utf8")) as Record<string, unknown>;
+// The schema is compiled in (src/flow-schema.generated.ts) so loading needs no file and works in a browser.
+export const flowSchema = flowSchemaJson;
 
 const ajv = new Ajv2020({ allErrors: true, strict: false, discriminator: true });
 const validateSchema = ajv.compile(flowSchema);
@@ -123,12 +123,12 @@ export function validateFlow(data: unknown, opts: ValidateOptions = {}): Validat
         issues.push({ level: "error", path: `${base}/executor/prompt`, message: `提示词路径必须是相对路径 / prompt path must be relative: "${prompt}"` });
       } else if (opts.dir) {
         const abs = path.join(opts.dir, prompt);
-        if (!fs.existsSync(abs)) {
+        if (!host().exists(abs)) {
           issues.push({ level: "error", path: `${base}/executor/prompt`, message: `找不到提示词文件 / prompt file not found: ${prompt}` });
         } else if (!staysInside(opts.dir, abs)) {
           issues.push({ level: "error", path: `${base}/executor/prompt`, message: linkOutsideError(prompt).message });
         } else {
-          const tpl = fs.readFileSync(abs, "utf8");
+          const tpl = host().readFile(abs, "utf8");
           for (const m of tpl.matchAll(/\{\{\s*inputs\.([A-Za-z0-9_]+)\s*\}\}/g)) {
             if (!flow.inputs || !Object.hasOwn(flow.inputs, m[1])) {
               issues.push({ level: "warning", path: `${base}/executor/prompt`, message: `${prompt} 用了 {{inputs.${m[1]}}}，但 flow.inputs 里没有 "${m[1]}" / ${prompt} uses {{inputs.${m[1]}}} but flow.inputs has no "${m[1]}"` });
@@ -256,7 +256,7 @@ function workflowIssues(flow: Flow, outputs: Output[], ex: ExecutorWorkflow, bas
     issues.push(...copyIssues(outputs, params.copy, undefined, `${base}/executor/params/copy`));
     return issues;
   }
-  if (!fs.existsSync(resolved.abs)) {
+  if (!host().exists(resolved.abs)) {
     issues.push({ level: "error", path: at, message: `找不到子流程 / sub-flow file not found: ${ex.file}` });
     issues.push(...copyIssues(outputs, params.copy, undefined, `${base}/executor/params/copy`));
     return issues;
@@ -269,7 +269,7 @@ function workflowIssues(flow: Flow, outputs: Output[], ex: ExecutorWorkflow, bas
   }
   let data: unknown;
   try {
-    data = JSON.parse(fs.readFileSync(resolved.abs, "utf8"));
+    data = JSON.parse(host().readFile(resolved.abs, "utf8"));
   } catch (err) {
     issues.push({ level: "error", path: at, message: `${ex.file} 不是合法的 JSON / is not valid JSON: ${(err as Error).message}` });
     return issues;
@@ -285,7 +285,7 @@ function workflowIssues(flow: Flow, outputs: Output[], ex: ExecutorWorkflow, bas
 /** Resolve the flow directory from a path that may be a directory, a flow.json or a flow.md. */
 export function resolveFlowDir(target: string = "."): string {
   const abs = path.resolve(target);
-  if (fs.existsSync(abs) && fs.statSync(abs).isFile()) return path.dirname(abs);
+  if (host().exists(abs) && host().stat(abs).isFile()) return path.dirname(abs);
   return abs;
 }
 
@@ -302,7 +302,7 @@ export class FlowNotFoundError extends Error {
  * Throws when both exist, since it would be unclear which one counts.
  */
 export function findFlowFile(dir: string): string | undefined {
-  let found = FLOW_FILES.map((name) => path.join(dir, name)).filter((f) => fs.existsSync(f));
+  let found = FLOW_FILES.map((name) => path.join(dir, name)).filter((f) => host().exists(f));
   // A flow.md without frontmatter next to flow.json is not a flow, e.g. an older
   // `flowgit graph --out flow.md`: keep using flow.json.
   if (found.length > 1 && !looksLikeFlowMd(path.join(dir, FLOW_MD_FILE))) found = [path.join(dir, FLOW_FILE)];
@@ -316,7 +316,7 @@ export function findFlowFile(dir: string): string | undefined {
 
 /** Whether a flow.md starts with frontmatter, as every flow.md must. */
 function looksLikeFlowMd(file: string): boolean {
-  const head = fs.readFileSync(file, "utf8").slice(0, 8).replace(/^\uFEFF/, "");
+  const head = host().readFile(file, "utf8").slice(0, 8).replace(/^\uFEFF/, "");
   return /^---\r?\n/.test(head);
 }
 
@@ -343,7 +343,7 @@ export function parseFlowText(text: string, file: string): unknown {
 
 /** Read and parse a flow file (flow.json or flow.md) without validating it. */
 export function readFlowFile(file: string): unknown {
-  return parseFlowText(fs.readFileSync(file, "utf8"), file);
+  return parseFlowText(host().readFile(file, "utf8"), file);
 }
 
 /** Text of a flow in the format its file name asks for. */
@@ -353,7 +353,7 @@ export function renderFlowText(flow: Flow, file: string): string {
 
 /** Write a flow back in the format of its file (flow.json or flow.md). */
 export function writeFlowFile(file: string, flow: Flow): void {
-  fs.writeFileSync(file, renderFlowText(flow, file));
+  host().writeFile(file, renderFlowText(flow, file));
 }
 
 /** Read, parse and validate <dir>/flow.json or <dir>/flow.md. Throws FlowValidationError on errors. */

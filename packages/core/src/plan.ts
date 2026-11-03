@@ -1,5 +1,4 @@
-import fs from "node:fs";
-import path from "node:path";
+import { host, path } from "./host/current.js";
 import { DEFAULT_MODEL } from "./executors/llm.js";
 import { mcpLaunchDetail } from "./mcp.js";
 import { isRunnableExecutor } from "./executors/index.js";
@@ -118,7 +117,7 @@ function runDetail(loaded: LoadedFlow, stage: Stage, opts: PlanOptions, env: Nod
  * output comes out the same.
  */
 export function planRunAll(loaded: LoadedFlow, opts: PlanOptions = {}): PlanStep[] {
-  const env = opts.env ?? process.env;
+  const env = opts.env ?? host().env;
   const flowInputs = loadFlowInputs(loaded.dir, loaded.flow, opts.inputs);
   const state = new Map(statusAll(loaded, flowInputs).map((s) => [s.stage.id, s.state]));
   const steps: PlanStep[] = [];
@@ -139,7 +138,7 @@ export function planRunAll(loaded: LoadedFlow, opts: PlanOptions = {}): PlanStep
       step("cannot-run", reserved);
       stopped = true;
     } else if (stage.executor.type === "human") {
-      const missing = stage.outputs.filter((o) => !fs.existsSync(outputAbs(loaded.dir, o))).map((o) => outputRel(o));
+      const missing = stage.outputs.filter((o) => !host().exists(outputAbs(loaded.dir, o))).map((o) => outputRel(o));
       if (missing.length) {
         step("wait", `需要你放好 / needs ${missing.join(", ")}`);
         stopped = true;

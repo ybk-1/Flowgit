@@ -1,7 +1,6 @@
-import fs from "node:fs";
-import path from "node:path";
+import { host, path } from "../host/current.js";
 import { DEFAULT_PROVIDER, flowKeyEndpoint, flowKeyEndpointNote, missingKeyMessage, providerKeyState, resolveModel, type ResolvedProvider } from "../providers.js";
-import { proxyHint } from "../proxy.js";
+import { proxyHint } from "../proxy-env.js";
 import type { ExecutorLlm, Flow, Stage } from "../types.js";
 import { schemaFailure, schemaProblems, schemaTexts } from "../schema-check.js";
 import { linkOutsideError, outputRel, readFlowText, truncate, wantsJson } from "../util.js";
@@ -67,7 +66,17 @@ export function extractJson(text: string): string {
 }
 
 /** Key for a provider, from the env var named by apiKeyEnv. Providers that need no key get a placeholder. */
-export function providerKey(p: ResolvedProvider, env: NodeJS.ProcessEnv = process.env): string {
+/**
+ * The SDKs send their requests through the host, so a browser host can supply its own fetch.
+ * In a browser the key is the user's own and stays on their device, which is what the SDKs'
+ * dangerouslyAllowBrowser option is for.
+ */
+function sdkTransport(): { fetch: typeof fetch; dangerouslyAllowBrowser?: boolean } {
+  const fetchViaHost = ((input: string | URL | Request, init?: RequestInit) => host().fetch(input, init)) as typeof fetch;
+  return host().platform === "browser" ? { fetch: fetchViaHost, dangerouslyAllowBrowser: true } : { fetch: fetchViaHost };
+}
+
+export function providerKey(p: ResolvedProvider, env: NodeJS.ProcessEnv = host().env): string {
   if (!p.apiKeyEnv) return "flowgit-no-key";
   const key = env[p.apiKeyEnv];
   if (!key) throw new Error(missingKeyMessage(p));
@@ -80,7 +89,7 @@ function usesSdkCredentials(p: ResolvedProvider): boolean {
 }
 
 // Kept here too, where they used to live.
-export { ignoredProxyVar, proxyHint } from "../proxy.js";
+export { ignoredProxyVar, proxyHint } from "../proxy-env.js";
 
 /** Turn an SDK error into a bilingual one that says which provider failed and what to check. */
 function requestError(err: unknown, p: ResolvedProvider): Error {
@@ -110,7 +119,7 @@ function requestError(err: unknown, p: ResolvedProvider): Error {
     lines.push("供应商那边暂时出错（已经自动重试过），稍后再试 / The provider returned a server error (already retried); try again later");
   } else if (e?.status === undefined && /connect|fetch failed|ECONNREFUSED|ENOTFOUND|timed out/i.test(`${e?.name} ${msg}`)) {
     lines.push("连不上这个地址，检查 baseUrl 和网络 / Could not reach it; check the baseUrl and your network");
-    const hint = proxyHint(process.env, p.baseUrl);
+    const hint = proxyHint(host().env, p.baseUrl);
     if (hint) lines.push(...hint);
   }
   return new Error(lines.join("\n"));
@@ -171,11 +180,11 @@ export const anthropicComplete: LlmComplete = async (req: LlmRequest): Promise<L
   const { default: Anthropic } = await import("@anthropic-ai/sdk");
   let client: InstanceType<typeof Anthropic>;
   if (usesSdkCredentials(p)) {
-    client = new Anthropic({ baseURL: p.baseUrl });
+    client = new Anthropic({ baseURL: p.baseUrl, ...sdkTransport() });
   } else {
     // An explicit key keeps the SDK from reading ANTHROPIC_API_KEY, so a Claude key never reaches another vendor.
     const key = providerKey(p);
-    client = new Anthropic({ baseURL: p.baseUrl, apiKey: key, ...(p.claudeApi ? {} : { defaultHeaders: { "x-api-key": key } }) });
+    client = new Anthropic({ baseURL: p.baseUrl, apiKey: key, ...sdkTransport(), ...(p.claudeApi ? {} : { defaultHeaders: { "x-api-key": key } }) });
   }
   type Params = Parameters<typeof client.beta.messages.stream>[0];
   let msg: AnthropicReply;
@@ -209,7 +218,7 @@ export const openaiComplete: LlmComplete = async (req: LlmRequest): Promise<LlmR
   const key = providerKey(p);
   const { default: OpenAI } = await import("openai");
   // Explicit values keep the SDK from reading OPENAI_* variables meant for OpenAI itself.
-  const client = new OpenAI({ apiKey: key, baseURL: p.baseUrl, ...(p.openaiApi ? {} : { organization: null, project: null }) });
+  const client = new OpenAI({ apiKey: key, baseURL: p.baseUrl, ...sdkTransport(), ...(p.openaiApi ? {} : { organization: null, project: null }) });
   let text = "";
   let refusal = "";
   let model = req.model;
@@ -278,17 +287,17 @@ export function mockCompleteFromDir(mockDir: string): LlmComplete {
   return async (req) => {
     if (req.repair) {
       const repair = path.join(mockDir, `${req.stageId}.repair.json`);
-      if (!fs.existsSync(repair)) {
+      if (!host().exists(repair)) {
         throw new Error(
           `FLOWGIT_LLM_MOCK_DIR 里没有阶段 "${req.stageId}" 的修复回复 / FLOWGIT_LLM_MOCK_DIR has no repair reply for stage "${req.stageId}" (expected ${req.stageId}.repair.json in ${mockDir})`,
         );
       }
-      return { text: fs.readFileSync(repair, "utf8"), model: `mock:${path.basename(repair)}` };
+      return { text: host().readFile(repair, "utf8"), model: `mock:${path.basename(repair)}` };
     }
     for (const ext of ["md", "txt", "json"]) {
       const file = path.join(mockDir, `${req.stageId}.${ext}`);
-      if (fs.existsSync(file)) {
-        return { text: fs.readFileSync(file, "utf8"), model: `mock:${path.basename(file)}` };
+      if (host().exists(file)) {
+        return { text: host().readFile(file, "utf8"), model: `mock:${path.basename(file)}` };
       }
     }
     throw new Error(`FLOWGIT_LLM_MOCK_DIR 里没有阶段 "${req.stageId}" 的回复 / FLOWGIT_LLM_MOCK_DIR has no reply for stage "${req.stageId}" (expected ${req.stageId}.md|txt|json in ${mockDir})`);
@@ -297,7 +306,7 @@ export function mockCompleteFromDir(mockDir: string): LlmComplete {
 
 export function resolveLlm(options: { llm?: LlmComplete }): LlmComplete {
   if (options.llm) return options.llm;
-  const mockDir = process.env.FLOWGIT_LLM_MOCK_DIR;
+  const mockDir = host().env.FLOWGIT_LLM_MOCK_DIR;
   if (mockDir) return mockCompleteFromDir(path.resolve(mockDir));
   return providerComplete;
 }
@@ -311,7 +320,7 @@ export const llmExecutor: StageExecutor = {
     const outside = ctx.inputs.find((a) => a.outside);
     if (outside) throw linkOutsideError(outputRel(outside.output));
     const json = wantsJson(output.type, output.path);
-    const spec = ctx.options.model ?? ex.model ?? process.env.FLOWGIT_MODEL ?? DEFAULT_MODEL;
+    const spec = ctx.options.model ?? ex.model ?? host().env.FLOWGIT_MODEL ?? DEFAULT_MODEL;
     const { provider, model } = resolveModel(spec, loaded.dir);
     const req: LlmRequest = {
       stageId: stage.id,
@@ -349,8 +358,8 @@ export const llmExecutor: StageExecutor = {
     }
     const abs = path.join(loaded.dir, outputRel(output));
     const write = (text: string) => {
-      fs.mkdirSync(path.dirname(abs), { recursive: true });
-      fs.writeFileSync(abs, text.endsWith("\n") ? text : `${text}\n`);
+      host().mkdir(path.dirname(abs), { recursive: true });
+      host().writeFile(abs, text.endsWith("\n") ? text : `${text}\n`);
     };
     write(content);
     ctx.log(`已写入 / wrote ${outputRel(output)} (${content.length} chars, ${ms} ms)`);

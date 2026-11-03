@@ -1,5 +1,4 @@
-import fs from "node:fs";
-import path from "node:path";
+import { host, path } from "./host/current.js";
 import { renderTemplate } from "./executors/llm.js";
 import type { Executor, ExecutorWorkflow, FlowgitWorkflowParams } from "./types.js";
 import { isSafeRelative } from "./util.js";
@@ -40,7 +39,7 @@ export function normRel(p: string): string {
 export function flowFileId(file: string): string {
   const abs = path.resolve(file);
   try {
-    return fs.existsSync(abs) ? fs.realpathSync(abs) : abs;
+    return host().exists(abs) ? host().realpath(abs) : abs;
   } catch {
     return abs;
   }

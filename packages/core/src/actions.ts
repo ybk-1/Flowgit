@@ -1,5 +1,4 @@
-import fs from "node:fs";
-import path from "node:path";
+import { host, path } from "./host/current.js";
 import { headerEnvNames } from "./executors/service.js";
 import { IMAGE_PRESETS } from "./image-providers.js";
 import { isStdioServer, mcpEnvNames, mcpLaunchDetail } from "./mcp.js";
@@ -63,10 +62,10 @@ export function flowActions(flow: Flow, dir?: string): FlowAction[] {
         actions.push({ stage: id, kind: "workflow", detail: `子流程 / sub-flow ${ex.file}` });
         if (!at) continue;
         const resolved = resolveSubflowFile(at, ex.file);
-        if ("error" in resolved || seen.has(resolved.abs) || !fs.existsSync(resolved.abs)) continue;
+        if ("error" in resolved || seen.has(resolved.abs) || !host().exists(resolved.abs)) continue;
         let sub: Flow;
         try {
-          sub = JSON.parse(fs.readFileSync(resolved.abs, "utf8")) as Flow;
+          sub = JSON.parse(host().readFile(resolved.abs, "utf8")) as Flow;
         } catch {
           continue; // validate reports it
         }

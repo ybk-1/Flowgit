@@ -1,5 +1,4 @@
-import fs from "node:fs";
-import path from "node:path";
+import { host, path } from "../host/current.js";
 import type { ExecutorHuman } from "../types.js";
 import { copyPath, outputRel } from "../util.js";
 import { HumanInputNeededError, type ExecContext, type ExecResult, type StageExecutor } from "./types.js";
@@ -20,17 +19,17 @@ export const humanExecutor: StageExecutor = {
     from.forEach((src, i) => {
       const out = stage.outputs[i];
       const abs = path.resolve(src);
-      if (!fs.existsSync(abs)) throw new Error(`--from 的路径不存在 / --from path not found: ${src}`);
+      if (!host().exists(abs)) throw new Error(`--from 的路径不存在 / --from path not found: ${src}`);
       const dst = path.join(loaded.dir, outputRel(out));
       if (path.resolve(dst) !== abs) {
-        fs.rmSync(dst, { recursive: true, force: true });
+        host().rm(dst, { recursive: true, force: true });
         copyPath(abs, dst);
         ctx.log(`已复制 / copied ${src} -> ${outputRel(out)}`);
       }
     });
     const missing = stage.outputs
       .map((o) => outputRel(o))
-      .filter((rel) => !fs.existsSync(path.join(loaded.dir, rel)));
+      .filter((rel) => !host().exists(path.join(loaded.dir, rel)));
     if (missing.length) {
       throw new HumanInputNeededError(stage, missing, ex.instructions);
     }

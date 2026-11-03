@@ -4,9 +4,10 @@
  * Every baseUrl comes from the vendor's official docs, linked on the preset.
  */
 
-import { proxyHint } from "./proxy.js";
+import { host } from "./host/current.js";
+import { proxyHint } from "./proxy-env.js";
 import type { Flow, Stage, ValidationIssue } from "./types.js";
-import { isSafeRelative, outputRel } from "./util.js";
+import { base64ToBytes, isSafeRelative, outputRel } from "./util.js";
 
 export type ImageApi = "openai" | "zhipu" | "volcengine" | "dashscope";
 
@@ -85,7 +86,7 @@ export function imagePresetList(): ImagePreset[] {
   return Object.entries(IMAGE_PRESETS).map(([id, preset]) => ({ id, ...preset }));
 }
 
-export function imageKeyState(preset: Pick<ImagePreset, "apiKeyEnv">, env: NodeJS.ProcessEnv = process.env): "set" | "unset" {
+export function imageKeyState(preset: Pick<ImagePreset, "apiKeyEnv">, env: NodeJS.ProcessEnv = host().env): "set" | "unset" {
   return env[preset.apiKeyEnv] ? "set" : "unset";
 }
 
@@ -129,7 +130,7 @@ export interface ResolvedImageModel {
 }
 
 /** "zhipu/cogview-4" → preset + model. Only the first "/" splits. */
-export function resolveImageModel(spec: string, env: NodeJS.ProcessEnv = process.env): ResolvedImageModel {
+export function resolveImageModel(spec: string, env: NodeJS.ProcessEnv = host().env): ResolvedImageModel {
   const text = spec.trim();
   const slash = text.indexOf("/");
   const id = slash < 0 ? "" : text.slice(0, slash);
@@ -198,7 +199,7 @@ async function callJson(
   if (left <= 0) throw timeoutError(init.timeoutSec);
   let response: Response;
   try {
-    response = await fetch(url, {
+    response = await host().fetch(url, {
       method: init.method,
       headers: init.headers,
       body: init.body === undefined ? undefined : JSON.stringify(init.body),
@@ -240,15 +241,15 @@ function assertOk(res: HttpResult, preset: ImagePreset, key: string): unknown {
   return json;
 }
 
-function decodeBase64(value: string): Buffer {
+function decodeBase64(value: string): Uint8Array {
   const cleaned = value.replace(/^data:image\/[a-z0-9.+-]+;base64,/i, "").replace(/\s+/g, "");
-  const buf = Buffer.from(cleaned, "base64");
+  const buf = base64ToBytes(cleaned);
   if (!buf.length) throw new Error(`返回的图片是空的 / the image data is empty`);
   if (buf.length > MAX_IMAGE_BYTES) throw new Error(`图片超过 30 MB，已停止 / image is over 30 MB and was stopped`);
   return buf;
 }
 
-async function downloadUrl(url: string, deadline: number, timeoutSec: number, env: NodeJS.ProcessEnv): Promise<Buffer> {
+async function downloadUrl(url: string, deadline: number, timeoutSec: number, env: NodeJS.ProcessEnv): Promise<Uint8Array> {
   let parsed: URL;
   try {
     parsed = new URL(url);
@@ -263,7 +264,7 @@ async function downloadUrl(url: string, deadline: number, timeoutSec: number, en
   let response: Response;
   try {
     // No Authorization header: the URL is often a signed link on another host.
-    response = await fetch(parsed, { redirect: "follow", signal: AbortSignal.timeout(left) });
+    response = await host().fetch(parsed, { redirect: "follow", signal: AbortSignal.timeout(left) });
   } catch (err) {
     throw mapFetchError(err, timeoutSec, parsed.href, env);
   }
@@ -272,7 +273,7 @@ async function downloadUrl(url: string, deadline: number, timeoutSec: number, en
   if (Number.isFinite(declared) && declared > MAX_IMAGE_BYTES) {
     throw new Error(`图片超过 30 MB，已停止 / image is over 30 MB and was stopped`);
   }
-  const buf = Buffer.from(await response.arrayBuffer());
+  const buf = new Uint8Array(await response.arrayBuffer());
   if (!buf.length) throw new Error(`下载到的图片是空的 / downloaded image is empty`);
   if (buf.length > MAX_IMAGE_BYTES) throw new Error(`图片超过 30 MB，已停止 / image is over 30 MB and was stopped`);
   return buf;
@@ -297,7 +298,7 @@ function firstPicture(json: unknown): PictureRef {
   throw new Error(`生图接口没有返回图片地址或 base64 / image API returned no image url or base64`);
 }
 
-async function pictureFromRef(ref: PictureRef, deadline: number, timeoutSec: number, env: NodeJS.ProcessEnv): Promise<Buffer> {
+async function pictureFromRef(ref: PictureRef, deadline: number, timeoutSec: number, env: NodeJS.ProcessEnv): Promise<Uint8Array> {
   if (ref.b64) return decodeBase64(ref.b64);
   if (ref.url) return downloadUrl(ref.url, deadline, timeoutSec, env);
   throw new Error(`生图接口没有返回图片地址或 base64 / image API returned no image url or base64`);
@@ -361,7 +362,7 @@ async function waitRemaining(ms: number, deadline: number, timeoutSec: number): 
   if (Date.now() >= deadline) throw timeoutError(timeoutSec);
 }
 
-async function generateDashScope(req: ImageRequest, key: string, deadline: number): Promise<Buffer> {
+async function generateDashScope(req: ImageRequest, key: string, deadline: number): Promise<Uint8Array> {
   const { path, body } = dashscopeBody(req.model, req.prompt, req.size);
   const headers = {
     Authorization: `Bearer ${key}`,
@@ -411,7 +412,7 @@ function volcengineBody(model: string, prompt: string, size: string): Record<str
 }
 
 /** One picture. The stage loops when it needs several. Keys are never written to a file or a log. */
-export async function generateImage(req: ImageRequest): Promise<Buffer> {
+export async function generateImage(req: ImageRequest): Promise<Uint8Array> {
   const key = requireKey(req.preset, req.env);
   const deadline = Date.now() + req.timeoutSec * 1000;
   if (req.preset.api === "dashscope") return generateDashScope(req, key, deadline);

@@ -1,3 +1,6 @@
+// Node entry. The browser entry is browser.ts; both share every module that goes through the Host.
+import "./node-setup.js";
+
 export * from "./types.js";
 export * from "./graph.js";
 export * from "./layout.js";
@@ -8,6 +11,7 @@ export * from "./prune.js";
 export * from "./diff.js";
 export * from "./run.js";
 export * from "./executors/index.js";
+export { mcpExecutor, listMcpTools, renderMcpArgs, renderMcpString, type McpToolDescription } from "./executors/mcp.js";
 export * from "./skill.js";
 export * from "./providers.js";
 export * from "./image-providers.js";
@@ -21,6 +25,8 @@ export * from "./privacy.js";
 export * from "./actions.js";
 export * from "./plugins.js";
 export * from "./trust.js";
+export * from "./host/index.js";
+export { nodeHost } from "./host/node.js";
 // proxyHint and ignoredProxyVar already come through ./executors/index.js.
 export {
   LOCAL_NO_PROXY,
@@ -44,4 +50,5 @@ export {
   type ProxySource,
   type ProxySupport,
 } from "./proxy.js";
+export { setProxySupportProbe } from "./proxy-env.js";
 export { hashPath, listFiles, isTextType, wantsJson, isDirOutput, outputRel, isSafeRelative, findOnPath, staysInside, readFlowText } from "./util.js";

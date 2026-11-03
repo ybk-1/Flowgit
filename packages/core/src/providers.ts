@@ -1,6 +1,4 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
+import { host, path } from "./host/current.js";
 import { LOCAL_FILE } from "./runs.js";
 
 /**
@@ -108,7 +106,7 @@ export const PROVIDER_PRESETS: Readonly<Record<string, Omit<Provider, "id" | "so
 
 /** ~/.flowgit/providers.json, or $FLOWGIT_HOME/providers.json. */
 export function globalProvidersFile(): string {
-  const home = process.env.FLOWGIT_HOME || path.join(os.homedir(), ".flowgit");
+  const home = host().env.FLOWGIT_HOME || path.join(host().homedir(), ".flowgit");
   return path.join(home, "providers.json");
 }
 
@@ -172,10 +170,10 @@ export function checkProvidersConfig(value: unknown, file: string): Record<strin
 }
 
 function readProvidersFile(file: string): Record<string, ProviderConfig> {
-  if (!fs.existsSync(file)) return {};
+  if (!host().exists(file)) return {};
   let data: unknown;
   try {
-    data = JSON.parse(fs.readFileSync(file, "utf8"));
+    data = JSON.parse(host().readFile(file, "utf8"));
   } catch (err) {
     throw new ProviderConfigError(`${file} 不是合法的 JSON / is not valid JSON: ${(err as Error).message}`);
   }
@@ -248,7 +246,7 @@ export function isOpenAiApi(baseUrl: string): boolean {
 }
 
 /** The endpoint a provider will actually call, following ANTHROPIC_BASE_URL / OPENAI_BASE_URL for the two vendor presets. */
-export function effectiveProvider(p: Provider, env: NodeJS.ProcessEnv = process.env): ResolvedProvider {
+export function effectiveProvider(p: Provider, env: NodeJS.ProcessEnv = host().env): ResolvedProvider {
   let baseUrl = p.baseUrl;
   if (!baseUrl && p.id === "anthropic") baseUrl = env.ANTHROPIC_BASE_URL || ANTHROPIC_API_URL;
   if (!baseUrl && p.id === "openai") baseUrl = env.OPENAI_BASE_URL || OPENAI_API_URL;
@@ -295,7 +293,7 @@ export function flowKeyEndpointNote(p: Provider, baseUrl: string): string {
 }
 
 /** Whether the provider's key is available. "none" = this provider needs no key. */
-export function providerKeyState(p: Provider, env: NodeJS.ProcessEnv = process.env): "set" | "unset" | "none" {
+export function providerKeyState(p: Provider, env: NodeJS.ProcessEnv = host().env): "set" | "unset" | "none" {
   if (!p.apiKeyEnv) return "none";
   if (env[p.apiKeyEnv]) return "set";
   // The Anthropic SDK also accepts ANTHROPIC_AUTH_TOKEN for the default provider.

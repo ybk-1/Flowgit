@@ -1,7 +1,4 @@
-import { createRequire } from "node:module";
-import fs from "node:fs";
-import path from "node:path";
-import { pathToFileURL } from "node:url";
+import { host, path } from "./host/current.js";
 import type { LoadedFlow } from "./types.js";
 import { hashPath, isSafeRelative, staysInside } from "./util.js";
 
@@ -124,9 +121,9 @@ function installHint(name: string): string {
 
 function readVersion(root: string): string | undefined {
   const file = path.join(root, "package.json");
-  if (!fs.existsSync(file)) return undefined;
+  if (!host().exists(file)) return undefined;
   try {
-    const pkg = JSON.parse(fs.readFileSync(file, "utf8")) as { version?: unknown };
+    const pkg = JSON.parse(host().readFile(file, "utf8")) as { version?: unknown };
     return typeof pkg.version === "string" && pkg.version ? pkg.version : undefined;
   } catch {
     return undefined;
@@ -148,8 +145,8 @@ function packageRoot(flowDir: string, name: string): string {
  */
 function entryInside(root: string, entry: string): boolean {
   try {
-    const realRoot = fs.realpathSync(root);
-    const realEntry = fs.realpathSync(entry);
+    const realRoot = host().realpath(root);
+    const realEntry = host().realpath(entry);
     const rel = path.relative(realRoot, realEntry);
     return rel === "" || (rel !== ".." && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel));
   } catch {
@@ -183,19 +180,19 @@ function resolveFolderPlugin(flowDir: string, spec: string): ResolvedPlugin {
   const posix = spec.replace(/\\/g, "/");
   if (!posix.startsWith("./") || !isSafeRelative(posix)) throw outsidePluginError(spec);
   const abs = path.resolve(flowDir, spec);
-  if (!fs.existsSync(abs)) throw new Error(`找不到插件 "${spec}" / plugin "${spec}" was not found`);
+  if (!host().exists(abs)) throw new Error(`找不到插件 "${spec}" / plugin "${spec}" was not found`);
   if (!staysInside(flowDir, abs)) throw new Error(`插件路径指向流程目录外面 / plugin path points outside the flow directory: "${spec}"`);
   let entry: string;
   try {
     // Parent filename is the flow's package.json path even when that file is absent.
-    entry = createRequire(path.join(flowDir, "package.json")).resolve(posix);
+    entry = host().resolveModule(path.join(flowDir, "package.json"), posix);
   } catch (err) {
     throw new Error(`找不到插件 "${spec}" 的入口文件 / plugin "${spec}" has no entry file (${(err as Error).message})`);
   }
   if (!staysInside(flowDir, entry)) {
     throw new Error(`插件 "${spec}" 的入口指向流程目录外面 / plugin "${spec}" entry points outside the flow directory`);
   }
-  const directory = fs.statSync(abs).isDirectory();
+  const directory = host().stat(abs).isDirectory();
   const root = directory ? abs : path.dirname(abs);
   return {
     spec,
@@ -210,10 +207,10 @@ function resolveFolderPlugin(flowDir: string, spec: string): ResolvedPlugin {
 function resolvePackagePlugin(flowDir: string, name: string): ResolvedPlugin {
   const root = packageRoot(flowDir, name);
   // Missing here means missing. Do not call resolve(), which would walk upward.
-  if (!fs.existsSync(root)) throw missingPluginError(name);
+  if (!host().exists(root)) throw missingPluginError(name);
   let entry: string;
   try {
-    entry = createRequire(path.join(flowDir, "package.json")).resolve(name);
+    entry = host().resolveModule(path.join(flowDir, "package.json"), name);
   } catch {
     throw missingPluginError(name);
   }
@@ -334,7 +331,7 @@ function showApiVersion(value: unknown): string {
 export async function loadFlowgitPlugin(resolved: ResolvedPlugin): Promise<{ name: string; run: (ctx: PluginContext) => void | Promise<void> }> {
   let imported: { default?: unknown };
   try {
-    imported = (await import(pathToFileURL(resolved.entry).href)) as { default?: unknown };
+    imported = (await host().importModule(resolved.entry)) as { default?: unknown };
   } catch (err) {
     throw new Error(`无法加载插件 "${resolved.spec}" / could not load plugin "${resolved.spec}": ${(err as Error).message}`);
   }

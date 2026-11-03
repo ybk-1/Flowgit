@@ -1,5 +1,4 @@
-import fs from "node:fs";
-import path from "node:path";
+import { host, path } from "./host/current.js";
 import { FILE_HEADERS_ONLY, createTwoFilesPatch } from "diff";
 import type { Flow } from "./types.js";
 import { requireStage } from "./graph.js";
@@ -54,23 +53,23 @@ function missingRun(stageId: string, n: number): Error {
 function sideRoot(dir: string, stageId: string, n: number | null): string {
   if (n === null) return dir;
   const versionDir = runDir(dir, stageId, n);
-  if (!fs.existsSync(versionDir)) throw missingRun(stageId, n);
+  if (!host().exists(versionDir)) throw missingRun(stageId, n);
   return path.join(versionDir, "outputs");
 }
 
 function readText(abs: string): string {
-  if (!fs.existsSync(abs) || !fs.statSync(abs).isFile()) return "";
-  return fs.readFileSync(abs, "utf8");
+  if (!host().exists(abs) || !host().stat(abs).isFile()) return "";
+  return host().readFile(abs, "utf8");
 }
 
 function fileHash(abs: string): string | null {
-  if (!fs.existsSync(abs) || !fs.statSync(abs).isFile()) return null;
+  if (!host().exists(abs) || !host().stat(abs).isFile()) return null;
   return sha256File(abs);
 }
 
 function dirHashes(abs: string): Map<string, string> {
   const hashes = new Map<string, string>();
-  if (!fs.existsSync(abs) || !fs.statSync(abs).isDirectory()) return hashes;
+  if (!host().exists(abs) || !host().stat(abs).isDirectory()) return hashes;
   for (const rel of listFiles(abs)) hashes.set(rel, sha256File(path.join(abs, rel)));
   return hashes;
 }

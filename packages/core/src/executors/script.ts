@@ -1,7 +1,6 @@
-import path from "node:path";
+import { host, path } from "../host/current.js";
 import type { ExecutorScript } from "../types.js";
 import { findOnPath, outputRel, truncate } from "../util.js";
-import { runCommand } from "./command.js";
 import type { ExecContext, ExecResult, StageExecutor } from "./types.js";
 
 const LOG_CAP = 20_000;
@@ -17,7 +16,7 @@ export const scriptExecutor: StageExecutor = {
     const ex = stage.executor as ExecutorScript;
     const cwd = ex.cwd ? path.resolve(loaded.dir, ex.cwd) : loaded.dir;
     const env: NodeJS.ProcessEnv = {
-      ...process.env,
+      ...host().env,
       ...(ctx.options.env ?? {}),
       ...(ex.env ?? {}),
       FLOWGIT_PROJECT_DIR: loaded.dir,
@@ -36,7 +35,7 @@ export const scriptExecutor: StageExecutor = {
       );
     }
     ctx.log(`$ ${ex.run}`);
-    const { code, output } = await runCommand({
+    const { code, output } = await host().exec({
       command: ex.run,
       cwd,
       env,

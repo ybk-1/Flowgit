@@ -45,6 +45,11 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 - 看板收到无法解析的请求路径（例如 `//`）时返回 400，不再是 500。
 - A request path the board cannot parse (for example `//`) returns 400 instead of 500.
 
+### 核心库 / Core library
+
+- `@flowgit/core` 的文件读写、哈希、运行命令、网络请求和环境变量都改成经过 `Host` 接口：电脑上是 `nodeHost`，行为和以前一样；`createMemoryHost()` 把文件放在内存里，给测试用，也是以后网页版的底子。新增浏览器入口（`package.json` 的 `browser` 条件，或 `@flowgit/core/browser`），不导入任何 `node:` 模块；在浏览器里 script、agent、MCP 和插件阶段会给出“要在电脑上运行”的双语错误。命令行和本机看板用起来没有变化。
+- File access, hashing, commands, network requests and environment variables in `@flowgit/core` now go through a `Host` interface: `nodeHost` on a computer, behaving as before, and `createMemoryHost()`, which keeps files in memory, for tests and as the base of the coming web app. A new browser entry (the `browser` condition in `package.json`, or `@flowgit/core/browser`) imports no `node:` module; there, script, agent, MCP and plugin stages fail with a bilingual "needs to run on a computer" error. The CLI and the local board work the same as before.
+
 ### 模板和示例 / Templates and examples
 
 - `social-posts`：多平台帖子。3 到 5 个角度（人挑选）→ 按小红书、微博、X、抖音、LinkedIn、微信朋友圈已公布的长度和话题规则写帖 → 检查绝对化用语、医疗用语、导流痕迹和占位符（只提醒）→ 导出 `posts.md`。规则会变，发出去之前要再核对。

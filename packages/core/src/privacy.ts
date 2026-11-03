@@ -1,5 +1,5 @@
-import fs from "node:fs";
-import path from "node:path";
+import { host, path } from "./host/current.js";
+
 
 export type FindingSeverity = "high" | "medium";
 
@@ -61,9 +61,9 @@ export function maskSecret(value: string): string {
 
 /** Any file up to 1 MB that looks like text (no NUL byte), whatever its extension: a key can hide in a .ps1 or .cfg too. */
 function scannable(abs: string): boolean {
-  const stat = fs.statSync(abs);
+  const stat = host().stat(abs);
   if (!stat.isFile() || stat.size > MAX_BYTES) return false;
-  return !fs.readFileSync(abs).includes(0);
+  return !host().readFile(abs).includes(0);
 }
 
 /**
@@ -75,8 +75,8 @@ export function findPrivateData(dir: string, files: string[]): Finding[] {
   for (const rel of files) {
     const normalized = rel.split(path.sep).join("/");
     const abs = path.join(dir, ...normalized.split("/"));
-    if (!fs.existsSync(abs) || !scannable(abs)) continue;
-    const lines = fs.readFileSync(abs, "utf8").split(/\r?\n/);
+    if (!host().exists(abs) || !scannable(abs)) continue;
+    const lines = host().readFile(abs, "utf8").split(/\r?\n/);
     lines.forEach((line, index) => {
       for (const rule of RULES) {
         rule.re.lastIndex = 0;

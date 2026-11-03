@@ -1,5 +1,5 @@
-import fs from "node:fs";
-import path from "node:path";
+import { posixPath } from "../host/posix-path.js";
+import { host, path } from "../host/current.js";
 import { loadFlow } from "../load.js";
 import {
   flowFileId,
@@ -14,6 +14,8 @@ import type { ExecutorWorkflow } from "../types.js";
 import { copyPath, isSafeRelative, outputRel } from "../util.js";
 import { HumanInputNeededError, type ExecContext, type ExecResult, type RunOptions, type StageExecutor } from "./types.js";
 
+const posix = posixPath();
+
 const LOG_PREFIX = (id: string) => `[子流程 / sub-flow ${id}]`;
 
 function inside(root: string, abs: string): boolean {
@@ -24,7 +26,7 @@ function inside(root: string, abs: string): boolean {
 function bubbleWait(err: HumanInputNeededError, ctx: ExecContext, subDir: string): HumanInputNeededError {
   const subflowStage = err.subflowStage ?? { id: err.stage.id, name: err.stage.name };
   const base = path.relative(ctx.loaded.dir, subDir).split(path.sep).join("/");
-  const missing = err.missing.map((rel) => (base ? path.posix.join(base, rel) : rel));
+  const missing = err.missing.map((rel) => (base ? posix.join(base, rel) : rel));
   return new HumanInputNeededError(ctx.stage, missing, err.instructions, subflowStage);
 }
 
@@ -43,10 +45,10 @@ function copyOutputs(ctx: ExecContext, subDir: string, copy: Record<string, stri
     if (!inside(subDir, src) || !inside(ctx.loaded.dir, dst)) {
       throw new Error(`copy 的路径必须留在流程目录内 / copy paths must stay inside the flow directory: "${fromRel}" -> "${toRel}"`);
     }
-    if (!fs.existsSync(src)) {
+    if (!host().exists(src)) {
       throw new Error(`子流程没有这个产物 ${fromRel} / sub-flow did not produce ${fromRel}`);
     }
-    fs.rmSync(dst, { recursive: true, force: true });
+    host().rm(dst, { recursive: true, force: true });
     copyPath(src, dst);
     ctx.log(`已复制 / copied ${fromRel} -> ${outputRel(output)}`);
   }
@@ -70,7 +72,7 @@ export const workflowExecutor: StageExecutor = {
     const stack = subflowStack(ctx.loaded.file, ctx.options.flowStack);
     const problem = subflowEnterProblem(stack, resolved.abs);
     if (problem) throw new Error(problem);
-    if (!fs.existsSync(resolved.abs)) {
+    if (!host().exists(resolved.abs)) {
       throw new Error(`找不到子流程 / sub-flow file not found: ${ex.file}`);
     }
     const sub = loadFlow(path.dirname(resolved.abs));

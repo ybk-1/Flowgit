@@ -37,6 +37,9 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: pnpm typecheck
+      - name: "浏览器入口不含 node: 模块 / The browser entry has no node: modules"
+        if: runner.os == 'Linux'
+        run: pnpm --filter @flowgit/core check:browser
       - name: Test
         run: pnpm test
         env:

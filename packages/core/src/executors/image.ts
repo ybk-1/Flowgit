@@ -1,5 +1,4 @@
-import fs from "node:fs";
-import path from "node:path";
+import { host, path } from "../host/current.js";
 import {
   DEFAULT_IMAGE_SIZE,
   DEFAULT_IMAGE_TIMEOUT_SEC,
@@ -33,7 +32,7 @@ function readJson(dir: string, rel: string): unknown {
   if (!staysInside(dir, abs)) throw linkOutsideError(rel);
   let text: string;
   try {
-    text = fs.readFileSync(abs, "utf8");
+    text = host().readFile(abs, "utf8");
   } catch {
     throw new Error(`找不到 ${rel} / ${rel} was not found`);
   }
@@ -79,34 +78,34 @@ function promptsFor(dir: string, rendered: string, each: ImageEach | undefined, 
 }
 
 /** Pictures in `<mockDir>/<stageId>/`, sorted by name. Too few and they repeat from the start. */
-export function mockPictures(mockDir: string, stageId: string, count: number): Buffer[] {
+export function mockPictures(mockDir: string, stageId: string, count: number): Uint8Array[] {
   const dir = path.join(path.resolve(mockDir), stageId);
-  if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) {
+  if (!host().exists(dir) || !host().stat(dir).isDirectory()) {
     throw new Error(
       `FLOWGIT_IMAGE_MOCK_DIR 里没有阶段 "${stageId}" 的图片 / FLOWGIT_IMAGE_MOCK_DIR has no pictures for stage "${stageId}" (expected a directory ${dir})`,
     );
   }
-  const files = fs
-    .readdirSync(dir)
+  const files = host()
+    .readdir(dir)
     .filter((name) => IMAGE_EXT.has(path.extname(name).toLowerCase()))
     .sort((a, b) => a.localeCompare(b));
   if (!files.length) {
     throw new Error(`FLOWGIT_IMAGE_MOCK_DIR 里阶段 "${stageId}" 没有图片文件 / FLOWGIT_IMAGE_MOCK_DIR has no picture files for stage "${stageId}" in ${dir}`);
   }
-  return Array.from({ length: count }, (_item, index) => fs.readFileSync(path.join(dir, files[index % files.length]!)));
+  return Array.from({ length: count }, (_item, index) => host().readFile(path.join(dir, files[index % files.length]!)));
 }
 
-function writePictures(dir: string, rel: string, pictures: Buffer[]): { file: string; bytes: number }[] {
+function writePictures(dir: string, rel: string, pictures: Uint8Array[]): { file: string; bytes: number }[] {
   const abs = path.join(dir, rel);
-  if (fs.existsSync(abs) && !staysInside(dir, abs)) throw linkOutsideError(rel);
-  fs.rmSync(abs, { recursive: true, force: true });
-  fs.mkdirSync(abs, { recursive: true });
+  if (host().exists(abs) && !staysInside(dir, abs)) throw linkOutsideError(rel);
+  host().rm(abs, { recursive: true, force: true });
+  host().mkdir(abs, { recursive: true });
   if (!staysInside(dir, abs)) throw linkOutsideError(rel);
   return pictures.map((bytes, index) => {
     const name = fileName(index);
     const file = path.join(abs, name);
     if (!staysInside(abs, file)) throw new Error(`图片文件名不合法 / invalid picture name ${name}`);
-    fs.writeFileSync(file, bytes);
+    host().writeFile(file, bytes);
     return { file: name, bytes: bytes.length };
   });
 }
@@ -119,14 +118,14 @@ export const imageExecutor: StageExecutor = {
         `image 阶段只能有一个以 / 结尾的目录产物 / an image stage needs exactly one directory output whose path ends with / ("${ctx.stage.id}")`,
       );
     }
-    const env = ctx.options.env ?? process.env;
+    const env = ctx.options.env ?? host().env;
     const rendered = renderTemplate(readFlowText(ctx.loaded.dir, ex.prompt), ctx.flowInputs);
     const prompts = promptsFor(ctx.loaded.dir, rendered, ex.each, ex.n);
     const size = ex.size ?? DEFAULT_IMAGE_SIZE;
     const timeoutSec = ex.timeoutSec ?? DEFAULT_IMAGE_TIMEOUT_SEC;
     const resolved = resolveImageModel(ex.model, env);
     const started = Date.now();
-    let pictures: Buffer[];
+    let pictures: Uint8Array[];
     const mockDir = env.FLOWGIT_IMAGE_MOCK_DIR;
     if (mockDir) {
       ctx.log(`使用固定图片 / using canned pictures ${mockDir}`);

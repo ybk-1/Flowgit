@@ -1,9 +1,11 @@
-import fs from "node:fs";
-import path from "node:path";
+import { posixPath } from "../host/posix-path.js";
+import { host, path } from "../host/current.js";
 import { loadFlowgitPlugin, resolveFlowPlugin, type PluginContext, type PluginOutput, type PluginStage, type PluginUpstream } from "../plugins.js";
 import type { ExecutorPlugin, Output, Stage } from "../types.js";
 import { isDirOutput, isSafeRelative, linkOutsideError, outputRel, staysInside } from "../util.js";
 import type { ExecContext, ExecResult, InputArtifact, StageExecutor } from "./types.js";
+
+const posix = posixPath();
 
 function timeoutMessage(seconds: number): string {
   return `超时（${seconds} 秒），已停止 / Timed out after ${seconds}s and was stopped`;
@@ -14,7 +16,7 @@ function isTimeoutError(err: unknown): boolean {
 }
 
 function normRel(rel: string): string {
-  return path.posix.normalize(rel.replace(/\\/g, "/")).replace(/^\.\//, "").replace(/\/+$/, "");
+  return posix.normalize(rel.replace(/\\/g, "/")).replace(/^\.\//, "").replace(/\/+$/, "");
 }
 
 function stageView(stage: Stage): PluginStage {
@@ -47,7 +49,7 @@ function outputAllowed(outputs: Output[], rel: string): boolean {
 /** Refuse a write that escapes the flow directory, including through a symlink. */
 function assertWriteInside(flowDir: string, abs: string): void {
   let cursor = abs;
-  while (!fs.existsSync(cursor)) {
+  while (!host().exists(cursor)) {
     const parent = path.dirname(cursor);
     if (parent === cursor) break;
     cursor = parent;
@@ -82,10 +84,10 @@ function upstreamOf(flowDir: string, inputs: InputArtifact[]): PluginUpstream {
       const abs = files.get(key);
       if (!abs) throw new Error(`没有这个上游产物 "${rel}" / no such upstream output "${rel}"`);
       if (!staysInside(flowDir, abs)) throw linkOutsideError(key);
-      if (fs.existsSync(abs) && fs.statSync(abs).isDirectory()) {
+      if (host().exists(abs) && host().stat(abs).isDirectory()) {
         throw new Error(`"${rel}" 是文件夹，先读里面的文件 / "${rel}" is a directory; read a file inside it`);
       }
-      return fs.readFileSync(abs, "utf8");
+      return host().readFile(abs, "utf8");
     },
   };
 }
@@ -111,8 +113,8 @@ function buildContext(ctx: ExecContext, config: Record<string, unknown>, signal:
       }
       const abs = path.resolve(flowDir, key);
       assertWriteInside(flowDir, abs);
-      fs.mkdirSync(path.dirname(abs), { recursive: true });
-      fs.writeFileSync(abs, data);
+      host().mkdir(path.dirname(abs), { recursive: true });
+      host().writeFile(abs, data);
       ctx.log(`已写入 / wrote ${key}`);
     },
     log(line: string) {

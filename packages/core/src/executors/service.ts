@@ -1,8 +1,7 @@
-import fs from "node:fs";
-import path from "node:path";
+import { host, path } from "../host/current.js";
 import type { ExecutorService } from "../types.js";
-import { isTextType, linkOutsideError, outputRel, wantsJson } from "../util.js";
-import { proxyHint } from "../proxy.js";
+import { bytesToText, isTextType, linkOutsideError, outputRel, wantsJson } from "../util.js";
+import { proxyHint } from "../proxy-env.js";
 import type { ExecContext, ExecResult, InputArtifact, StageExecutor } from "./types.js";
 
 const ENV_REF = /\{\{\s*env\.([A-Za-z_][A-Za-z0-9_]*)\s*\}\}/g;
@@ -44,9 +43,9 @@ function upstreamText(inputs: InputArtifact[]): Record<string, Record<string, st
   for (const artifact of inputs) {
     if (artifact.outside) throw linkOutsideError(outputRel(artifact.output));
     if (!artifact.exists || artifact.isDir || !isTextType(artifact.output.type, artifact.output.path)) continue;
-    if (fs.statSync(artifact.absPath).size > MAX_UPSTREAM_BYTES) continue;
+    if (host().stat(artifact.absPath).size > MAX_UPSTREAM_BYTES) continue;
     const bucket = upstream[artifact.stage] ?? {};
-    bucket[outputRel(artifact.output)] = fs.readFileSync(artifact.absPath, "utf8");
+    bucket[outputRel(artifact.output)] = host().readFile(artifact.absPath, "utf8");
     upstream[artifact.stage] = bucket;
   }
   return upstream;
@@ -67,7 +66,7 @@ export const serviceExecutor: StageExecutor = {
     if (target.protocol !== "http:" && target.protocol !== "https:") {
       throw new Error(`服务只允许 http 和 https，收到 ${target.protocol} / service url must be http or https, got ${target.protocol}`);
     }
-    const headers = resolveHeaderTemplates(ex.headers, ctx.options.env ?? process.env);
+    const headers = resolveHeaderTemplates(ex.headers, ctx.options.env ?? host().env);
     const method = ex.method ?? "POST";
     const timeoutSec = ex.timeoutSec ?? 60;
     if (method === "GET") {
@@ -80,14 +79,14 @@ export const serviceExecutor: StageExecutor = {
     const signal = AbortSignal.timeout(timeoutSec * 1000);
     const body = method === "POST" ? JSON.stringify({ inputs: ctx.flowInputs, upstream: upstreamText(ctx.inputs) }) : undefined;
     let response: Response;
-    let bytes: Buffer;
+    let bytes: Uint8Array;
     try {
       // Redirects are followed by hand: a header can carry a key, so it never goes to another origin.
       let url = target;
       let verb: string = method;
       let payload = body;
       for (let hop = 0; ; hop++) {
-        response = await fetch(url, {
+        response = await host().fetch(url, {
           method: verb,
           headers: payload !== undefined ? { "content-type": "application/json", ...headers } : headers,
           body: payload,
@@ -110,34 +109,34 @@ export const serviceExecutor: StageExecutor = {
         if (hop >= 5) throw new Error(`跳转太多次 / too many redirects`);
         url = next;
       }
-      bytes = Buffer.from(await response.arrayBuffer());
+      bytes = new Uint8Array(await response.arrayBuffer());
     } catch (err) {
       const error = err as Error;
       if (error.name === "TimeoutError" || error.name === "AbortError") {
         throw new Error(`超时（${timeoutSec} 秒），已停止 / Timed out after ${timeoutSec}s and was stopped`);
       }
       if (error.message.includes(" / the service redirected") || error.message.includes("too many redirects")) throw error;
-      const hint = proxyHint(ctx.options.env ?? process.env, target.href);
+      const hint = proxyHint(ctx.options.env ?? host().env, target.href);
       const cause = (error as Error & { cause?: { message?: string } }).cause?.message;
       throw new Error(`调用服务失败 / service call failed: ${error.message}${cause ? ` (${cause})` : ""}${hint ? `\n${hint.join("\n")}` : ""}`);
     }
     if (!response.ok) {
-      const preview = bytes.subarray(0, 500).toString("utf8");
+      const preview = bytesToText(bytes.subarray(0, 500));
       throw new Error(`服务返回 ${response.status} / service returned ${response.status}${preview ? `\n${preview}` : ""}`);
     }
     const output = ctx.stage.outputs[0]!;
     const abs = path.join(ctx.loaded.dir, outputRel(output));
-    fs.mkdirSync(path.dirname(abs), { recursive: true });
+    host().mkdir(path.dirname(abs), { recursive: true });
     if (wantsJson(output.type, output.path)) {
       let data: unknown;
       try {
-        data = JSON.parse(bytes.toString("utf8")) as unknown;
+        data = JSON.parse(bytesToText(bytes)) as unknown;
       } catch {
         throw new Error(`服务返回的不是 JSON / service response is not JSON`);
       }
-      fs.writeFileSync(abs, `${JSON.stringify(data, null, 2)}\n`);
+      host().writeFile(abs, `${JSON.stringify(data, null, 2)}\n`);
     } else {
-      fs.writeFileSync(abs, bytes);
+      host().writeFile(abs, bytes);
     }
     ctx.log(`已写入 / wrote ${outputRel(output)} (${bytes.length} bytes, ${Date.now() - started} ms)`);
     return { params: { url: ex.url, method, timeoutSec, status: response.status, durationMs: Date.now() - started } };
