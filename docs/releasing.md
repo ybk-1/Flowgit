@@ -24,6 +24,7 @@ npm can only set up Trusted Publishing for a package that already exists, so the
    npm login
    npm whoami
    pnpm install --frozen-lockfile
+   git clean -fdX packages/core/dist packages/web/dist packages/cli/dist
    pnpm build
    pnpm test
    node scripts/pack-smoke.mjs
@@ -38,8 +39,11 @@ npm can only set up Trusted Publishing for a package that already exists, so the
    git push origin v0.1.0
    ```
 
-   `npm whoami` 应该显示你的 npm 用户名。`--frozen-lockfile` 不会改 `pnpm-lock.yaml`，工作区不干净时 `pnpm publish` 会停下。`pack-smoke` 先确认打出来的包装得起来。一定要用 `pnpm publish`，它会把 `"workspace:*"` 换成真正的版本号。按 core、web、cli 的顺序发。最后推的 tag 会触发 `release.yml`，它看到三个版本都已经在 npm 上就会跳过发布，只留下 tag 记录这一版。
-   `npm whoami` should print your npm username. `--frozen-lockfile` leaves `pnpm-lock.yaml` alone; `pnpm publish` stops when the working tree isn't clean. `pack-smoke` first makes sure the packed packages install. Use `pnpm publish`: it replaces `"workspace:*"` with the real version. Publish core, then web, then the CLI. The tag pushed at the end triggers `release.yml`, which finds all three versions already on npm and skips publishing, so the tag just marks the release.
+   `npm whoami` 应该显示你的 npm 用户名。`--frozen-lockfile` 不会改 `pnpm-lock.yaml`，工作区不干净时 `pnpm publish` 会停下。`git clean -fdX` 只删三个包的 `dist`，也就是以前构建留下的文件：切换提交时 `dist/` 会留着，`pnpm build` 也不会删掉已经没有源码的旧文件，不删就会一起打进包里。`pack-smoke` 先确认打出来的包装得起来。一定要用 `pnpm publish`，它会把 `"workspace:*"` 换成真正的版本号。按 core、web、cli 的顺序发。最后推的 tag 会触发 `release.yml`，它看到三个版本都已经在 npm 上就会跳过发布，只留下 tag 记录这一版。
+   `npm whoami` should print your npm username. `--frozen-lockfile` leaves `pnpm-lock.yaml` alone; `pnpm publish` stops when the working tree isn't clean. `git clean -fdX` deletes only the three packages' `dist`, the output of earlier builds: `dist/` survives switching commits, and `pnpm build` doesn't remove old files whose sources are gone, so they would ship in the package. `pack-smoke` first makes sure the packed packages install. Use `pnpm publish`: it replaces `"workspace:*"` with the real version. Publish core, then web, then the CLI. The tag pushed at the end triggers `release.yml`, which finds all three versions already on npm and skips publishing, so the tag just marks the release.
+
+   npm 现在有分段发布（[staged publishing](https://docs.npmjs.com/staged-publishing)）。发布一个还不存在的包时，npm 可能先放一个占名字的 `0.0.0-stage` 版本，你在浏览器用 2FA 确认以后，真正的版本才上线，这之前 `npm view` 会显示 `0.0.0-stage`。`npm stage list <包名>` 列出还在等确认的版本，可以在 npmjs.com 的 Staged Packages 标签页确认，也可以用 `npm stage approve <id>`（npm 11.15 以上）。占位版本会留在版本列表里，不影响安装，`latest` 指向真正的版本。
+   npm now has [staged publishing](https://docs.npmjs.com/staged-publishing). When you publish a package that doesn't exist yet, npm may first put up a `0.0.0-stage` placeholder to hold the name; the real version goes live once you confirm it with 2FA in the browser, and until then `npm view` prints `0.0.0-stage`. `npm stage list <package>` lists versions still waiting; confirm them in the Staged Packages tab on npmjs.com or with `npm stage approve <id>` (npm 11.15 or newer). The placeholder stays in the version list without affecting installs, and `latest` points to the real version.
 
 4. **设置 Trusted Publishing**：在 npmjs.com 打开每个包的 Settings → Trusted Publisher → GitHub Actions，填：
    **Set up Trusted Publishing**: on npmjs.com, open each package's Settings → Trusted Publisher → GitHub Actions and fill in:
@@ -75,8 +79,8 @@ git tag v0.1.1 && git push origin v0.1.1      # 触发 release.yml / triggers re
 
 ## 注意 / Notes
 
-- **来源证明（provenance）**：npm 只给公开仓库自动生成。仓库现在是私有的，所以发布的版本没有 provenance；仓库公开后，之后的版本会自动带上，不用改 workflow。
-  **Provenance**: npm generates it only for public repositories. The repository is private for now, so versions published now have none; once it's public, later versions get it automatically with no workflow change.
+- **来源证明（provenance）**：npm 只给公开仓库自动生成。仓库已经公开，所以之后由 CI 发布的版本会自动带上，不用改 workflow。0.1.0 是在自己电脑上手动发布的，没有 provenance。
+  **Provenance**: npm generates it only for public repositories. The repository is public now, so versions published by CI get it automatically with no workflow change. 0.1.0 was published by hand from a computer and has none.
 - **不要用 token 发布**：npm 会在 2027 年 1 月取消用 granular token 直接发布新版本，所以这里只用 Trusted Publishing。
   **Don't publish with tokens**: npm removes direct publishing with granular access tokens in January 2027, so this setup uses Trusted Publishing only.
 - `package.json` 的 `repository.url` 必须和 GitHub 仓库一致，Trusted Publishing 会检查。改仓库名或转移仓库时要一起改。
