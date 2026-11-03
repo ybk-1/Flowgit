@@ -1,24 +1,22 @@
 # 社区模板登记 / Community template registry
 
-`community.json` 是社区模板的名单。自带模板（装在 `flowgit` 里的那些）不写在这里。一条记录对应一个 Git 仓库里的一份流程，`flowgit init -t <id>` 会按这条记录去复制。
+`registry/community/<id>.json` 是社区模板的名单，一个条目一个文件，这样两个人同时登记不会改到同一个文件。自带模板（装在 `flowgit` 里的那些）不写在这里。一条记录对应一个 Git 仓库里的一份流程，`flowgit init -t <id>` 会按这条记录去复制。字段和以前的数组一样，见 `community.schema.json` 的 `entry`。站点构建把这些文件合并成 https://flowgit.dev/registry.json。
 
-`community.json` is the list of community templates. Bundled templates (the ones shipped inside `flowgit`) are not listed here. Each entry is one flow in a Git repository, and `flowgit init -t <id>` copies it from that entry.
+`registry/community/<id>.json` is the list of community templates, one file per entry, so two people can register at the same time without editing the same file. Bundled templates (the ones shipped inside `flowgit`) are not listed here. Each entry is one flow in a Git repository, and `flowgit init -t <id>` copies it from that entry. The fields are the same as before: `entry` in `community.schema.json`. The site build merges the files into https://flowgit.dev/registry.json.
 
-命令在当前目录往上能找到这份 `registry/community.json` 时，用仓库里的这一份（不用联网，也能看到还没合并的登记）。找不到时，读 GitHub 上的 raw 地址：
+`flowgit templates --all` 先读 https://flowgit.dev/registry.json，读不到再读仓库里的这个目录。旧的单文件 `community.json`（一个 JSON 数组）也还能读。`FLOWGIT_REGISTRY` 可以换成别的网址、一个 JSON 文件或一个目录。读不到时，`flowgit templates --all` 仍列出自带模板，并只提示一行。
 
-When the command can find this `registry/community.json` by walking up from the current directory, it uses the copy in the checkout (no network, and entries that are not merged yet still show up). Otherwise it reads the raw URL on GitHub:
-
-`https://raw.githubusercontent.com/cgold9820-dotcom/Flowgit/main/registry/community.json`
-
-`FLOWGIT_REGISTRY` 可以换成别的网址，或一个本地 JSON 文件。读不到时，`flowgit templates --all` 仍列出自带模板，并只提示一行。
-
-`FLOWGIT_REGISTRY` can point at another URL or a local JSON file. If the list cannot be read, `flowgit templates --all` still prints the bundled templates and one note.
+`flowgit templates --all` reads https://flowgit.dev/registry.json first, then this directory in the checkout. The old single-file `community.json` (one JSON array) still reads too. `FLOWGIT_REGISTRY` can point at another URL, a JSON file or a directory. If the list cannot be read, `flowgit templates --all` still prints the bundled templates and one note.
 
 ## 怎么登记 / How to register
 
-1. Fork 这个仓库，在 `registry/community.json` 数组里加一条。字段见 `community.schema.json`。 / Fork this repo and add one object to the array in `registry/community.json`. The fields are in `community.schema.json`.
-2. 模板本身放在你的公开 Git 仓库里（可以是本仓库的 `examples/`，也可以是你自己的仓库）。 / The template itself lives in a public Git repository (this repo's `examples/`, or a repository of your own).
-3. 开一个 Pull Request。标题里写上模板的 id。 / Open a pull request. Put the template id in the title.
+1. 把流程放在你的公开 Git 仓库里（可以是本仓库的 `examples/`，也可以是你自己的仓库）。根目录要有 LICENSE，README 要有「依据 / Sources」，不要提交 `runs/` 和密钥。 / Put the flow in a public Git repository (this repo's `examples/`, or a repository of your own). The root needs a LICENSE, the README needs 依据 / Sources, and do not commit `runs/` or secrets.
+2. 在流程目录里运行 `flowgit publish --git <地址> --author <作者> --tag <标签> --language zh`。不过关会列出双语原因并停住。过关会打印 JSON。 / From the flow directory, run `flowgit publish --git <url> --author <name> --tag <tag> --language zh`. A failure lists the reasons in both languages and stops. Success prints JSON.
+3. GitHub 的新建文件页面没有写明预填参数，所以命令不代你打开带内容的链接，也不调用 GitHub API。按打印的步骤，新建 `registry/community/<id>.json`，把 JSON 贴进去，开 Pull Request。标题里写上模板的 id。 / GitHub's new-file page does not document prefill parameters, so the command does not open a prefilled link and does not call the GitHub API. Follow the printed steps: add `registry/community/<id>.json`, paste the JSON, and open a pull request. Put the template id in the title.
+
+改了 `registry/community/` 的 Pull Request 会浅克隆条目里的仓库（按 `ref`），只读：校验、密钥扫描、许可证。不运行阶段，不安装依赖，并留一条双语评论。
+
+A pull request that changes `registry/community/` shallow-clones the entry's repository (at `ref`), read only: validation, a secret scan and the license. It runs no stage, installs nothing, and leaves one bilingual comment.
 
 仓库根目录没有 `flow.json` 时，把子目录写在地址末尾：`https://github.com/org/repo.git#path=examples/my-flow`。`flowgit init` 会只复制这个子目录。不要用 `..` 跳出仓库。
 
@@ -28,7 +26,7 @@ When the flow is not at the root of the repository, put the subdirectory at the 
 
 合并前要满足这几条。 / A pull request is merged only when all of these hold:
 
-- **能通过校验 / It validates.** `community.json` 是合法 JSON，并且符合 `community.schema.json`（`node scripts/check-registry.mjs`，需要先 `pnpm build`）。 / `community.json` is valid JSON and matches `community.schema.json` (`node scripts/check-registry.mjs` after `pnpm build`).
+- **能通过校验 / It validates.** `registry/community/*.json` 是合法 JSON，并且符合 `community.schema.json`（`node scripts/check-registry.mjs`，需要先 `pnpm build`）。 / `registry/community/*.json` is valid JSON and matches `community.schema.json` (`node scripts/check-registry.mjs` after `pnpm build`).
 - **没有密钥 / No secrets.** 登记和模板里都不要有令牌、密码、私钥、邮箱或只在你电脑上才有的路径。 / The entry and the template contain no tokens, passwords, private keys, emails, or paths that exist only on your machine.
 - **许可证写清楚 / The license is clear.** `license` 用大家认得的名字，例如 `Apache-2.0` 或 `MIT`，并和仓库里的许可证一致。 / `license` is a name people recognise, such as `Apache-2.0` or `MIT`, and it matches the license in the repository.
 - **模板有「依据 / Sources」。** 模板的 README 里要有一节 `依据 / Sources`（或 `参考资料 / References`），说明做法参考了什么，方便别人判断能不能用。 / The template README has a `依据 / Sources` section (or `参考资料 / References`) saying what the flow is based on, so other people can judge it.
@@ -51,7 +49,8 @@ When the flow is not at the root of the repository, put the subdirectory at the 
 
 ```bash
 flowgit templates --all
-FLOWGIT_REGISTRY=./registry/community.json flowgit templates --all
+FLOWGIT_REGISTRY=./registry/community flowgit templates --all
+flowgit publish --git https://github.com/you/your-flow.git --author "Your Name" --language zh
 flowgit init my-page -t agent-page
 flowgit gallery build
 ```

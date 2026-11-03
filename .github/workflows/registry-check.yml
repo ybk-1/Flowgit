@@ -1,0 +1,40 @@
+# Pull requests that touch registry/community/: shallow-clone each entry, read
+# only, and post one bilingual comment. The check itself is scripts/registry-check.mjs
+# (tested); this workflow only calls it.
+name: Registry check
+
+on:
+  pull_request:
+    paths:
+      - "registry/community/**"
+
+jobs:
+  registry:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: 检查社区登记 / Check community registry entries
+        id: check
+        env:
+          REGISTRY_BASE: ${{ github.event.pull_request.base.sha }}
+        run: node scripts/registry-check.mjs --comment registry-comment.md
+        continue-on-error: true
+      - name: 写一条双语评论 / Post one bilingual comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh pr comment ${{ github.event.pull_request.number }} --body-file registry-comment.md
+      - name: 没通过就失败 / Fail when the check failed
+        if: steps.check.outcome == 'failure'
+        run: exit 1

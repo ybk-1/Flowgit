@@ -174,7 +174,7 @@ describe("gallery and community templates", () => {
 
   it("gallery build writes a home page and a page per bundled template", () => {
     const out = path.join(root, "site");
-    const registry = path.join(repo, "registry", "community.json");
+    const registry = path.join(repo, "registry", "community");
     const built = run(["gallery", "build", "--out", out], { FLOWGIT_REGISTRY: registry });
     expect(built.code, built.out).toBe(0);
     const home = fs.readFileSync(path.join(out, "index.html"), "utf8");

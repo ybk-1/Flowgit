@@ -179,7 +179,14 @@ interface CommunityEntry {
   ref?: string;
 }
 
-const REGISTRY = "https://raw.githubusercontent.com/cgold9820-dotcom/Flowgit/main/registry/community.json";
+/**
+ * The site publishes the registry at /registry.json, next to /app/.
+ * A relative URL stays on this origin, so it matches connect-src 'self'.
+ * Fetching https://flowgit.dev from the page is blocked by that policy.
+ */
+function registryUrl(): string {
+  return new URL("../registry.json", document.baseURI).href;
+}
 
 function both(text: CommunityEntry["name"] | undefined): string {
   if (!text) return "";
@@ -192,7 +199,7 @@ async function showCommunity(store: Store): Promise<void> {
   const info = document.getElementById("community-note")!;
   let entries: CommunityEntry[];
   try {
-    const res = await fetch(REGISTRY);
+    const res = await fetch(registryUrl());
     if (!res.ok) throw new Error(String(res.status));
     entries = (await res.json()) as CommunityEntry[];
   } catch {

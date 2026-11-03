@@ -1,0 +1,16 @@
+{
+  "id": "agent-page",
+  "name": {
+    "zh": "一页介绍网页（agent 示例）",
+    "en": "One-page explainer (agent example)"
+  },
+  "description": {
+    "zh": "让 agent 先写大纲、再做一个单文件网页，最后用脚本检查网页。",
+    "en": "Have an agent outline a topic, build a single-file web page from it, then check the page with a script."
+  },
+  "git": "https://github.com/cgold9820-dotcom/Flowgit.git#path=examples/agent-page",
+  "author": "Flowgit",
+  "tags": ["agent", "example", "web"],
+  "language": ["zh", "en"],
+  "license": "Apache-2.0"
+}
