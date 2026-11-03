@@ -1,4 +1,4 @@
-import { isSafeRelative } from "@flowgit/core";
+import { type GeneratePreview, isSafeRelative } from "@flowgit/core";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import http from "node:http";
@@ -38,6 +38,8 @@ export interface HandlerCtx {
   watching: boolean;
   /** Debounce timer for filesystem events. Cleared by `close()`. */
   changeTimer?: ReturnType<typeof setTimeout>;
+  /** The last preview from POST /api/generate, written only after the board confirms it. */
+  pendingGenerate?: { id: string; dir: string; preview: GeneratePreview };
 }
 
 export const JSON_LIMIT = 1_000_000;

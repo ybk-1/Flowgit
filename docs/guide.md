@@ -20,6 +20,45 @@ alias flowgit="node $PWD/packages/cli/dist/index.js"
 function flowgit { node E:\claude_code\Flowgit\Flowgit\packages\cli\dist\index.js @args }
 ```
 
+## 用一句话生成 / Generate one from a sentence
+
+下面几节是亲手把周报写出来。如果只想要一份能改的初稿，可以用一句话生成，再按后面的章节改提示词和检查脚本。
+
+The sections below build the weekly report by hand. For a first draft you can edit, generate it from one sentence, then change the prompts and the check script using the chapters after this one.
+
+```bash
+flowgit new "把一周的笔记整理成周报，并用脚本检查格式" ~/my-report
+```
+
+不在终端里（例如脚本、CI）时它不会写文件，加上 `--yes` 才写入。`--language en` 让流程和提示词用英文，`--md` 写成 `flow.md`。描述没有明确要求时，不会生成会在电脑上跑命令的 script 或 agent 阶段；上面这句要求了脚本，预演里会标明。
+
+Outside a terminal (a script, or CI) it writes nothing unless you add `--yes`. `--language en` writes the flow and the prompts in English, and `--md` writes `flow.md`. Unless the description explicitly asks, it does not add a script or agent stage, because those run commands on your computer; the sentence above does ask for a script, and the dry run says so.
+
+不在终端里，它会先打印预演和文件列表，然后停下来，一个文件都不写 / Outside a terminal it prints the dry run and the file list, then stops without writing anything:
+
+```text
+预演：不会运行任何阶段 / dry run: nothing runs
+
+#  阶段 stage    会怎样 action               详情 details
+1  随手记 notes  ⏸ 停下等你 / stops for you  需要你放好 / needs notes.md
+2  草稿 draft    · 走不到 / not reached
+3  检查 check    · 走不到 / not reached      node scripts/check.mjs — 会在你的电脑上运行命令 / runs commands on your computer
+
+不会调用模型 / no model calls
+
+要写入的文件 / files to write:
+  flow.json
+  prompts/draft.md
+
+会在你的电脑上运行命令 / runs commands on your computer:
+  check: node scripts/check.mjs
+不在终端里，什么都没写。确认写入请加上 --yes / Not a terminal, so nothing was written. Add --yes to write.
+```
+
+在终端里，最后那行换成 `写入这些文件？/ Write these files? [y/N]`，回答 `y`、`yes` 或 `是` 才写入。校验不通过时，双语错误会交回模型再改，最多 3 次。3 次仍然失败就打印这些错误，一个文件都不写。看板顶部有同样的输入框，确认后才写入；有别的阶段正在运行时会拒绝。
+
+In a terminal, the last line is `写入这些文件？/ Write these files? [y/N]` instead, and it writes only when you answer `y`, `yes` or `是`. When validation fails, the bilingual errors go back to the model, at most 3 times. If it still fails, those errors are printed and nothing is written. The board has the same box at the top and writes only after you confirm; it refuses while another stage is running.
+
 ## 1. 先想清楚阶段 / Plan the stages
 
 流程就是一串阶段。每个阶段回答三个问题：读什么、产出什么、谁来做。先在纸上写清楚，再写文件：

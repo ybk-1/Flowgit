@@ -1,6 +1,7 @@
 /** Board startup: listeners, hold-to-run, and the first load. */
 import { closeMenus, openAddStage, paintBoard, render, requestRemove, setView, submitStage, syncStageFields, syncViewToggle } from "./cards.js";
 import { FX } from "./fx.js";
+import { startGenerate } from "./generate.js";
 import { I18N } from "./i18n.js";
 import { saveInputs } from "./inputs.js";
 import { closePanel, notePress } from "./panel.js";
@@ -106,6 +107,7 @@ export function start() {
           return;
       syncStageFields();
   });
+  startGenerate();
   connectEvents();
   refresh();
 }

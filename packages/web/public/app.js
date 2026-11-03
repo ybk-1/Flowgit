@@ -7,6 +7,7 @@ import * as history from "./history.js";
 import * as graph from "./graph.js";
 import * as inputs from "./inputs.js";
 import * as run from "./run.js";
+import * as generate from "./generate.js";
 import { start } from "./main.js";
 
 const contract = `
@@ -28,6 +29,7 @@ setInterval(refresh, 3000)
 "/api/plan"
 "/api/trust"
 "/api/usage"
+"/api/generate"
 t("plan.calls"
 t("run.confirm"
 window.confirm
@@ -47,7 +49,7 @@ key: "state.running"
 `.split("\n").map((line) => line.trim()).filter(Boolean);
 
 const sources = [];
-for (const mod of [api, state, cards, panel, history, graph, inputs, run]) {
+for (const mod of [api, state, cards, panel, history, graph, inputs, run, generate]) {
   for (const value of Object.values(mod)) {
     if (typeof value === "function") sources.push(Function.prototype.toString.call(value));
   }

@@ -37,6 +37,51 @@
     </div>
   </header>
   <div id="banner" class="banner" hidden></div>
+  <section class="inputs-panel generate-panel" aria-labelledby="generate-heading">
+    <h2 id="generate-heading" data-i18n="generate.heading">用一句话生成流程</h2>
+    <p class="hint" data-i18n="generate.hint">先给出预演和文件列表，确认后才写入。已有流程不会被覆盖；要写到新文件夹，填文件夹名。</p>
+    <form id="generate-form">
+      <label class="field generate-description">
+        <span class="field-name" data-i18n="generate.description">描述</span>
+        <textarea id="generate-description" name="description" rows="2" required data-i18n-attr='{"placeholder":["generate.placeholder"]}' placeholder="例如：把一周的笔记整理成周报"></textarea>
+      </label>
+      <div class="generate-options">
+        <label class="field">
+          <span class="field-name" data-i18n="generate.folder">文件夹</span>
+          <input id="generate-folder" name="dir" autocomplete="off" spellcheck="false" data-i18n-attr='{"placeholder":["generate.folderPlaceholder"]}' placeholder="留空则写在当前目录" />
+        </label>
+        <label class="field">
+          <span class="field-name" data-i18n="generate.language">语言</span>
+          <select id="generate-language" name="language">
+            <option value="" data-i18n="generate.languageAuto">跟着描述</option>
+            <option value="zh">中文</option>
+            <option value="en">English</option>
+          </select>
+        </label>
+        <label class="field">
+          <span class="field-name" data-i18n="generate.model">模型（可选）</span>
+          <input id="generate-model" name="model" autocomplete="off" spellcheck="false" placeholder="provider/model" />
+        </label>
+        <label class="field generate-md">
+          <span class="field-name" data-i18n="generate.md">写成 flow.md</span>
+          <input id="generate-md" name="md" type="checkbox" />
+        </label>
+      </div>
+      <p id="generate-status" class="inputs-status" hidden></p>
+      <button id="generate-go" class="save" type="submit" data-i18n="generate.preview">生成预演</button>
+    </form>
+    <div id="generate-result" hidden>
+      <p class="hint" data-i18n="generate.dryRun">预演 · 还没写文件</p>
+      <ul id="generate-plan" class="generate-plan"></ul>
+      <p class="hint" data-i18n="generate.files">要写入的文件</p>
+      <pre id="generate-files" class="generate-files"></pre>
+      <p id="generate-commands" class="hint" hidden data-i18n="generate.runsCommands">会在你的电脑上运行命令</p>
+      <div class="generate-actions">
+        <button id="generate-write" class="save" type="button" data-i18n="generate.write">确认写入</button>
+        <button id="generate-cancel" class="ghost" type="button" data-i18n="generate.cancel">取消</button>
+      </div>
+    </div>
+  </section>
   <section class="inputs-panel" aria-labelledby="inputs-heading">
     <h2 id="inputs-heading" data-i18n="inputs.heading">流程输入</h2>
     <form id="inputs-form">

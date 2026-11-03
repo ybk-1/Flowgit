@@ -1738,3 +1738,214 @@ describe("board history with a gap in version numbers", () => {
     }
   });
 });
+
+const generatePlan = {
+  name: "周报",
+  description: "把一周的笔记整理成周报",
+  language: "zh",
+  inputs: [{ name: "name", type: "string", description: "你的名字", required: true }],
+  stages: [
+    {
+      id: "notes",
+      name: "随手记",
+      executor: "human",
+      dependsOn: [],
+      outputs: [{ type: "text/markdown", path: "notes.md" }],
+      instructions: "写下这周的事",
+    },
+    {
+      id: "draft",
+      name: "草稿",
+      executor: "llm",
+      dependsOn: ["notes"],
+      outputs: [{ type: "text/markdown", path: "report.md" }],
+    },
+  ],
+};
+
+const generateDoc = {
+  flow: {
+    format: "flowgit",
+    version: "0.1",
+    name: "周报",
+    description: "把一周的笔记整理成周报",
+    language: "zh",
+    inputs: { name: { type: "string", description: "你的名字", required: true } },
+    stages: [
+      {
+        id: "notes",
+        name: "随手记",
+        executor: { type: "human", instructions: "写下这周的事" },
+        outputs: [{ type: "text/markdown", path: "notes.md" }],
+      },
+      {
+        id: "draft",
+        name: "草稿",
+        inputs: ["notes"],
+        executor: { type: "llm", prompt: "prompts/draft.md" },
+        outputs: [{ type: "text/markdown", path: "report.md" }],
+      },
+    ],
+  },
+  prompts: { "prompts/draft.md": "把 {{inputs.name}} 的笔记整理成周报。\n" },
+};
+
+function writeGenerateMocks(dir: string, files: Record<string, unknown>): string {
+  const mockDir = path.join(dir, "replies");
+  fs.mkdirSync(mockDir, { recursive: true });
+  for (const [name, value] of Object.entries(files)) fs.writeFileSync(path.join(mockDir, name), `${JSON.stringify(value, null, 2)}\n`);
+  return mockDir;
+}
+
+describe("POST /api/generate", () => {
+  const previousMock = process.env.FLOWGIT_LLM_MOCK_DIR;
+  afterAll(() => {
+    if (previousMock === undefined) delete process.env.FLOWGIT_LLM_MOCK_DIR;
+    else process.env.FLOWGIT_LLM_MOCK_DIR = previousMock;
+  });
+
+  it("returns 400 for a missing description, a bad language, and a flow that still fails after 3 repairs", async () => {
+    const work = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-generate-400-"));
+    const board = await startBoard({ dir: work, port: 0, open: false });
+    const headers = { "X-Flowgit-Token": board.token, "Content-Type": "application/json" };
+    const nameless = {
+      flow: {
+        format: "flowgit",
+        version: "0.1",
+        stages: [{ id: "notes", name: "随手记", executor: { type: "human" }, outputs: [{ type: "text/markdown", path: "notes.md" }] }],
+      },
+      prompts: {},
+    };
+    process.env.FLOWGIT_LLM_MOCK_DIR = writeGenerateMocks(work, {
+      "generate-plan.json": generatePlan,
+      "generate-flow.json": nameless,
+      "generate-repair-1.json": nameless,
+      "generate-repair-2.json": nameless,
+      "generate-repair-3.json": nameless,
+    });
+    try {
+      const empty = await httpCall(board.port, "POST", "/api/generate", JSON.stringify({ description: "  " }), headers);
+      expect(empty.status).toBe(400);
+      expect(empty.body).toContain("请用一句话描述这个流程 / describe the flow in one sentence");
+
+      const language = await httpCall(board.port, "POST", "/api/generate", JSON.stringify({ description: "周报", language: "fr" }), headers);
+      expect(language.status).toBe(400);
+      expect(language.body).toContain("语言只能是 zh 或 en");
+
+      const outside = await httpCall(board.port, "POST", "/api/generate", JSON.stringify({ description: "周报", dir: "../outside" }), headers);
+      expect(outside.status).toBe(400);
+      expect(outside.body).toContain("文件夹必须在看板目录里面");
+
+      const failed = await httpCall(board.port, "POST", "/api/generate", JSON.stringify({ description: "把一周的笔记整理成周报", confirm: true }), headers);
+      expect(failed.status).toBe(400);
+      expect(failed.body).toContain("缺少必填字段 / missing required property");
+      expect(fs.existsSync(path.join(work, "flow.json"))).toBe(false);
+    } finally {
+      await board.close();
+      fs.rmSync(work, { recursive: true, force: true });
+    }
+  });
+
+  it("shows the dry run and writes only after confirmation", async () => {
+    const work = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-generate-ok-"));
+    const board = await startBoard({ dir: work, port: 0, open: false });
+    const headers = { "X-Flowgit-Token": board.token, "Content-Type": "application/json" };
+    process.env.FLOWGIT_LLM_MOCK_DIR = writeGenerateMocks(work, {
+      "generate-plan.json": generatePlan,
+      "generate-flow.json": generateDoc,
+    });
+    try {
+      const page = await httpGet(board.port, `/?token=${board.token}`);
+      expect(page.body).toContain('id="generate-form"');
+      expect(page.body).toContain("generate.heading");
+
+      const preview = await httpCall(board.port, "POST", "/api/generate", JSON.stringify({ description: "把一周的笔记整理成周报" }), headers);
+      expect(preview.status, preview.body).toBe(200);
+      const shown = JSON.parse(preview.body) as {
+        written: boolean;
+        id: string;
+        files: string[];
+        plan: Array<{ id: string; action: string }>;
+        exists: boolean;
+      };
+      expect(shown.written).toBe(false);
+      expect(shown.exists).toBe(false);
+      expect(shown.files).toEqual(["flow.json", "prompts/draft.md"]);
+      expect(shown.plan.map((step) => step.action)).toEqual(["wait", "not-reached"]);
+      expect(fs.existsSync(path.join(work, "flow.json"))).toBe(false);
+
+      const stale = await httpCall(board.port, "POST", "/api/generate", JSON.stringify({ confirm: true, id: "nope" }), headers);
+      expect(stale.status).toBe(400);
+      expect(stale.body).toContain("预演已经过期");
+
+      const wrote = await httpCall(board.port, "POST", "/api/generate", JSON.stringify({ confirm: true, id: shown.id }), headers);
+      expect(wrote.status, wrote.body).toBe(200);
+      expect(JSON.parse(wrote.body).written).toBe(true);
+      expect(loadFlow(work).flow.name).toBe("周报");
+      const flow = await httpGet(board.port, "/api/flow", { "X-Flowgit-Token": board.token });
+      expect(flow.status).toBe(200);
+      expect(JSON.parse(flow.body).name).toBe("周报");
+    } finally {
+      await board.close();
+      fs.rmSync(work, { recursive: true, force: true });
+    }
+  });
+
+  it("returns 409 while a run is in progress", async () => {
+    const work = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-generate-busy-"));
+    fs.writeFileSync(
+      path.join(work, "flow.json"),
+      JSON.stringify(
+        {
+          format: "flowgit",
+          version: "0.1",
+          name: "slow",
+          stages: [
+            {
+              id: "slow",
+              name: "慢",
+              executor: { type: "script", run: "node slow.cjs" },
+              outputs: [{ type: "text/plain", path: "out.txt" }],
+            },
+          ],
+        },
+        null,
+        2,
+      ),
+    );
+    fs.writeFileSync(
+      path.join(work, "slow.cjs"),
+      [
+        'const fs = require("node:fs");',
+        'fs.writeFileSync("started", "1");',
+        "const deadline = Date.now() + 15000;",
+        'while (!fs.existsSync("go")) {',
+        "  if (Date.now() > deadline) process.exit(2);",
+        "  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 30);",
+        "}",
+        'fs.writeFileSync("out.txt", "ok\\n");',
+        "",
+      ].join("\n"),
+    );
+    const board = await startBoard({ dir: work, port: 0, open: false });
+    const headers = { "X-Flowgit-Token": board.token, "Content-Type": "application/json" };
+    const first = httpCall(board.port, "POST", "/api/run", JSON.stringify({ stage: "slow" }), headers);
+    try {
+      const started = path.join(work, "started");
+      const deadline = Date.now() + 10_000;
+      while (!fs.existsSync(started)) {
+        if (Date.now() > deadline) throw new Error("slow stage did not start");
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      const blocked = await httpCall(board.port, "POST", "/api/generate", JSON.stringify({ description: "另一个流程" }), headers);
+      expect(blocked.status).toBe(409);
+      expect(blocked.body).toContain("正在运行，结束后再生成");
+      expect(blocked.body).toContain("a run is in progress");
+    } finally {
+      fs.writeFileSync(path.join(work, "go"), "1");
+      await first.catch(() => undefined);
+      await board.close();
+      fs.rmSync(work, { recursive: true, force: true });
+    }
+  }, 30_000);
+});

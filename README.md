@@ -135,11 +135,26 @@ FLOWGIT_LLM_MOCK_DIR=demo-replies flowgit run all
 
 CLI messages and errors are bilingual. What a template produces (script, captions, its own messages) follows the `language` input you choose.
 
+### 用一句话生成 / From one sentence
+
+不想从模板开始的话，用一句话生成一份初稿。它先列出预演和要写的文件，确认后才写入；`--yes` 不再询问。描述里没有明确要求脚本或 agent 时，生成的流程只用人工和模型阶段。
+
+To start without a template, generate a first draft from one sentence. It lists the dry run and the files, and writes only after you confirm; `--yes` skips the question. Unless the description explicitly asks for a script or an agent, the flow uses only human and model stages.
+
+```bash
+flowgit new "把一周的笔记整理成周报" ~/my-report
+# 看过预演之后 / after you have read the dry run:
+flowgit new "把一周的笔记整理成周报" ~/my-report --yes
+```
+
+看板（`flowgit board`）顶部有同样的输入框，也是确认后才写入。 / The board (`flowgit board`) has the same box at the top, and it also writes only after you confirm.
+
 ## 命令 / Commands
 
 | 命令 / Command | 作用 | What it does |
 | --- | --- | --- |
 | `flowgit init [dir] [-t 模板\|社区 id\|目录\|Git 地址]` | 从模板、社区模板、本地目录或 Git 地址新建流程。本地目录和 Git 默认不复制产物，`--with-outputs` 才复制；Git 可加 `--ref` 和 `--path`，地址末尾的 `#path=` 也表示子目录 | Create a flow from a template, a community id, a local directory or a Git URL. A local directory or Git URL skips outputs unless `--with-outputs` is set; Git also takes `--ref` and `--path`, and `#path=` at the end of the URL is a subdirectory |
+| `flowgit new "<描述>" [dir] [--model provider/model] [--language zh\|en] [--md] [--yes]` | 用一句话生成流程。先给阶段计划，再写 `flow.json`（`--md` 写 `flow.md`）和模型阶段的提示词；校验失败最多修 3 次。写之前打印预演和文件列表，确认后才写（`--yes` 跳过）。没有明确要求时只用人工和模型阶段。看板顶部有同样的输入框 | Generate a flow from one sentence. A stage plan, then `flow.json` (`flow.md` with `--md`) and prompt files; validation is repaired at most 3 times. Prints the dry run and the file list and writes after you confirm (`--yes` skips). Without an explicit request, only human and model stages. The board has the same box at the top |
 | `flowgit share <目录> [--with-outputs] [--force]` | 复制一份可以分享的流程：默认不带产物，发现密钥就拒绝写入，邮箱和本机路径只提醒 | Copy a flow that is safe to share: outputs stay behind by default, a secret refuses the write, emails and local paths are warnings |
 | `flowgit templates [--json] [--all]` | 列出自带的模板和它们的阶段。`--all` 连社区模板；读不到登记时仍列出自带模板并提示一行 | List the bundled templates and their stages. `--all` adds community templates; if the registry cannot be read, the bundled list is still printed with one note |
 | `flowgit validate` | 按规范检查 `flow.json` 或 `flow.md` | Check `flow.json` or `flow.md` against the spec |

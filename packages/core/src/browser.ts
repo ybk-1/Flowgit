@@ -28,6 +28,19 @@ export * from "./providers.js";
 export * from "./image-providers.js";
 export * from "./mermaid.js";
 export * from "./plan.js";
+export {
+  RUNS_ON_COMPUTER,
+  descriptionAllows,
+  generateFlow,
+  generateMockComplete,
+  generatePromptFile,
+  writeGeneratedFlow,
+  type GenerateFile,
+  type GenerateOptions,
+  type GeneratePlanStep,
+  type GeneratePreview,
+  type GenerateResult,
+} from "./generate.js";
 export * from "./usage.js";
 export * from "./files.js";
 export * from "./edit.js";

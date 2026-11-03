@@ -4,6 +4,8 @@
  * then every request and the event stream are answered in the browser instead of by a server.
  */
 const transport = globalThis.flowgitTransport;
+/** True in the web app, where requests are answered in the page and there is no local server. */
+export const inPage = Boolean(transport);
 export const token = document.querySelector('meta[name="flowgit-token"]')?.getAttribute("content") ?? "";
 
 export function headers() {
@@ -126,3 +128,13 @@ export function subscribe(url) {
   return transport ? transport.events(url) : new EventSource(url);
 }
 
+
+/** Generate a flow from one sentence (a dry run), or write the previewed one with `{ confirm: true, id }`. */
+export function postGenerate(payload) {
+  return request("/api/generate", {
+    method: "POST",
+    headers: { ...headers(), "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+    cache: "no-store",
+  });
+}

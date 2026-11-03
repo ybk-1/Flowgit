@@ -1,6 +1,7 @@
 import { serveEvents, stopWatching, watchFlow } from "./routes/events.js";
 import { putFlowFile, serveFlowFile, uploadFlowFile } from "./routes/files.js";
 import { flowBoard } from "./routes/flow.js";
+import { postGenerate } from "./routes/generate.js";
 import { flowGraph } from "./routes/graph.js";
 import { boardInputs, putInputs } from "./routes/inputs.js";
 import { servePlan } from "./routes/plan.js";
@@ -242,6 +243,12 @@ export function handle(req: http.IncomingMessage, res: http.ServerResponse, ctx:
     if (!authorized(req, res, ctx)) return;
     if (busy(req, res, ctx)) return;
     void postRestore(req, res, ctx).catch((err) => sendError(res, err));
+    return;
+  }
+  if (req.method === "POST" && pathname === "/api/generate") {
+    if (!authorized(req, res, ctx)) return;
+    if (busy(req, res, ctx, "正在运行，结束后再生成 / a run is in progress; generate again when it finishes")) return;
+    void postGenerate(req, res, ctx).catch((err) => sendError(res, err));
     return;
   }
   if (pathname === "/api/stage") {
