@@ -1,0 +1,58 @@
+{
+  "charts": [
+    {
+      "id": "category-amount",
+      "type": "bar",
+      "x": "category",
+      "y": "amount",
+      "agg": "sum",
+      "filter": "",
+      "title": "比较各类目的销售额合计。"
+    },
+    {
+      "id": "category-quantity",
+      "type": "bar",
+      "x": "category",
+      "y": "quantity",
+      "agg": "sum",
+      "filter": "",
+      "title": "比较各类目的销售件数合计。"
+    },
+    {
+      "id": "region-amount",
+      "type": "bar",
+      "x": "region",
+      "y": "amount",
+      "agg": "sum",
+      "filter": "",
+      "title": "比较各地区的销售额合计。"
+    },
+    {
+      "id": "weekly-amount",
+      "type": "line",
+      "x": "date",
+      "y": "amount",
+      "agg": "sum",
+      "filter": "",
+      "title": "看这一季每周销售额合计怎样变化。"
+    },
+    {
+      "id": "category-median",
+      "type": "table",
+      "x": "category",
+      "y": "amount",
+      "agg": "median",
+      "filter": "",
+      "title": "列出各类目金额的中位数，便于查阅精确值。"
+    },
+    {
+      "id": "east-category",
+      "type": "bar",
+      "x": "category",
+      "y": "amount",
+      "agg": "sum",
+      "filter": "region=华东",
+      "title": "只看华东，比较各类目的销售额合计。"
+    }
+  ]
+}

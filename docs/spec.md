@@ -44,7 +44,7 @@ my-flow/
 | `author` | 否 / no | `{ "name": "...", "url": "..." }` | `{ "name": "...", "url": "..." }` |
 | `license` | 否 / no | 流程本身（提示词、脚本）的 SPDX 许可证 | SPDX license of the flow itself (prompts, scripts) |
 | `tags` | 否 / no | 标签数组 | Array of tags |
-| `forkedFrom` | 否 / no | 从 Git 地址 `init` 时记下的来源：`{ "source", "ref"?, "commit"? }`，地址里的账号和密码（令牌）会去掉。从本地目录复制不写这个字段，避免把可能含用户名的本机路径带出去 | Recorded when `init` copies a Git URL: `{ "source", "ref"?, "commit"? }`, with any user name and password (token) removed from the URL. A local directory does not set it, so a path that may contain a user name is never stored |
+| `forkedFrom` | 否 / no | 从 Git 地址 `init` 时记下的来源：`{ "source", "ref"?, "commit"? }`，地址里的账号和密码（令牌）会去掉。从本地目录复制不写这个字段，避免把可能含用户名的本机路径带出去。有这个字段、又会运行命令、启动 agent、调用服务、启动 MCP 服务器、加载插件或运行子流程的流程，第一次运行前要在每台电脑上确认一次（`flowgit trust`、`run` 时的询问或看板弹窗）；确认记在 `~/.flowgit/trusted.json`（或 `$FLOWGIT_HOME/trusted.json`），不在流程目录里，这些动作变了会再问 | Recorded when `init` copies a Git URL: `{ "source", "ref"?, "commit"? }`, with any user name and password (token) removed from the URL. A local directory does not set it, so a path that may contain a user name is never stored. A flow with this field that runs commands, starts agents, calls services, starts MCP servers, loads plugins or runs sub-flows must be confirmed once on each computer before its first run (`flowgit trust`, the prompt in `run`, or the board dialog); the confirmation is stored in `~/.flowgit/trusted.json` (or `$FLOWGIT_HOME/trusted.json`), never in the flow directory, and is asked again when that list changes |
 | `inputs` | 否 / no | 流程级参数，见下 | Flow-level parameters, see below |
 | `mcpServers` | 否 / no | 具名 MCP 服务器，写法和 Claude Desktop / Cursor 一样。stdio 是 `{ command, args?, env? }`，远程是 `{ url }`（Streamable HTTP）。`env` 的每个值必须是 `${变量名}`。见「MCP 执行器」 | Named MCP servers, shaped like Claude Desktop / Cursor. Stdio is `{ command, args?, env? }`; remote is `{ url }` (Streamable HTTP). Every `env` value must be `${VAR}`. See "The MCP executor" |
 | `stages` | 是 / yes | 阶段数组，至少一个 | Array of stages, at least one |
@@ -157,7 +157,7 @@ An `mcp` stage calls one MCP tool. Servers live in the top-level `mcpServers` ob
 - `isError: true` 时阶段失败，错误里是工具返回的文字。
 - 超时先看阶段的 `timeoutSec`，没有就用默认 60 秒。到点就停掉 stdio 子进程。子进程的 stderr 写进这次运行的日志。
 - 是否需要重跑的哈希包含 `mcpServers` 里这个服务器的配置（`env` 只算变量名，不算值）、`tool` 和 `args`。改了参数或命令会变成 `stale`；换一个密钥的值不会。
-- `flowgit doctor` 检查 stdio 的 `command` 在不在 PATH 上，以及每个 `${变量名}` 有没有设置。`flowgit mcp tools <服务器>` 列出工具和参数。`init` 和从别处复制来的流程会列出将要启动的命令或 URL。
+- `flowgit doctor` 检查 stdio 的 `command` 在不在 PATH 上，以及每个 `${变量名}` 有没有设置。`flowgit mcp tools <服务器>` 列出工具和参数。`init` 和从别处复制来的流程会列出将要启动的命令或 URL。从 Git 地址复制来的流程，第一次运行前要确认这份清单；确认之前不会启动 MCP 服务器。
 - 可运行的例子：[`examples/mcp-echo`](../examples/mcp-echo)（本地假服务器，不访问网络）。更完整的说明见 [docs/mcp.md](mcp.md)。
 
 - A stdio server matches Claude Desktop / Cursor: `command`, `args`, `env`. Every `env` value must be the whole string `${VAR}` (for example `"API_KEY": "${API_KEY}"`). It is read from the environment at run time and never written to a file. Anything else, including a literal secret in flow.json, fails validation. A remote server is only `url`, over Streamable HTTP, and only `http` and `https` are allowed.
@@ -166,7 +166,7 @@ An `mcp` stage calls one MCP tool. Servers live in the top-level `mcpServers` ob
 - `isError: true` fails the stage, and the error is the tool's text.
 - The timeout is the stage's `timeoutSec`, or 60 seconds when that is unset. At the deadline the stdio child is killed. The child's stderr is written to the run log.
 - The staleness hash includes that server's `mcpServers` entry with env values removed (the variable names stay), plus `tool` and `args`. Changing args or the command marks the stage `stale`; changing a secret's value does not.
-- `flowgit doctor` checks that a stdio `command` is on PATH and that every `${VAR}` is set. `flowgit mcp tools <server>` lists tools and parameters. `init`, and a flow copied from somewhere else, lists the command or URL that would be started.
+- `flowgit doctor` checks that a stdio `command` is on PATH and that every `${VAR}` is set. `flowgit mcp tools <server>` lists tools and parameters. `init`, and a flow copied from somewhere else, lists the command or URL that would be started. A flow copied from a Git URL must confirm that list before its first run; no MCP server starts until then.
 - Runnable example: [`examples/mcp-echo`](../examples/mcp-echo) (a local fake server, no network). The longer write-up is [docs/mcp.md](mcp.md).
 
 ### 插件执行器 / The plugin executor
@@ -189,7 +189,7 @@ A `plugin` stage loads a plugin in this process and calls its `executor.run`. Th
 - `writeOutput` 只能写这个阶段声明的产物（目录产物可以写里面的文件）。`upstream.read` 只能读上游产物。
 - `timeoutSec` 到点就中止 `signal`，这次运行记为失败。不写表示不限时。
 - 是否需要重跑的哈希包含 `config`。包插件还包含其 `package.json` 的 `version`；文件夹插件改为该目录（或那一个文件）的哈希。
-- `flowgit doctor` 和 `flowgit plugins` 列出用到的插件、解析到的路径和版本，以及没找到的。`init` 和从别处复制来的流程会列出插件名字和解析位置。
+- `flowgit doctor` 和 `flowgit plugins` 列出用到的插件、解析到的路径和版本，以及没找到的。`init` 和从别处复制来的流程会列出插件名字和解析位置。从 Git 地址复制来的流程，第一次运行前要确认这份清单；确认之前不会加载插件。
 - 可运行的例子：[`examples/plugin-echo`](../examples/plugin-echo)（纯 JavaScript，无依赖）。
 
 - `plugin` is a package name or a relative path starting with `./`. A package name is resolved only from that directory's `node_modules` via `createRequire(<flowDir>/package.json)`: no parent directories, no global lookup, and no auto-install. A missing package fails and hints to run `npm install <name>` in the flow directory. A `./` path must stay inside the flow directory; `../outside` fails validation.
@@ -197,7 +197,7 @@ A `plugin` stage loads a plugin in this process and calls its `executor.run`. Th
 - `writeOutput` can only write this stage's declared outputs (a directory output accepts a file inside it). `upstream.read` can only read upstream outputs.
 - `timeoutSec` aborts `signal` and fails the run. Unset means no limit.
 - The staleness hash includes `config`. A package plugin also includes the `version` in its `package.json`; a folder plugin hashes that directory (or that one file) instead.
-- `flowgit doctor` and `flowgit plugins` list the plugins in use, the resolved path and version, and any that are missing. `init`, and a flow copied from somewhere else, lists plugin names and where they resolve.
+- `flowgit doctor` and `flowgit plugins` list the plugins in use, the resolved path and version, and any that are missing. `init`, and a flow copied from somewhere else, lists plugin names and where they resolve. A flow copied from a Git URL must confirm that list before its first run; no plugin is loaded until then.
 - Runnable example: [`examples/plugin-echo`](../examples/plugin-echo) (plain JavaScript, no dependencies).
 
 ### 子流程 / Sub-flows
@@ -455,6 +455,10 @@ Each run of a stage:
 回退（`flowgit restore <stage> <n>`，或看板上的"回退"）把 `runs/<stage>/<n>/outputs/` 复制回原位。当前产物如果和任何一个已保存的版本都不一样，说明是手改的，会先存成一个 `manual` 版本再回退。回退后的产物等于一个已保存的版本，所以不算手改：这个阶段不会显示 `edited`，下次运行也不会再存一份；下游因为上游产物变了而变成 `stale`。
 
 Restoring (`flowgit restore <stage> <n>`, or "Restore" on the board) copies `runs/<stage>/<n>/outputs/` back in place. If the current outputs match no saved version, they are a hand edit and are saved as a `manual` version before the restore. Restored outputs equal a saved version, so they are not a hand edit: the stage does not show as `edited` and the next run does not save another copy; downstream stages become `stale` because their upstream output changed.
+
+`flowgit prune [--keep <n>] [--stage <id>] [--dry-run] [--yes]` 删掉不需要的整个 `runs/<阶段>/<n>/`。每个阶段保留最新的 `--keep` 个版本（默认 5，至少 1），另外保留所有 `executor` 为 `manual` 的版本、产物哈希和当前文件一致的最新一个版本，以及最新一次成功的版本。版本号不会重新使用，下一次运行仍是现有最大编号加一。`--dry-run` 只列出要删除的版本和能腾出的空间（KB / MB / GB）。在终端里会问一次 `[y/N]`；不在终端里，除非加上 `--yes`，否则什么都不删。`runs/` 超过 500 MB 时，`flowgit status` 的最后一行会提示可以用 `flowgit prune` 清理。
+
+`flowgit prune [--keep <n>] [--stage <id>] [--dry-run] [--yes]` deletes whole `runs/<stage>/<n>/` folders that are no longer kept. Each stage keeps its newest `--keep` versions (default 5, minimum 1), plus every version whose `executor` is `manual`, the newest version whose output hashes match the current files, and the newest successful version. Version numbers are never reused: the next run is still one past the highest number. `--dry-run` only lists the versions and the space they would free (KB / MB / GB). A terminal asks once `[y/N]`; outside a terminal nothing is deleted unless `--yes` is passed. When `runs/` is over 500 MB, the last line of `flowgit status` points at `flowgit prune`.
 
 `run.json` 的主要字段：`stage`、`n`、`status`、`executor`、`startedAt`、`finishedAt`、`inputHash`、`inputs`（上游产物和它们的 sha256）、`flowInputs`、`outputs`（路径、类型、sha256、大小）、`params`（provider、模型、用量、命令等）、`log`、`error`。
 

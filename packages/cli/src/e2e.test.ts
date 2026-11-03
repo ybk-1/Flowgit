@@ -75,12 +75,14 @@ describe("flowgit CLI with the short-video template", () => {
     expect(list.status).toBe(0);
     const templates = JSON.parse(list.stdout) as { id: string; default: boolean; stages: { executor: string }[] }[];
     expect(templates[0]).toMatchObject({ id: "short-video", default: true });
-    expect(templates.map((t) => t.id)).toEqual(expect.arrayContaining(["weekly-report", "article", "support-sop", "job-application", "research-report", "ecommerce-listing", "slides", "live-selling", "short-drama", "lesson-plan", "novel-serial", "business-plan", "event-plan", "hiring", "travel-guide", "online-course"]));
-    expect(spawnSync(process.execPath, [cli, "templates"], { encoding: "utf8", env: { ...process.env, NO_COLOR: "1" } }).stdout).toMatch(/weekly-report\s+周报（入门示例）\s+随手记 human → 周报草稿 llm → 检查 script/);
+    expect(templates.map((t) => t.id)).toEqual(expect.arrayContaining(["weekly-report", "article", "support-sop", "job-application", "research-report", "ecommerce-listing", "slides", "live-selling", "short-drama", "lesson-plan", "novel-serial", "business-plan", "event-plan", "hiring", "travel-guide", "online-course", "landing-page", "social-posts", "data-report", "meeting-notes"]));
+    const listed = spawnSync(process.execPath, [cli, "templates"], { encoding: "utf8", env: { ...process.env, NO_COLOR: "1" } });
+    expect(listed.stdout).toMatch(/weekly-report\s+周报（入门示例）\s+随手记 human → 周报草稿 llm → 检查 script/);
+    expect(listed.stdout).toMatch(/landing-page\s+落地页\s+简报 human → 结构 llm → 文案 llm → 照片 human → 生成 script → 检查 script/);
 
     const wrong = spawnSync(process.execPath, [cli, "init", path.join(work, "nope"), "-t", "no-such-template"], { encoding: "utf8" });
     expect(wrong.status).toBe(1);
-    expect(wrong.stderr).toContain("bundled templates: short-video, article, business-plan, ecommerce-listing, event-plan, hiring, job-application, lesson-plan, live-selling, novel-serial, online-course, research-report, short-drama, slides, support-sop, travel-guide, weekly-report");
+    expect(wrong.stderr).toContain("bundled templates: short-video, article, business-plan, data-report, ecommerce-listing, event-plan, hiring, job-application, landing-page, lesson-plan, live-selling, meeting-notes, novel-serial, online-course, research-report, short-drama, slides, social-posts, support-sop, travel-guide, weekly-report");
   });
 
   it("shows a short, quoted path when the new flow is below the current folder", () => {
@@ -469,10 +471,29 @@ describe("flowgit diff", () => {
     expect(bad.out).toContain("正整数");
     expect(bad.out).toContain("positive integer");
   });
+
+  it("says in status which version the files are after a restore", () => {
+    // v1 and v3 are the demo reply, v2 is the hand edit kept before the re-run
+    const restored = flowgitDiff(["restore", "storyboard", "2"]);
+    expect(restored.code, restored.out).toBe(0);
+    const board = flowgitDiff(["status"]);
+    expect(board.code, board.out).toBe(0);
+    expect(board.out).toMatch(/storyboard\s.*v2（回退 \/ restored） \/3/);
+    const json = JSON.parse(flowgitDiff(["status", "--json"]).out) as { stages: { id: string; latest: { n: number } | null; current: number | null }[] };
+    expect(json.stages.find((stage) => stage.id === "storyboard")).toMatchObject({ current: 2, latest: { n: 3 } });
+
+    // back on the newest version (v3, the same files as v1): the plain form again
+    expect(flowgitDiff(["restore", "storyboard", "3"]).code).toBe(0);
+    const plain = flowgitDiff(["status"]);
+    expect(plain.out).toMatch(/storyboard\s.*v3 \/3/);
+    expect(plain.out).not.toContain("restored");
+  });
 });
 
 describe("flowgit init from a directory or a Git URL", () => {
   const hasGit = spawnSync("git", ["--version"]).status === 0;
+  // git init, commit and clone plus several CLI starts: a slow Windows runner once took 36s for the clone test alone.
+  const GIT_TEST_TIMEOUT = 120_000;
   let root: string;
   let source: string;
 
@@ -522,7 +543,10 @@ describe("flowgit init from a directory or a Git URL", () => {
     expect(fs.existsSync(path.join(withOutputs, ".env"))).toBe(false);
   });
 
-  it.skipIf(!hasGit)("records forkedFrom.commit when init clones a file:// repository", () => {
+  /** The source flow as a local Git repository, made once. */
+  let gitRepo: { url: string; commit: string } | undefined;
+  function makeGitRepo(): { url: string; commit: string } {
+    if (gitRepo) return gitRepo;
     const repo = path.join(root, "repo");
     fs.cpSync(source, repo, { recursive: true, filter: (p) => !p.split(path.sep).includes("runs") && path.basename(p) !== "flowgit.local.json" && path.basename(p) !== ".env" });
     const git = (args: string[]) => {
@@ -534,7 +558,12 @@ describe("flowgit init from a directory or a Git URL", () => {
     git(["add", "-A"]);
     git(["commit", "-m", "init flow"]);
     const commit = spawnSync("git", ["rev-parse", "HEAD"], { cwd: repo, encoding: "utf8" }).stdout.trim();
-    const url = pathToFileURL(repo).href;
+    gitRepo = { url: pathToFileURL(repo).href, commit };
+    return gitRepo;
+  }
+
+  it.skipIf(!hasGit)("records forkedFrom.commit when init clones a file:// repository", () => {
+    const { url, commit } = makeGitRepo();
     const dest = path.join(root, "from-git");
     const cloned = run(["init", dest, "-t", url, "--ref", "main"]);
     expect(cloned.code, cloned.out).toBe(0);
@@ -549,7 +578,67 @@ describe("flowgit init from a directory or a Git URL", () => {
     expect(escape.code).toBe(1);
     expect(escape.out).toContain("--path must stay inside the repository");
     expect(fs.existsSync(path.join(root, "escape", "flow.json"))).toBe(false);
-  });
+  }, GIT_TEST_TIMEOUT);
+
+  it.skipIf(!hasGit)("asks once before the first run of a flow cloned from a Git URL, and again only when its commands change", () => {
+    const { url } = makeGitRepo();
+    const home = path.join(root, "trust-home");
+    const env = { FLOWGIT_HOME: home };
+    const flowgit = (args: string[]) => {
+      // spawnSync has no terminal, so nothing can be asked: the run stops and says how to confirm
+      const r = spawnSync(process.execPath, [cli, ...args], { encoding: "utf8", env: { ...process.env, NO_COLOR: "1", ...env } });
+      return { code: r.status, out: `${r.stdout}${r.stderr}` };
+    };
+    const dest = path.join(root, "trusted-copy");
+    const cloned = flowgit(["init", dest, "-t", url]);
+    expect(cloned.code, cloned.out).toBe(0);
+    expect(cloned.out).toContain("the first run asks you to confirm these; or run flowgit trust first");
+    const notes = path.join(root, "my-notes.md");
+    fs.writeFileSync(notes, "- shipped the board\n");
+
+    const refused = flowgit(["-C", dest, "run", "notes", "--from", notes]);
+    expect(refused.code, refused.out).toBe(1);
+    expect(refused.out).toContain(`This flow was copied from ${url} and does this on your computer:`);
+    expect(refused.out).toMatch(/script\s+check\s+node scripts\/check-report\.mjs/);
+    expect(refused.out).toContain("run flowgit trust to see what it does on your computer and confirm");
+    expect(refused.out).toContain("or add --yes to run to confirm and run");
+    expect(fs.existsSync(path.join(dest, "notes.md"))).toBe(false);
+    expect(fs.existsSync(path.join(dest, "runs"))).toBe(false);
+
+    const doctor = flowgit(["-C", dest, "doctor"]);
+    expect(doctor.out).toContain("what it does hasn't been confirmed yet");
+
+    const trusted = flowgit(["-C", dest, "trust"]);
+    expect(trusted.code, trusted.out).toBe(0);
+    expect(trusted.out).toMatch(/script\s+check\s+node scripts\/check-report\.mjs/);
+    expect(trusted.out).toContain("You won't be asked again unless the commands change.");
+    // remembered under FLOWGIT_HOME, not in the flow
+    expect(fs.existsSync(path.join(home, "trusted.json"))).toBe(true);
+    expect(fs.readdirSync(dest)).not.toContain("trusted.json");
+    expect(flowgit(["-C", dest, "trust"]).out).toContain("Already confirmed; the commands haven't changed.");
+
+    const named = flowgit(["-C", dest, "inputs", "set", "name=Cyrus"]);
+    expect(named.code, named.out).toBe(0);
+    const ran = flowgit(["-C", dest, "run", "notes", "--from", notes]);
+    expect(ran.code, ran.out).toBe(0);
+    expect(ran.out).not.toContain("copied from");
+    expect(fs.readFileSync(path.join(dest, "notes.md"), "utf8")).toBe("- shipped the board\n");
+
+    // a changed command is asked about again; --yes confirms it without a prompt
+    const flowFile = path.join(dest, "flow.json");
+    const flow = JSON.parse(fs.readFileSync(flowFile, "utf8")) as { stages: Array<{ id: string; executor: { run?: string } }> };
+    const check = flow.stages.find((stage) => stage.id === "check");
+    if (!check) throw new Error("weekly-report has a check stage");
+    check.executor.run = "node scripts/check-report.mjs --strict";
+    fs.writeFileSync(flowFile, `${JSON.stringify(flow, null, 2)}\n`);
+    const again = flowgit(["-C", dest, "run", "notes", "--from", notes]);
+    expect(again.code, again.out).toBe(1);
+    expect(again.out).toContain("This flow's commands changed since you confirmed them.");
+    expect(again.out).toContain("node scripts/check-report.mjs --strict");
+    const yes = flowgit(["-C", dest, "run", "notes", "--from", notes, "--yes"]);
+    expect(yes.code, yes.out).toBe(0);
+    expect(yes.out).toContain("You won't be asked again unless the commands change.");
+  }, GIT_TEST_TIMEOUT);
 
   it.skipIf(!hasGit)("never prints the credentials in a Git URL", () => {
     const r = spawnSync(process.execPath, [cli, "init", path.join(root, "secret"), "-t", "https://someone:s3cr3tTOKEN@127.0.0.1:1/flow.git"], {
@@ -854,6 +943,633 @@ describe("popular templates on demo replies", () => {
     expect(key).toContain("分母 5，分子 3");
     expect(worksheet).not.toContain("分母 5，分子 3");
     expect(worksheet).toContain("课后作业");
+  });
+});
+
+describe("landing-page template", () => {
+  let pageDir: string;
+
+  function run(args: string[], env: Record<string, string> = {}) {
+    const r = spawnSync(process.execPath, [cli, "-C", pageDir, ...args], {
+      encoding: "utf8",
+      env: { ...process.env, NO_COLOR: "1", ...env },
+    });
+    return { code: r.status, out: `${r.stdout}${r.stderr}` };
+  }
+
+  beforeAll(() => {
+    if (!fs.existsSync(cli)) throw new Error("Build the CLI first: pnpm -r run build");
+    pageDir = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-landing-"));
+  });
+
+  afterAll(() => {
+    if (pageDir) fs.rmSync(pageDir, { recursive: true, force: true });
+  });
+
+  it("builds a site from demo replies and escapes a heading", () => {
+    const init = spawnSync(process.execPath, [cli, "init", pageDir, "-t", "landing-page"], { encoding: "utf8" });
+    expect(init.status, `${init.stdout}${init.stderr}`).toBe(0);
+    expect(run(["inputs", "set", "product=箱栖", "audience=养猫的人", "goal=留下邮箱"]).code).toBe(0);
+    const ran = run(["run", "all"], { FLOWGIT_LLM_MOCK_DIR: path.join(pageDir, "demo-replies") });
+    expect(ran.code, ran.out).toBe(0);
+    expect(ran.out).toContain("5 个区块，0 张图片，5 个色块");
+
+    const htmlPath = path.join(pageDir, "site", "index.html");
+    expect(fs.existsSync(htmlPath)).toBe(true);
+    const html = fs.readFileSync(htmlPath, "utf8");
+    const copy = JSON.parse(fs.readFileSync(path.join(pageDir, "copy.json"), "utf8")) as { blocks: Record<string, { heading?: string }> };
+    for (const block of Object.values(copy.blocks)) {
+      if (block.heading) expect(html).toContain(block.heading);
+    }
+    expect(html).toContain('<html lang="zh-Hans">');
+    expect(html).toContain("<title>箱栖：一块纸板，折一下就是猫窝</title>");
+    expect(html).toContain('<meta name="description" content="箱栖是一块瓦楞纸');
+    expect(html).toContain('name="viewport"');
+    // a labelled email field with autocomplete, marked required, tied to the notice under it
+    expect(html).toContain('<label for="f-email">邮箱<span class="req">（必填）</span></label>');
+    expect(html).toContain('<input id="f-email" type="email" autocomplete="email" required aria-describedby="form-note">');
+    expect(html).toContain('<p id="form-note" class="note">邮箱由箱栖工作室（hello@boxnest.example）收集');
+    expect(html).not.toMatch(/\bchecked\b/);
+    // the placeholder form sends nothing: its input has no name
+    expect(html).not.toMatch(/<input[^>]*\bname=/);
+    expect(html).not.toMatch(/<script/i);
+    expect(html).not.toMatch(/\b(?:src|href)\s*=\s*["']\s*https?:/i);
+    const css = fs.readFileSync(path.join(pageDir, "site", "style.css"), "utf8");
+    expect(css).toMatch(/max-width:\s*40rem/);
+    expect(css).toContain("prefers-color-scheme: dark");
+    expect(css).toContain("--field-line: #78716c;");
+    expect(css).not.toMatch(/https?:\/\//);
+    expect(css).not.toMatch(/url\s*\(/);
+    const report = fs.readFileSync(path.join(pageDir, "check-report.md"), "utf8");
+    expect(report).toContain("没有必须修的问题；上线前确认 2 项。");
+    expect(report).toContain("| 必须修 | 缺少替代文本的图片 | WCAG 1.1.1 | 通过 |");
+    expect(report).toContain("| 必须修 | 颜色对比度不够 | WCAG 1.4.3, 1.4.11 | 通过 |");
+    expect(report).toContain("| 上线前确认 | 推荐语 |");
+    expect(report).toContain("### 隐私政策链接");
+    expect(report).toContain("还没有图片，页面上显示的是「图片待补」：hero.jpg、features.jpg、testimonial.jpg、faq.jpg、cta.jpg");
+
+    const en = run(["run", "check", "--input", "language=en"]);
+    expect(en.code, en.out).toBe(0);
+    expect(fs.readFileSync(path.join(pageDir, "check-report.md"), "utf8")).toContain("Nothing to fix; 2 to confirm before going live.");
+
+    // a privacy policy link goes in the notice; anything but http(s) is ignored
+    const linked = run(["run", "build", "--input", "privacyUrl=https://boxnest.example/privacy?a=1&b=2"]);
+    expect(linked.code, linked.out).toBe(0);
+    expect(fs.readFileSync(htmlPath, "utf8")).toContain('我们马上删除。<a href="https://boxnest.example/privacy?a=1&amp;b=2" rel="privacy-policy">隐私政策</a></p>');
+    const sneaky = run(["run", "build", "--input", "privacyUrl=javascript:alert(1)"]);
+    expect(sneaky.code, sneaky.out).toBe(0);
+    expect(sneaky.out).toContain("privacyUrl 不是 http(s) 链接，已忽略");
+    expect(fs.readFileSync(htmlPath, "utf8")).not.toContain("javascript:");
+
+    // photos: an unreadable file gets no size, a PNG and a rotated JPEG get theirs
+    fs.writeFileSync(path.join(pageDir, "images", "hero.jpg"), "not-a-real-jpeg");
+    const png = Buffer.alloc(33);
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(png, 0);
+    png.writeUInt32BE(13, 8);
+    png.write("IHDR", 12, "latin1");
+    png.writeUInt32BE(1200, 16);
+    png.writeUInt32BE(800, 20);
+    fs.writeFileSync(path.join(pageDir, "images", "features.jpg"), png);
+    const exif = Buffer.concat([
+      Buffer.from("Exif\0\0", "latin1"),
+      Buffer.from([0x4d, 0x4d, 0x00, 0x2a, 0x00, 0x00, 0x00, 0x08]), // big-endian TIFF, first IFD at 8
+      Buffer.from([0x00, 0x01, 0x01, 0x12, 0x00, 0x03, 0x00, 0x00, 0x00, 0x01, 0x00, 0x06, 0x00, 0x00]), // orientation 6
+      Buffer.from([0x00, 0x00, 0x00, 0x00]),
+    ]);
+    const app1 = Buffer.concat([Buffer.from([0xff, 0xe1, 0x00, exif.length + 2]), exif]);
+    const sof = Buffer.from([0xff, 0xc0, 0x00, 0x11, 0x08, 0x01, 0x2c, 0x01, 0x90, 0x03, ...new Array(9).fill(0)]); // 400 x 300
+    fs.writeFileSync(path.join(pageDir, "images", "cta.jpg"), Buffer.concat([Buffer.from([0xff, 0xd8]), app1, sof, Buffer.from([0xff, 0xd9])]));
+    const withPhoto = run(["run", "build"]);
+    expect(withPhoto.code, withPhoto.out).toBe(0);
+    expect(withPhoto.out).toContain("3 张图片，2 个色块");
+    const htmlPhoto = fs.readFileSync(htmlPath, "utf8");
+    expect(htmlPhoto).toContain('<img src="images/hero.jpg" alt="一只猫钻进折好的纸板窝，只露出头" fetchpriority="high">');
+    expect(htmlPhoto).toContain('<img src="images/features.jpg" alt="一块摊开的纸板和一个折好的猫窝并排放着" width="1200" height="800" loading="lazy">');
+    expect(htmlPhoto).toContain('<img src="images/cta.jpg" alt="折好的纸板窝放在沙发旁边" width="300" height="400" loading="lazy">');
+    expect(fs.readFileSync(path.join(pageDir, "site", "images", "hero.jpg"), "utf8")).toBe("not-a-real-jpeg");
+    const checked = run(["run", "check"]);
+    expect(checked.code, checked.out).toBe(0);
+    expect(fs.readFileSync(path.join(pageDir, "check-report.md"), "utf8")).toContain("images/hero.jpg：没写 width 和 height，图片加载时页面会跳");
+
+    const edited = JSON.parse(fs.readFileSync(path.join(pageDir, "copy.json"), "utf8")) as { blocks: { hero: { heading: string } } };
+    edited.blocks.hero.heading = "Hello <script>alert(1)</script>";
+    fs.writeFileSync(path.join(pageDir, "copy.json"), `${JSON.stringify(edited, null, 2)}\n`);
+    const rebuilt = run(["run", "build"]);
+    expect(rebuilt.code, rebuilt.out).toBe(0);
+    const html2 = fs.readFileSync(htmlPath, "utf8");
+    expect(html2).toContain("Hello &lt;script&gt;alert(1)&lt;/script&gt;");
+    expect(html2).not.toContain("<script>");
+  });
+
+  it("reports missing alt, empty links, skipped headings, long copy, and blocks left off the page", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-landing-check-"));
+    fs.mkdirSync(path.join(root, "site"));
+    fs.writeFileSync(
+      path.join(root, "site", "index.html"),
+      '<!DOCTYPE html><html><body>\n<h1>Hi</h1>\n<h3>Skipped</h3>\n<img src="images/a.jpg">\n<a href="">x</a>\n<section data-block="hero"><h1>Hi</h1></section>\n</body></html>\n',
+    );
+    fs.writeFileSync(
+      path.join(root, "copy.json"),
+      JSON.stringify({
+        blocks: {
+          hero: { heading: "Hi", body: "short", button: "Go" },
+          gone: { heading: "Missing heading", body: "x".repeat(501), button: "" },
+        },
+      }),
+    );
+    const script = path.join(here, "..", "templates", "landing-page", "scripts", "check.mjs");
+    const r = spawnSync(process.execPath, [script], {
+      cwd: root,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        FLOWGIT_PROJECT_DIR: root,
+        FLOWGIT_FLOW_INPUTS: JSON.stringify({ language: "zh" }),
+        FLOWGIT_OUTPUTS: JSON.stringify([{ path: "check-report.md" }]),
+      },
+    });
+    expect(r.status).toBe(1);
+    const report = fs.readFileSync(path.join(root, "check-report.md"), "utf8");
+    expect(report).toContain("images/a.jpg");
+    expect(report).toContain('href=""');
+    expect(report).toContain("h1 之后是 h3");
+    expect(report).toContain("gone：正文 501 字（上限 500）");
+    expect(report).toContain("文案里有、页面上没有的区块");
+    expect(report).toContain("- gone");
+    expect(report).not.toContain("没有问题。");
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  it("fails on form, consent and contrast problems and warns about wording the brief does not back", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-landing-form-"));
+    fs.mkdirSync(path.join(root, "site"));
+    fs.writeFileSync(
+      path.join(root, "site", "index.html"),
+      [
+        '<!DOCTYPE html><html lang="en"><head><title>Join</title></head><body>',
+        '<section id="cta" data-block="cta"><h1>Join the list</h1>',
+        '<form action="#cta"><input id="mail" type="email" placeholder="Email">',
+        '<input id="news" type="checkbox" checked><label for="news">Send me news</label>',
+        '<button type="submit">Submit</button></form></section>',
+        '<section data-block="testimonial"><h2>What people say</h2></section>',
+        '<a href="https://elsewhere.example/">Learn more</a>',
+        "</body></html>",
+      ].join("\n"),
+    );
+    fs.writeFileSync(path.join(root, "site", "style.css"), ":root { --bg: #ffffff; --text: #999999; --card: #ffffff; --field-line: #eeeeee; }\n");
+    fs.writeFileSync(
+      path.join(root, "copy.json"),
+      JSON.stringify({
+        blocks: {
+          cta: { heading: "Join the list", body: "Limited time: the best bed, only 3 left. No countdown here. To add: who we are", button: "Submit" },
+          testimonial: { heading: "What people say", body: '"Best bed ever, my cat loves it" - Anna', button: "" },
+        },
+      }),
+    );
+    fs.writeFileSync(path.join(root, "brief.md"), '# Bed\n\n## Proof\n\nNo quotes yet.\n\n## Do not say\n\n- Never say "vet recommended" or "limited time".\n');
+    const script = path.join(here, "..", "templates", "landing-page", "scripts", "check.mjs");
+    const r = spawnSync(process.execPath, [script], {
+      cwd: root,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        FLOWGIT_PROJECT_DIR: root,
+        FLOWGIT_FLOW_INPUTS: JSON.stringify({ language: "en" }),
+        FLOWGIT_OUTPUTS: JSON.stringify([{ path: "check-report.md" }]),
+      },
+    });
+    expect(r.status).toBe(1);
+    const report = fs.readFileSync(path.join(root, "check-report.md"), "utf8");
+    const must = report.slice(report.indexOf("## Must fix"), report.indexOf("## Confirm before going live"));
+    const confirm = report.slice(report.indexOf("## Confirm before going live"), report.indexOf("## What was checked"));
+    expect(must).toContain("### Inputs without a label (WCAG 1.3.1, 3.3.2)\n\n- #mail");
+    expect(must).toContain('#mail: type="email" needs autocomplete="email"');
+    expect(must).toContain("### Pre-ticked boxes (CJEU C-673/17 Planet49; GDPR recital 32)\n\n- Send me news");
+    expect(must).toContain("### Fields without a notice at collection");
+    expect(must).toContain("cta.body: Limited time");
+    expect(must).toContain("Light: --text (#999999) on --bg (#ffffff) is 2.85:1; it needs at least 4.5:1");
+    expect(must).toContain("Light: --field-line (#eeeeee) on --card (#ffffff) is 1.16:1; it needs at least 3:1");
+    expect(confirm).toContain("There is no privacy policy link near the form.");
+    expect(confirm).toContain('"Submit": say the action and what happens');
+    expect(confirm).toContain('"Learn more": say the action and what happens');
+    expect(confirm).toContain("Learn more → https://elsewhere.example/");
+    expect(confirm).toContain('"limited time": the brief states no real deadline or stock');
+    expect(confirm).toContain('"limited time": the brief says not to say this');
+    expect(confirm).toContain('"the best": remove it unless you can prove it');
+    expect(confirm).toContain('"Best bed ever, my cat loves it" is not in the brief.');
+    expect(confirm).toContain("3: not in the brief; verify before going live");
+    // "No countdown" is not urgency, and the copy never mentions a vet
+    expect(confirm).not.toContain('"countdown"');
+    expect(confirm).not.toContain("vet recommended");
+    expect(report).toContain("| Must fix | Low color contrast | WCAG 1.4.3, 1.4.11 | 4 |");
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  it("fails a page whose lang does not match its text", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-landing-lang-"));
+    fs.mkdirSync(path.join(root, "site"));
+    const zh = "一块纸板，折一下就是猫窝。沿压痕折好就能让猫钻进去，不用工具，也没有塑料零件。现在还不能下单。";
+    fs.writeFileSync(path.join(root, "site", "index.html"), `<!DOCTYPE html><html lang="en"><head><title>BoxNest</title></head><body>\n<section data-block="hero"><h1>箱栖</h1><p>${zh}</p></section>\n</body></html>\n`);
+    fs.writeFileSync(path.join(root, "copy.json"), JSON.stringify({ blocks: { hero: { heading: "箱栖", body: zh, button: "" } } }));
+    const script = path.join(here, "..", "templates", "landing-page", "scripts", "check.mjs");
+    const r = spawnSync(process.execPath, [script], {
+      cwd: root,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        FLOWGIT_PROJECT_DIR: root,
+        FLOWGIT_FLOW_INPUTS: JSON.stringify({ language: "en" }),
+        FLOWGIT_OUTPUTS: JSON.stringify([{ path: "check-report.md" }]),
+      },
+    });
+    expect(r.status).toBe(1);
+    expect(fs.readFileSync(path.join(root, "check-report.md"), "utf8")).toContain('The page says lang="en" but most of its text is Chinese');
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+});
+
+describe("social-posts template", () => {
+  let root: string;
+
+  function runIn(dir: string, args: string[], env: Record<string, string> = {}) {
+    const r = spawnSync(process.execPath, [cli, "-C", dir, ...args], {
+      encoding: "utf8",
+      env: { ...process.env, NO_COLOR: "1", ...env },
+    });
+    return { code: r.status, out: `${r.stdout}${r.stderr}` };
+  }
+
+  beforeAll(() => {
+    if (!fs.existsSync(cli)) throw new Error("Build the CLI first: pnpm -r run build");
+    root = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-social-"));
+  });
+
+  afterAll(() => {
+    if (root) fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  it("runs in Chinese and the check report names the sample warnings", () => {
+    const dir = path.join(root, "zh");
+    const init = spawnSync(process.execPath, [cli, "init", dir, "-t", "social-posts"], { encoding: "utf8" });
+    expect(init.status, `${init.stdout}${init.stderr}`).toBe(0);
+    expect(runIn(dir, ["inputs", "set", "topic=南风文具社的周末写信会", "language=zh"]).code).toBe(0);
+    const ran = runIn(dir, ["run", "all"], { FLOWGIT_LLM_MOCK_DIR: path.join(dir, "demo-replies", "zh") });
+    expect(ran.code, ran.out).toBe(0);
+    const report = fs.readFileSync(path.join(dir, "check-report.md"), "utf8");
+    expect(report).toContain("微博: 最佳");
+    expect(report).toContain("多于 2 个");
+    expect(report).toContain("标题 7/20");
+    expect(report).not.toContain("格式错误");
+    const exported = fs.readFileSync(path.join(dir, "posts.md"), "utf8");
+    expect(exported).toContain("## 小红书");
+    expect(exported).toContain("桌角的灯还亮着");
+    expect(exported).toContain("## 微博");
+    expect(exported).toContain("## X");
+  });
+
+  it("runs in English and the check report names the sample warning", () => {
+    const dir = path.join(root, "en");
+    const init = spawnSync(process.execPath, [cli, "init", dir, "-t", "social-posts"], { encoding: "utf8" });
+    expect(init.status, `${init.stdout}${init.stderr}`).toBe(0);
+    expect(runIn(dir, ["inputs", "set", "topic=a weekend letter at South Wind Stationery", "language=en"]).code).toBe(0);
+    const ran = runIn(dir, ["run", "all"], { FLOWGIT_LLM_MOCK_DIR: path.join(dir, "demo-replies", "en") });
+    expect(ran.code, ran.out).toBe(0);
+    const report = fs.readFileSync(path.join(dir, "check-report.md"), "utf8");
+    expect(report).toContain("X: best");
+    expect(report).toContain("weighted 108/280");
+    expect(report).toContain("title 18/20");
+    expect(report).not.toContain("Format error");
+    const exported = fs.readFileSync(path.join(dir, "posts.md"), "utf8");
+    expect(exported).toContain("## Xiaohongshu");
+    expect(exported).toContain("Desk lamp still on");
+    expect(exported).toContain("## Weibo");
+    expect(exported).toContain("## X");
+  });
+});
+
+describe("data-report template", () => {
+  let root: string;
+
+  function runIn(dir: string, args: string[], env: Record<string, string> = {}) {
+    const r = spawnSync(process.execPath, [cli, "-C", dir, ...args], {
+      encoding: "utf8",
+      env: { ...process.env, NO_COLOR: "1", ...env },
+    });
+    return { code: r.status, out: `${r.stdout}${r.stderr}` };
+  }
+
+  beforeAll(() => {
+    if (!fs.existsSync(cli)) throw new Error("Build the CLI first: pnpm -r run build");
+    root = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-data-report-"));
+  });
+
+  afterAll(() => {
+    if (root) fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  function init(dir: string, inputs: string[]) {
+    const created = spawnSync(process.execPath, [cli, "init", dir, "-t", "data-report"], { encoding: "utf8" });
+    expect(created.status, `${created.stdout}${created.stderr}`).toBe(0);
+    expect(runIn(dir, ["inputs", "set", ...inputs]).code).toBe(0);
+  }
+
+  it("runs in Chinese on the canned replies and the check matches", () => {
+    const dir = path.join(root, "zh");
+    init(dir, ["question=哪个类目和地区的销售额最高，下一步该补货还是促销？"]);
+    const ran = runIn(dir, ["run", "all"], { FLOWGIT_LLM_MOCK_DIR: path.join(dir, "demo-replies", "zh") });
+    expect(ran.code, ran.out).toBe(0);
+    for (const file of ["profile.json", "charts.json", "aggregates.json", "analysis.md", "report.md", "report.html", "check-report.md", "charts/category-amount.svg"]) {
+      expect(fs.existsSync(path.join(dir, file)), file).toBe(true);
+    }
+    const profile = JSON.parse(fs.readFileSync(path.join(dir, "profile.json"), "utf8")) as { rowCount: number; columns: { name: string; missing: number; mean: number; median: number }[] };
+    expect(profile.rowCount).toBe(208);
+    const amount = profile.columns.find((col) => col.name === "amount");
+    expect(amount).toMatchObject({ missing: 3, mean: 623.53, median: 543 });
+    const aggregates = JSON.parse(fs.readFileSync(path.join(dir, "aggregates.json"), "utf8")) as { charts: { id: string; points: { x: string; y: number }[] }[] };
+    expect(aggregates.charts.map((chart) => chart.id)).toEqual(["category-amount", "category-quantity", "region-amount", "weekly-amount", "category-median", "east-category"]);
+    expect(aggregates.charts[0]?.points[0]).toEqual({ x: "茶饮", y: 52860 });
+    const check = fs.readFileSync(path.join(dir, "check-report.md"), "utf8");
+    expect(check).toContain("## 对不上的数字\n\n没有。");
+    expect(check).toContain("## 没被引用的图\n\n没有。");
+    expect(check).toContain("## 开头不是结论\n\n没有。");
+    const html = fs.readFileSync(path.join(dir, "report.html"), "utf8");
+    expect(html).toContain("<svg");
+    expect(html).toContain("prefers-color-scheme: dark");
+    expect(html).toContain("哪个类目和地区的销售额最高");
+    expect(html).not.toMatch(/<script[^>]+src=|<link[^>]+href="http/);
+    const svg = fs.readFileSync(path.join(dir, "charts", "category-amount.svg"), "utf8");
+    expect(svg).toContain("52860");
+    expect(svg).toContain("prefers-color-scheme: dark");
+
+    fs.appendFileSync(path.join(dir, "analysis.md"), "\n多出来的数 999999。\n");
+    const warned = runIn(dir, ["run", "report"]);
+    expect(warned.code, warned.out).toBe(0);
+    const again = fs.readFileSync(path.join(dir, "check-report.md"), "utf8");
+    expect(again).toContain("- 999999");
+    expect(again).not.toContain("## 对不上的数字\n\n没有。");
+
+    fs.writeFileSync(path.join(dir, "analysis.md"), "\n");
+    const broken = runIn(dir, ["run", "report"]);
+    expect(broken.code).toBe(1);
+    expect(broken.out).toContain("analysis.md 是空的");
+  });
+
+  it("runs in English on the canned replies and the check matches", () => {
+    const dir = path.join(root, "en");
+    init(dir, [
+      "question=Which category and region brought in the most revenue, and should we restock or run a discount?",
+      "audience=regional sales managers",
+      "language=en",
+    ]);
+    const ran = runIn(dir, ["run", "all"], { FLOWGIT_LLM_MOCK_DIR: path.join(dir, "demo-replies", "en") });
+    expect(ran.code, ran.out).toBe(0);
+    const check = fs.readFileSync(path.join(dir, "check-report.md"), "utf8");
+    expect(check).toContain("## Numbers that do not match\n\nNone.");
+    expect(check).toContain("## Charts the analysis never cites\n\nNone.");
+    expect(check).toContain("## Answer is not first\n\nNone.");
+    const report = fs.readFileSync(path.join(dir, "report.md"), "utf8");
+    expect(report).toContain("52860");
+    expect(report).toContain("For: regional sales managers");
+    const html = fs.readFileSync(path.join(dir, "report.html"), "utf8");
+    expect(html).toContain('lang="en"');
+    expect(html).toContain("<svg");
+    expect(html).not.toMatch(/<script[^>]+src=|<link[^>]+href="http/);
+  });
+
+  it("reads any CSV: another file name, Chinese headers, GBK bytes from Excel", () => {
+    const dir = path.join(root, "any");
+    init(dir, ["question=哪个门店的金额最高？", "audience=店长"]);
+    fs.rmSync(path.join(dir, "data", "sales.csv"));
+    // GBK bytes, as Excel on Chinese Windows saves a CSV by default.
+    const gbk: Record<string, number[]> = { 日: [0xc8, 0xd5], 期: [0xc6, 0xda], 门: [0xc3, 0xc5], 店: [0xb5, 0xea], 金: [0xbd, 0xf0], 额: [0xb6, 0xee], 东: [0xb6, 0xab], 西: [0xce, 0xf7], 区: [0xc7, 0xf8] };
+    const toGbk = (text: string) => Buffer.from([...text].flatMap((ch) => gbk[ch] ?? [...Buffer.from(ch)]));
+    const table = ["日期,门店,金额", "2025-01-06,东区,120", "2025-01-06,西区,80", "2025-01-13,东区,150", "2025-01-13,西区,", "2025-01-20,东区,90", "2025-01-20,西区,110", ""].join("\r\n");
+    fs.writeFileSync(path.join(dir, "data", "stores.csv"), toGbk(table));
+
+    const mock = path.join(root, "any-mock");
+    fs.mkdirSync(mock, { recursive: true });
+    const chart = (id: string, type: string, x: string, agg: string, filter: string, title: string) => ({ id, type, x, y: "金额", agg, filter, title });
+    fs.writeFileSync(
+      path.join(mock, "plan.json"),
+      JSON.stringify({
+        charts: [
+          chart("store-sum", "bar", "门店", "sum", "", "比较各门店的金额合计。"),
+          chart("big-orders", "bar", "门店", "sum", "金额>=100", "只看金额不低于 100 的单，比较各门店的合计。"),
+          chart("weekly", "line", "日期", "sum", "", "看每周金额合计的变化。"),
+          chart("store-median", "table", "门店", "median", "", "列出各门店金额的中位数。"),
+        ],
+      }),
+    );
+    fs.writeFileSync(
+      path.join(mock, "analysis.md"),
+      [
+        "东区的金额合计是 360，高于西区的 190，先看东区。",
+        "",
+        "## 发生了什么",
+        "",
+        "- 按门店合计，东区是 360，西区是 190，见 charts/store-sum.svg。",
+        "- 只看金额不低于 100 的单，东区是 270，西区是 110，见 charts/big-orders.svg。",
+        "- 每周合计见 charts/weekly.svg，2025-01-13 是 150。",
+        "- 中位数见 charts/store-median.svg，东区是 120，西区是 95。金额列缺失 1 个。",
+        "",
+        "## 可能的原因",
+        "",
+        "猜测：东区客流更多，没有检验过。",
+        "",
+        "## 建议",
+        "",
+        "店长先看东区的备货。",
+        "",
+      ].join("\n"),
+    );
+    const ran = runIn(dir, ["run", "all"], { FLOWGIT_LLM_MOCK_DIR: mock });
+    expect(ran.code, ran.out).toBe(0);
+    const profile = JSON.parse(fs.readFileSync(path.join(dir, "profile.json"), "utf8")) as { source: string; rowCount: number; dateRange: unknown; columns: { name: string; type: string }[] };
+    expect(profile).toMatchObject({ source: "data/stores.csv", rowCount: 6, dateRange: { min: "2025-01-06", max: "2025-01-20" } });
+    expect(profile.columns.map((col) => [col.name, col.type])).toEqual([["日期", "date"], ["门店", "string"], ["金额", "number"]]);
+    const aggregates = JSON.parse(fs.readFileSync(path.join(dir, "aggregates.json"), "utf8")) as { charts: { id: string; skippedRows: number; points: { x: string; y: number }[] }[] };
+    const byId = Object.fromEntries(aggregates.charts.map((c) => [c.id, c]));
+    expect(byId["store-sum"]?.points).toEqual([{ x: "东区", y: 360 }, { x: "西区", y: 190 }]);
+    expect(byId["store-sum"]?.skippedRows).toBe(1);
+    expect(byId["big-orders"]?.points).toEqual([{ x: "东区", y: 270 }, { x: "西区", y: 110 }]);
+    expect(byId["weekly"]?.points.map((p) => p.x)).toEqual(["2025-01-06", "2025-01-13", "2025-01-20"]);
+    expect(byId["store-median"]?.points).toEqual([{ x: "东区", y: 120 }, { x: "西区", y: 95 }]);
+    const check = fs.readFileSync(path.join(dir, "check-report.md"), "utf8");
+    expect(check).toContain("## 对不上的数字\n\n没有。");
+    expect(check).toContain("## 没被引用的图\n\n没有。");
+    expect(fs.readFileSync(path.join(dir, "report.md"), "utf8")).toContain("数据来自 data/stores.csv，共 6 行。");
+    const svg = fs.readFileSync(path.join(dir, "charts", "store-median.svg"), "utf8");
+    expect(svg).toMatch(/<svg [^>]*width="\d+" height="\d+"/);
+
+    // Two CSVs: the profile stops and names both.
+    fs.writeFileSync(path.join(dir, "data", "extra.csv"), "a,b\n1,2\n");
+    const two = runIn(dir, ["run", "profile"]);
+    expect(two.code).toBe(1);
+    expect(two.out).toContain("只留下要分析的那一个");
+    fs.rmSync(path.join(dir, "data", "extra.csv"));
+
+    // A sum over a text column is a spec error that says how to fix it.
+    fs.writeFileSync(path.join(dir, "charts.json"), JSON.stringify({ charts: [{ ...chart("bad", "bar", "日期", "sum", "", "错的。"), y: "门店" }] }));
+    const bad = runIn(dir, ["run", "charts"]);
+    expect(bad.code).toBe(1);
+    expect(bad.out).toContain("里没有数字");
+  });
+});
+
+describe("meeting-notes template", () => {
+  let root: string;
+
+  function runIn(dir: string, args: string[], env: Record<string, string> = {}) {
+    const r = spawnSync(process.execPath, [cli, "-C", dir, ...args], {
+      encoding: "utf8",
+      env: { ...process.env, NO_COLOR: "1", ...env },
+    });
+    return { code: r.status, out: `${r.stdout}${r.stderr}` };
+  }
+
+  beforeAll(() => {
+    if (!fs.existsSync(cli)) throw new Error("Build the CLI first: pnpm -r run build");
+    root = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-meeting-"));
+  });
+
+  afterAll(() => {
+    if (root) fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  it("runs the Chinese sample and the check report matches", () => {
+    const dir = path.join(root, "zh");
+    const init = spawnSync(process.execPath, [cli, "init", dir, "-t", "meeting-notes"], { encoding: "utf8" });
+    expect(init.status, `${init.stdout}${init.stderr}`).toBe(0);
+    expect(runIn(dir, ["inputs", "set", "meeting=轻杯 Mini 产品周会", "date=2026-03-04", "attendees=林夏、周衡、沈予", "style=brief", "language=zh"]).code).toBe(0);
+    const ran = runIn(dir, ["run", "all"], { FLOWGIT_LLM_MOCK_DIR: path.join(dir, "demo-replies", "zh") });
+    expect(ran.code, ran.out).toBe(0);
+    const clean = fs.readFileSync(path.join(dir, "clean.md"), "utf8");
+    expect(clean).toContain("来源：transcript/weekly-zh.srt");
+    expect(clean).toContain("[0:20] 林夏：");
+    expect(clean).toContain("出席的是我、周衡和沈予");
+    expect(clean).not.toContain("[0:48]");
+    expect(clean).not.toContain("-->");
+    const minutes = fs.readFileSync(path.join(dir, "minutes.md"), "utf8");
+    expect(minutes).toContain("[12:30]");
+    expect(minutes).toContain("[7:30]");
+    const actions = JSON.parse(fs.readFileSync(path.join(dir, "actions.json"), "utf8")) as { owner: string; due: string; source: string }[];
+    expect(actions.map((item) => item.owner)).toEqual(["周衡", "林夏", "沈予", "沈予"]);
+    expect(actions.map((item) => item.due)).toEqual(["2026-03-11", "2026-03-11", "2026-03-09", ""]);
+    expect(actions.map((item) => item.source)).toEqual(["8:50", "16:40", "22:15", "28:50"]);
+    const report = fs.readFileSync(path.join(dir, "check-report.md"), "utf8");
+    expect(report).toContain("待办 4 条。");
+    expect(report).toContain("周衡：交出下一版 380 克结构草图，只给下一版；做不到就写上实际估重（2026-03-11，出处 8:50）");
+    expect(report).toContain("林夏：锁上架清单（标题、详情、7 天无理由退换、电机保修 1 年）并发到群里（2026-03-11，出处 16:40）");
+    expect(report).toContain("沈予：写 5 条客服问答（重量、榨冰、充电、退换、保修），每条对应已有资料，不新增承诺（2026-03-09，出处 22:15）");
+    // the sample's last promise names no day: kept, and the check asks for a date
+    expect(report).toContain("沈予：把问答草稿先发给林夏看一眼（日期待定，出处 28:50）");
+    expect(report).toContain("#4 把问答草稿先发给林夏看一眼：会上没说什么时候做完，请补上日期。");
+    expect(report).toContain("没有。");
+    expect(report).toContain("有 1 处要看一下。");
+    const followUp = fs.readFileSync(path.join(dir, "follow-up.md"), "utf8");
+    expect(followUp).toContain("完整转录不附在这封邮件里");
+    expect(followUp).toContain("日期待定");
+  });
+
+  it("runs the English sample and the check report matches", () => {
+    const dir = path.join(root, "en");
+    const init = spawnSync(process.execPath, [cli, "init", dir, "-t", "meeting-notes"], { encoding: "utf8" });
+    expect(init.status, `${init.stdout}${init.stderr}`).toBe(0);
+    expect(runIn(dir, ["inputs", "set", "meeting=Lightcup Mini product weekly", "date=2026-03-04", "attendees=Lin Xia, Zhou Heng, Shen Yu", "style=brief", "language=en"]).code).toBe(0);
+    const ran = runIn(dir, ["run", "all"], { FLOWGIT_LLM_MOCK_DIR: path.join(dir, "demo-replies", "en") });
+    expect(ran.code, ran.out).toBe(0);
+    const clean = fs.readFileSync(path.join(dir, "clean.md"), "utf8");
+    expect(clean).toContain("Source: transcript/weekly-en.srt");
+    expect(clean).toContain("[0:20] Lin Xia:");
+    expect(clean).toContain("Here today: Lin Xia, Zhou Heng, and Shen Yu.");
+    expect(clean).not.toContain("[0:48]");
+    const report = fs.readFileSync(path.join(dir, "check-report.md"), "utf8");
+    expect(report).toContain("4 action(s).");
+    expect(report).toContain("Zhou Heng: Deliver the 380 gram structure sketch for the next version only, and write the real estimate if 380 grams is missed (2026-03-11, source 8:50)");
+    expect(report).toContain("Lin Xia: Lock the launch list (title, detail page, 7-day returns, 1-year motor warranty) and send it to the group (2026-03-11, source 16:40)");
+    expect(report).toContain("Shen Yu: Write 5 support answers (weight, ice, charging, returns, warranty) from facts already on record, with no new promises (2026-03-09, source 22:15)");
+    expect(report).toContain("Shen Yu: Send the draft answers to Lin Xia for a quick look (date TBD, source 28:50)");
+    expect(report).toContain("#4 Send the draft answers to Lin Xia for a quick look: no date was named; add one.");
+    expect(report).toContain("None.");
+    expect(report).toContain("1 thing(s) to look at.");
+  });
+
+  it("reads a GBK .txt with a name-and-time line above the words, and keeps an action nobody took", () => {
+    const dir = path.join(root, "txt");
+    const init = spawnSync(process.execPath, [cli, "init", dir, "-t", "meeting-notes"], { encoding: "utf8" });
+    expect(init.status, `${init.stdout}${init.stderr}`).toBe(0);
+    for (const name of fs.readdirSync(path.join(dir, "transcript"))) fs.rmSync(path.join(dir, "transcript", name));
+    // GBK bytes, as many Windows tools save a .txt. "会议改到 10:30" ends with a time but is words, not a speaker line.
+    const gbk: Record<string, number[]> = { 林: [0xc1, 0xd6], 夏: [0xcf, 0xc4], 先: [0xcf, 0xc8], 对: [0xb6, 0xd4], 上: [0xc9, 0xcf], 架: [0xbc, 0xdc], "。": [0xa1, 0xa3], 会: [0xbb, 0xe1], 议: [0xd2, 0xe9], 改: [0xb8, 0xc4], 到: [0xb5, 0xbd], 周: [0xd6, 0xdc], 衡: [0xba, 0xe2], 寄: [0xbc, 0xc4], 出: [0xb3, 0xf6], 个: [0xb8, 0xf6], 不: [0xb2, 0xbb], 材: [0xb2, 0xc4], 料: [0xc1, 0xcf] };
+    const toGbk = (text: string) => Buffer.from([...text].flatMap((ch) => gbk[ch] ?? [...Buffer.from(ch)]));
+    const transcript = ["林夏  00:00:20", "先对上架。", "会议改到 10:30", "", "周衡  00:01:10", "寄出 20 个。", "", "林夏  00:07:30", "不改材料。", ""].join("\r\n");
+    fs.writeFileSync(path.join(dir, "transcript", "meeting.txt"), toGbk(transcript));
+    const replies = path.join(root, "txt-replies");
+    fs.mkdirSync(replies, { recursive: true });
+    fs.writeFileSync(path.join(replies, "summary.md"), "# 周会\n\n## 议题\n\n### 材料\n- 决定：不改材料。[7:30]\n");
+    fs.writeFileSync(
+      path.join(replies, "actions.json"),
+      `${JSON.stringify([{ owner: "", task: "问物流报价", due: "", source: "7:30" }, { owner: "周衡", task: "再寄 20 个试用", due: "2026-03-11", source: "1:10" }], null, 2)}\n`,
+    );
+    fs.writeFileSync(path.join(replies, "email.md"), "# 会后跟进：周会\n\n- 负责人待定：问物流报价。日期待定，请确认。\n");
+    expect(runIn(dir, ["inputs", "set", "meeting=周会", "date=2026-03-04", "language=zh"]).code).toBe(0);
+    const ran = runIn(dir, ["run", "all"], { FLOWGIT_LLM_MOCK_DIR: replies });
+    expect(ran.code, ran.out).toBe(0);
+    const clean = fs.readFileSync(path.join(dir, "clean.md"), "utf8");
+    expect(clean).toContain("[0:20] 林夏：先对上架。会议改到 10:30");
+    expect(clean).toContain("[1:10] 周衡：寄出 20 个。");
+    expect(clean).toContain("[7:30] 林夏：不改材料。");
+    const report = fs.readFileSync(path.join(dir, "check-report.md"), "utf8");
+    expect(report).toContain("（负责人待定）：问物流报价（日期待定，出处 7:30）");
+    expect(report).toContain("#1 问物流报价：会上没人接下，请指定一个负责人。");
+    expect(report).toContain("#1 问物流报价：会上没说什么时候做完，请补上日期。");
+    // 周衡 is found inside the words, so no "not in the transcript" warning
+    expect(report).toContain("## 负责人不在记录里\n没有。");
+    expect(report).toContain("有 2 处要看一下。");
+  });
+
+  it("keeps a time in the words out of the speaker name and groups unlabeled subtitles by the minute", () => {
+    const dir = path.join(root, "srt");
+    const init = spawnSync(process.execPath, [cli, "init", dir, "-t", "meeting-notes"], { encoding: "utf8" });
+    expect(init.status, `${init.stdout}${init.stderr}`).toBe(0);
+    for (const name of fs.readdirSync(path.join(dir, "transcript"))) fs.rmSync(path.join(dir, "transcript", name));
+    const cues = [
+      ["00:00:01,000", "我们约在 10:30 开会"],
+      ["00:00:20,000", "比例是 3:1"],
+      ["00:01:05,000", "下一段从这里开始"],
+    ];
+    const srt = cues.map(([start, text], index) => `${index + 1}\n${start} --> 00:01:30,000\n${text}\n`).join("\n");
+    fs.writeFileSync(path.join(dir, "transcript", "subs.srt"), srt);
+    expect(runIn(dir, ["inputs", "set", "meeting=周会", "date=2026-03-04"]).code).toBe(0);
+    expect(runIn(dir, ["run", "transcript"]).code).toBe(0);
+    const ran = runIn(dir, ["run", "clean"]);
+    expect(ran.code, ran.out).toBe(0);
+    expect(ran.out).toContain("记录里没有发言人");
+    const clean = fs.readFileSync(path.join(dir, "clean.md"), "utf8");
+    expect(clean).toContain("[0:01] 我们约在 10:30 开会比例是 3:1");
+    expect(clean).toContain("[1:05] 下一段从这里开始");
+    expect(clean).not.toContain("我们约在 10：");
+  });
+
+  it("warns on a due date before the meeting and stops only on a format error", () => {
+    const dir = path.join(root, "zh");
+    const actionsPath = path.join(dir, "actions.json");
+    const original = fs.readFileSync(actionsPath, "utf8");
+    const actions = JSON.parse(original) as { due: string }[];
+    actions[0].due = "2026-03-01";
+    fs.writeFileSync(actionsPath, `${JSON.stringify(actions, null, 2)}\n`);
+    const warned = runIn(dir, ["run", "check"]);
+    expect(warned.code, warned.out).toBe(0);
+    const warning = fs.readFileSync(path.join(dir, "check-report.md"), "utf8");
+    expect(warning).toContain("2026-03-01 早于会议 2026-03-04");
+    expect(warning).not.toContain("检查通过。");
+
+    fs.writeFileSync(actionsPath, "{\"owner\":\"林夏\"}\n");
+    const broken = runIn(dir, ["run", "check"]);
+    expect(broken.code).not.toBe(0);
+    const format = fs.readFileSync(path.join(dir, "check-report.md"), "utf8");
+    expect(format).toContain("## 格式错误");
+    expect(format).toContain("actions.json 必须是数组。");
   });
 });
 

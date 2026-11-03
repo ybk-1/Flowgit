@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import readline from "node:readline/promises";
 import { fileURLToPath } from "node:url";
 import { isDeepStrictEqual } from "node:util";
 import { Command, Help } from "commander";
@@ -32,6 +33,7 @@ import {
   effectiveProvider,
   globalProvidersFile,
   diffRuns,
+  formatByteSize,
   listRuns,
   listMcpTools,
   listPlugins,
@@ -41,18 +43,28 @@ import {
   loadFlowInputs,
   flowLog,
   planModelCalls,
+  planPrune,
   planRunAll,
+  prune,
   resolveFlowInputs,
   renderSkillMd,
   resolveFlowDir,
+  requireStage,
   restoreStage,
   runAll,
   runStage,
+  runsDirBytes,
+  runsPruneHint,
   saveFlowInputs,
   stageStatus,
   statusAll,
+  TrustNeededError,
+  trustFlow,
+  trustState,
   validateFlow,
   usageTokens,
+  type FlowAction,
+  type TrustState,
   type AddableStageType,
   type AgentName,
   type Finding,
@@ -70,8 +82,11 @@ import {
   type RunOptions,
 } from "@flowgit/core";
 import { openBrowser, startBoard } from "@flowgit/web";
+import { runBatch } from "./batch.js";
+import { buildGallery } from "./gallery.js";
 import { bilingualCliError, c, colorizeUnifiedDiff, nextHint, statusBoard, table, width } from "./format.js";
 import { restoreProxyChild, routeThroughProxy } from "./proxy.js";
+import { loadCommunityRegistry, splitGitFragment, type CommunityEntry } from "./registry.js";
 
 restoreProxyChild();
 
@@ -169,6 +184,11 @@ function fail(err: unknown, ctx: { inputFlags?: string[] } = {}): never {
     console.error(`  已经有了 / have one: 先 cd 进流程目录，或者加 / cd into it, or add: -C <流程目录 flow dir>`);
     return exit(1);
   }
+  if (e instanceof TrustNeededError) {
+    console.error(`${c.red("✗")} ${e.message}`);
+    console.error(`  也可以在 run 后面加 --yes，确认并运行 / or add --yes to run to confirm and run`);
+    return exit(1);
+  }
   if (e instanceof UpstreamNotReadyError) {
     console.error(`${c.red("✗")} ${e.message}\n  先运行 / run first: ${e.missing.map((m) => `flowgit run ${m}`).join(", ")}`);
     exit(1);
@@ -252,9 +272,9 @@ program
   .version(VERSION, "-V, --version", "显示版本号 / show the version number")
   .option("-C, --dir <dir>", "流程目录（含 flow.json 或 flow.md）/ flow directory (contains flow.json or flow.md)", ".");
 
-// run and board call models and services: send those through the user's proxy, if there is one.
+// run, batch and board call models and services: send those through the user's proxy, if there is one.
 program.hook("preAction", async (_program, action) => {
-  if (action.name() !== "run" && action.name() !== "board") return;
+  if (action.name() !== "run" && action.name() !== "batch" && action.name() !== "board") return;
   const code = await routeThroughProxy();
   if (code !== undefined) process.exit(code);
 });
@@ -432,11 +452,8 @@ function convertFlowFile(dir: string, to: FlowFormat): { from: string; to: strin
   return { from: path.basename(from), to: path.basename(target) };
 }
 
-/** For a flow copied from somewhere else: the commands it runs, the agents it starts, the services it calls and the plugins it loads. */
-function printActions(flow: Flow, dir: string): void {
-  const actions = flowActions(flow, dir);
-  if (!actions.length) return;
-  console.log(`${c.yellow("!")} 运行前请看一眼，这个流程会在你的电脑上做这些事 / Before you run it, look at what this flow does on your computer:`);
+/** One line per command, agent, service, MCP server, plugin or sub-flow. */
+function printActionRows(actions: FlowAction[]): void {
   const width = Math.max(...actions.map((a) => a.stage.length));
   for (const a of actions) {
     const env = a.env?.length
@@ -448,6 +465,53 @@ function printActions(flow: Flow, dir: string): void {
   }
 }
 
+/** For a flow copied from somewhere else: the commands it runs, the agents it starts, the services it calls, the MCP servers it starts and the plugins it loads. */
+function printActions(flow: Flow, dir: string): FlowAction[] {
+  const actions = flowActions(flow, dir);
+  if (!actions.length) return actions;
+  console.log(`${c.yellow("!")} 运行前请看一眼，这个流程会在你的电脑上做这些事 / Before you run it, look at what this flow does on your computer:`);
+  printActionRows(actions);
+  return actions;
+}
+
+/** What a copied flow would be confirmed for. */
+function printTrustList(state: TrustState): void {
+  console.log(
+    state.reason === "changed"
+      ? `${c.yellow("!")} 这个流程要运行的命令和你上次确认的不一样了，现在是 / This flow's commands changed since you confirmed them. Now it does:`
+      : `${c.yellow("!")} 这个流程是从 ${state.source ?? "?"} 复制来的，会在你的电脑上做这些事 / This flow was copied from ${state.source ?? "?"} and does this on your computer:`,
+  );
+  printActionRows(state.actions);
+}
+
+const TRUST_REMEMBERED = "已确认。命令不变就不会再问 / Confirmed. You won't be asked again unless the commands change.";
+
+/**
+ * Before a run: a flow copied from a Git URL that hasn't been confirmed on this computer
+ * shows what it does and asks once. --yes confirms without asking; with no terminal to
+ * ask in, it stops and says how to confirm.
+ */
+async function ensureTrusted(loaded: LoadedFlow, yes?: boolean): Promise<void> {
+  const state = trustState(loaded);
+  if (!state.needed) return;
+  printTrustList(state);
+  if (!yes) {
+    if (!process.stdin.isTTY || !process.stdout.isTTY) throw new TrustNeededError(loaded, state);
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    let answer = "";
+    try {
+      answer = (await rl.question("确认后运行吗？/ Confirm and run? [y/N] ")).trim().toLowerCase();
+    } catch {
+      // input closed (Ctrl+D): treat as no
+    } finally {
+      rl.close();
+    }
+    if (!["y", "yes", "是"].includes(answer)) throw new Error("没有确认，什么都没运行 / Not confirmed; nothing ran");
+  }
+  trustFlow(loaded, state.fingerprint);
+  console.log(`${c.green("✓")} ${TRUST_REMEMBERED}\n`);
+}
+
 // Two lines rather than `cd … && flowgit status`: Windows PowerShell 5.1 has no `&&`.
 function nextStepLine(target: string): string {
   const rel = path.relative(process.cwd(), target);
@@ -455,17 +519,29 @@ function nextStepLine(target: string): string {
   return `  下一步 / next:\n    cd ${/\s/.test(shown) ? `"${shown}"` : shown}\n    flowgit status`;
 }
 
+/** A community id becomes its Git URL. Bundled names, Git URLs and real directories stay as they are. */
+async function resolveCommunityTemplate(template: string): Promise<{ template: string; entry?: CommunityEntry; note?: string; ids: string[] }> {
+  if (bundledDir(template) || isGitUrl(template) || path.isAbsolute(template) || template.includes("/") || template.includes("\\") || fs.existsSync(path.resolve(template))) {
+    return { template, ids: [] };
+  }
+  const loaded = await loadCommunityRegistry();
+  if (!loaded.ok) return { template, note: loaded.note, ids: [] };
+  const entry = loaded.entries.find((item) => item.id === template);
+  if (!entry) return { template, ids: loaded.entries.map((item) => item.id) };
+  return { template: entry.git, entry, ids: [] };
+}
+
 program
   .command("init")
-  .description("从模板、本地目录或 Git 地址新建流程（默认 short-video）/ create a flow from a template, a local directory or a Git URL (default: short-video)")
+  .description("从模板、社区模板、本地目录或 Git 地址新建流程（默认 short-video）/ create a flow from a template, a community template, a local directory or a Git URL (default: short-video)")
   .argument("[dir]", "目标目录 / target directory", ".")
   .option("-t, --template <name>", "模板、目录或 Git 地址 / template, directory or Git URL", DEFAULT_TEMPLATE)
   .option("--ref <ref>", "Git 分支或标签 / Git branch or tag")
-  .option("--path <subdir>", "仓库里的子目录 / subdirectory inside the repo")
+  .option("--path <subdir>", "仓库里的子目录；也可以写在地址末尾 #path=子目录 / subdirectory inside the repo, or #path=<subdir> on the URL")
   .option("--with-outputs", "连产物一起复制 / also copy stage outputs")
   .option("--format <format>", "流程文件写成 json（flow.json）还是 md（flow.md），默认跟来源一样 / write the flow file as json (flow.json) or md (flow.md); defaults to the source's format")
   .option("--force", "覆盖已有的流程文件 / overwrite an existing flow file")
-  .action((dir: string, opts: { template: string; ref?: string; path?: string; withOutputs?: boolean; format?: string; force?: boolean }) => {
+  .action(async (dir: string, opts: { template: string; ref?: string; path?: string; withOutputs?: boolean; format?: string; force?: boolean }) => {
     const target = path.resolve(dir);
     const format = parseFormat(opts.format);
     const existing = [FLOW_FILE, FLOW_MD_FILE].map((f) => path.join(target, f)).filter((f) => fs.existsSync(f));
@@ -500,7 +576,17 @@ program
       console.log(nextStepLine(target));
       return;
     }
-    if ((opts.ref || opts.path) && !isGitUrl(opts.template)) {
+
+    const resolved = await resolveCommunityTemplate(opts.template);
+    const template = resolved.template;
+    const ref = opts.ref ?? resolved.entry?.ref;
+    const split = splitGitFragment(template);
+    if (split.path === "") fail(new Error(`#path= 后面要写子目录 / #path= needs a subdirectory`));
+    if (opts.path && split.path && opts.path !== split.path) {
+      fail(new Error(`--path 和地址里的 #path= 不一致：「${opts.path}」和「${split.path}」 / --path and #path= in the URL disagree: "${opts.path}" and "${split.path}"`));
+    }
+    const pathInRepo = opts.path ?? split.path;
+    if ((ref || pathInRepo) && !isGitUrl(split.url)) {
       fail(new Error(`--ref 和 --path 只用于 Git 地址 / --ref and --path are only for a Git URL`));
     }
 
@@ -509,25 +595,29 @@ program
     let forked: ForkedFrom | undefined;
     try {
       try {
-        if (isGitUrl(opts.template)) {
-          const cloned = cloneFlowRepo(opts.template, opts.ref);
+        if (isGitUrl(split.url)) {
+          const cloned = cloneFlowRepo(split.url, ref);
           cleanup = cloned.dir;
-          src = path.resolve(cloned.dir, opts.path ?? ".");
-          // Resolve symlinks too, so a link in the repository can't point --path outside it.
+          src = path.resolve(cloned.dir, pathInRepo ?? ".");
+          // Resolve symlinks too, so a link in the repository can't point --path or #path= outside it.
           const real = (p: string) => (fs.existsSync(p) ? fs.realpathSync(p) : p);
           const escaped = path.relative(real(cloned.dir), real(src));
           if (escaped.startsWith("..") || path.isAbsolute(escaped)) {
             throw new Error(`--path 必须在仓库里面 / --path must stay inside the repository`);
           }
-          forked = { source: publicGitUrl(opts.template), ...(opts.ref ? { ref: opts.ref } : {}), commit: cloned.commit };
+          forked = { source: publicGitUrl(split.url), ...(ref ? { ref } : {}), commit: cloned.commit };
         } else {
-          src = path.resolve(opts.template);
+          src = path.resolve(split.url);
         }
         const srcFile = findFlowFile(src);
         if (!srcFile) {
           const names = bundledTemplates().map((t) => t.id).join(", ");
-          const where = opts.path ? `${opts.template} (${opts.path})` : opts.template;
-          throw new Error(`找不到流程 / Flow not found: ${where}\n  自带的模板 / bundled templates: ${names}（flowgit templates 查看说明 / see flowgit templates）`);
+          const where = pathInRepo ? `${template} (${pathInRepo})` : template;
+          const lines = [`找不到流程 / Flow not found: ${where}`];
+          if (resolved.note) lines.push(`  ${resolved.note}`);
+          lines.push(`  自带的模板 / bundled templates: ${names}（flowgit templates 查看说明 / see flowgit templates）`);
+          if (resolved.ids.length) lines.push(`  社区模板 / community templates: ${resolved.ids.join(", ")}（flowgit templates --all）`);
+          throw new Error(lines.join("\n"));
         }
         const sourceFlow = readSourceFlow(srcFile);
         const withOutputs = !!opts.withOutputs;
@@ -542,11 +632,16 @@ program
         }
         finish(path.basename(srcFile));
         const skipped = withOutputs ? [] : presentOutputs(src, sourceFlow);
+        const shown = isGitUrl(split.url) ? publicGitUrl(split.url) : opts.template;
         console.log(`${c.green("✓")} 已创建流程 / created flow in ${target}`);
-        console.log(`  来源 / source: ${isGitUrl(opts.template) ? publicGitUrl(opts.template) : opts.template}${opts.path ? ` (${opts.path})` : ""}`);
+        console.log(`  来源 / source: ${shown}${pathInRepo ? ` (${pathInRepo})` : ""}`);
+        if (resolved.entry) console.log(`  社区模板 / community template: ${resolved.entry.id}`);
         console.log(`  复制了 ${rels.length} 个文件 / copied ${rels.length} file(s)`);
         console.log(skipped.length ? `  跳过的产物 / skipped outputs: ${skipped.join(", ")}` : `  没有跳过产物 / no outputs skipped`);
-        printActions(sourceFlow, src);
+        const actions = printActions(sourceFlow, src);
+        if (forked && actions.length) {
+          console.log(c.dim("  第一次运行前会请你确认这些，也可以先运行 flowgit trust / the first run asks you to confirm these; or run flowgit trust first"));
+        }
         console.log(nextStepLine(target));
       } finally {
         if (cleanup) fs.rmSync(cleanup, { recursive: true, force: true });
@@ -619,25 +714,39 @@ program
     }
   });
 
+function bundledTemplateJson(list: { id: string; flow: Flow }[]) {
+  return list.map(({ id, flow }) => ({
+    id,
+    name: flow.name,
+    description: flow.description ?? "",
+    default: id === DEFAULT_TEMPLATE,
+    stages: flow.stages.map((s) => ({ id: s.id, name: s.name, executor: s.executor.type })),
+  }));
+}
+
 program
   .command("templates")
-  .description("列出自带的模板 / list the bundled templates")
+  .description("列出自带的模板；--all 连社区模板 / list the bundled templates; --all adds community templates")
   .option("--json", "输出 JSON / machine-readable output")
-  .action((opts: { json?: boolean }) => {
+  .option("--all", "连社区模板一起列出 / also list community templates")
+  .action(async (opts: { json?: boolean; all?: boolean }) => {
     const list = bundledTemplates();
+    const loaded = opts.all ? await loadCommunityRegistry() : undefined;
+    const community = loaded?.ok ? loaded.entries : [];
+    const note = loaded && !loaded.ok ? loaded.note : undefined;
     if (opts.json) {
       console.log(
-        JSON.stringify(
-          list.map(({ id, flow }) => ({
-            id,
-            name: flow.name,
-            description: flow.description ?? "",
-            default: id === DEFAULT_TEMPLATE,
-            stages: flow.stages.map((s) => ({ id: s.id, name: s.name, executor: s.executor.type })),
-          })),
-          null,
-          2,
-        ),
+        opts.all
+          ? JSON.stringify(
+              {
+                bundled: bundledTemplateJson(list).map((item) => ({ ...item, source: "bundled" })),
+                community: community.map((entry) => ({ ...entry, source: "community" })),
+                ...(note ? { note } : {}),
+              },
+              null,
+              2,
+            )
+          : JSON.stringify(bundledTemplateJson(list), null, 2),
       );
       return;
     }
@@ -646,7 +755,14 @@ program
       rows.push([`${id}${id === DEFAULT_TEMPLATE ? c.dim(" (默认 default)") : ""}`, flow.name, flow.stages.map((s) => `${s.name} ${c.dim(s.executor.type)}`).join(" → ")]);
     }
     console.log(table(rows));
-    console.log(c.dim("\n用法 / usage: flowgit init <目录 dir> -t <模板 template>"));
+    if (community.length) {
+      const communityRows = [[c.dim("模板 template"), c.dim("名称 name"), c.dim("地址 git")]];
+      for (const entry of community) communityRows.push([entry.id, entry.name.zh, entry.git]);
+      console.log(`\n${c.bold("社区模板 / community templates")}`);
+      console.log(table(communityRows));
+    }
+    if (note) console.log(`\n${note}`);
+    console.log(c.dim(`\n用法 / usage: flowgit init <目录 dir> -t <模板 template>${opts.all ? "" : "    flowgit templates --all"}`));
   });
 
 program
@@ -853,6 +969,7 @@ program
                 state: s.state,
                 runs: s.runs,
                 latest: s.latest ? { n: s.latest.n, status: s.latest.status, finishedAt: s.latest.finishedAt } : null,
+                current: s.current ?? null,
                 missingUpstream: s.missingUpstream,
                 outputs: s.stage.outputs,
               })),
@@ -872,6 +989,8 @@ program
         const hint = nextHint(statuses);
         if (hint) console.log(`\n${hint}`);
       }
+      const runsLine = runsPruneHint(runsDirBytes(loaded.dir));
+      if (runsLine) console.log(`\n${runsLine}`);
     } catch (err) {
       fail(err);
     }
@@ -930,7 +1049,8 @@ program
   .option("--model <model>", "llm 阶段用的模型，可写 provider/model，如 glm/glm-5.3 / model for llm stages, optionally provider/model, e.g. glm/glm-5.3")
   .option("--force", "配合 all：已是最新的阶段也重跑 / with all: re-run stages that are already up to date")
   .option("--dry-run", "配合 all：只说会做什么，不运行、不调用模型 / with all: show what would happen, without running anything or calling a model")
-  .action(async (stageId: string, opts: { input?: string[]; from?: string[]; model?: string; force?: boolean; dryRun?: boolean }) => {
+  .option("-y, --yes", "从 Git 地址复制来的流程：不再询问，确认它会做的事并运行 / for a flow copied from a Git URL: confirm what it does and run, without asking")
+  .action(async (stageId: string, opts: { input?: string[]; from?: string[]; model?: string; force?: boolean; dryRun?: boolean; yes?: boolean }) => {
     try {
       const loaded = loadFlow(dirOf());
       if (opts.dryRun) {
@@ -946,6 +1066,8 @@ program
         force: opts.force,
         onEvent: printEvent,
       };
+      if (stageId !== "all") requireStage(loaded.flow, stageId);
+      await ensureTrusted(loaded, opts.yes);
       if (stageId === "all") {
         const records = await runAll(loaded, options);
         printUsageTotal();
@@ -958,6 +1080,58 @@ program
       }
     } catch (err) {
       fail(err, { inputFlags: opts.input });
+    }
+  });
+
+program
+  .command("batch")
+  .description("用 CSV 一次跑很多份：每行一份，表头是流程输入 / run many copies from a CSV: one row each, headers are flow inputs")
+  .argument("<file.csv>", "CSV 文件，第一行是流程输入名 / CSV file whose first row names the flow inputs")
+  .option("--out <dir>", "输出目录，相对流程目录 / output directory, relative to the flow directory", "batch")
+  .option("--concurrency <n>", "同时跑几行（1 到 4）/ how many rows to run at once (1 to 4)", "1")
+  .option("--rows <a-b>", "只跑这几行数据（从 1 开始，不含表头）/ only these data rows (1-based, the header is not counted)")
+  .option("-y, --yes", "从 Git 地址复制来的流程：不再询问，确认它会做的事并运行 / for a flow copied from a Git URL: confirm what it does and run, without asking")
+  .action(async (file: string, opts: { out: string; concurrency: string; rows?: string; yes?: boolean }) => {
+    try {
+      // Every row is a copy of this flow, so a flow copied from a Git URL is confirmed once, here.
+      await ensureTrusted(loadFlow(dirOf()), opts.yes);
+      const code = await runBatch({
+        flowDir: dirOf(),
+        csvPath: path.resolve(file),
+        out: opts.out,
+        concurrency: opts.concurrency,
+        rows: opts.rows,
+      });
+      if (code !== 0) process.exit(code);
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+program
+  .command("trust")
+  .description("确认从 Git 地址复制来的流程会做的事，之后运行就不再问 / confirm what a flow copied from a Git URL does, so runs stop asking")
+  .action(() => {
+    try {
+      const loaded = loadFlow(dirOf());
+      const state = trustState(loaded);
+      if (state.reason === "not-forked") {
+        console.log("这个流程不是从 Git 地址复制来的，不用确认 / This flow wasn't copied from a Git URL; there is nothing to confirm.");
+        return;
+      }
+      if (state.reason === "no-actions") {
+        console.log("这个流程只调用模型或等人，不在你的电脑上运行命令，不用确认 / This flow only calls models or waits for people and runs nothing on your computer; there is nothing to confirm.");
+        return;
+      }
+      printTrustList(state);
+      if (state.reason === "trusted") {
+        console.log(`${c.green("✓")} 已经确认过，命令没变 / Already confirmed; the commands haven't changed.`);
+        return;
+      }
+      trustFlow(loaded, state.fingerprint);
+      console.log(`${c.green("✓")} ${TRUST_REMEMBERED}`);
+    } catch (err) {
+      fail(err);
     }
   });
 
@@ -1092,6 +1266,77 @@ program
       if (kept) console.log(c.dim(`  你的手动修改已存为 / your manual edit was saved as v${kept.n}`));
       console.log(`${c.green("✓")} 已回退到 / restored ${stageId} v${run.n}: ${run.outputs.map((o) => o.path).join(", ")}`);
       console.log(c.dim("  下游阶段会显示为需重跑 / downstream stages will show as stale"));
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+function parseKeep(raw: string): number {
+  if (!/^[1-9]\d*$/.test(raw)) {
+    throw new Error(`--keep 至少是 1，收到 "${raw}" / --keep must be at least 1, got "${raw}"`);
+  }
+  return Number(raw);
+}
+
+/** y or yes. Anything else, including an empty answer, is no. */
+function answeredYes(answer: string): boolean {
+  return /^(y|yes)$/i.test(answer.trim());
+}
+
+async function askOnce(question: string): Promise<string> {
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    return await rl.question(question);
+  } catch {
+    return ""; // input closed (Ctrl+D): treat as no
+  } finally {
+    rl.close();
+  }
+}
+
+function printPrunePlan(plan: { delete: { stage: string; n: number; bytes: number }[]; bytes: number }, dryRun: boolean): void {
+  if (!plan.delete.length) {
+    console.log("没有要删除的版本 / Nothing to delete.");
+    return;
+  }
+  if (dryRun) console.log(c.dim("预演：不会删除任何版本 / dry run: nothing will be deleted\n"));
+  const rows = [[c.dim("阶段 stage"), c.dim("版本 v"), c.dim("大小 size")]];
+  for (const item of plan.delete) rows.push([item.stage, `v${item.n}`, formatByteSize(item.bytes)]);
+  console.log(table(rows));
+  console.log(`\n释放 ${formatByteSize(plan.bytes)} / frees ${formatByteSize(plan.bytes)}`);
+}
+
+program
+  .command("prune")
+  .description("清理旧版本。每个阶段留下最新的几个、所有手动修改、和当前文件一致的版本，以及最近一次成功的运行 / delete old versions, keeping the newest few, every manual edit, the version matching the current files, and the newest success")
+  .option("--keep <n>", "每个阶段保留的最新版本数，至少 1 / newest versions to keep per stage, at least 1", "5")
+  .option("--stage <id>", "只清理这个阶段 / only this stage")
+  .option("--dry-run", "只列出将删除的版本和能腾出的空间，不删除 / list what would be deleted and how much space it frees, without deleting")
+  .option("--yes", "不询问，直接删除 / delete without asking")
+  .action(async (opts: { keep?: string; stage?: string; dryRun?: boolean; yes?: boolean }) => {
+    try {
+      const loaded = loadFlow(dirOf());
+      const keep = parseKeep(opts.keep ?? "5");
+      const stage = opts.stage?.trim() || undefined;
+      const plan = planPrune(loaded.dir, loaded.flow, { keep, stage });
+      printPrunePlan(plan, Boolean(opts.dryRun));
+      if (!plan.delete.length || opts.dryRun) return;
+      if (!opts.yes) {
+        if (!process.stdin.isTTY) {
+          console.log("不在终端里，没有删除。确认删除请加上 --yes / Not a terminal, so nothing was deleted. Add --yes to delete.");
+          process.exitCode = 1;
+          return;
+        }
+        const answer = await askOnce("删除这些版本？/ Delete these versions? [y/N] ");
+        if (!answeredYes(answer)) {
+          console.log("已取消，没有删除 / Cancelled, nothing deleted.");
+          return;
+        }
+      }
+      const deleted = prune(loaded.dir, loaded.flow, { keep, stage });
+      console.log(
+        `${c.green("✓")} 已删除 ${deleted.delete.length} 个版本，释放 ${formatByteSize(deleted.bytes)} / deleted ${deleted.delete.length} version(s), freed ${formatByteSize(deleted.bytes)}`,
+      );
     } catch (err) {
       fail(err);
     }
@@ -1348,6 +1593,23 @@ mcpCmd
         return;
       }
       printMcpTools(server, tools);
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+const galleryCmd = program.command("gallery").description("静态模板画廊 / static template gallery");
+
+galleryCmd
+  .command("build")
+  .description("生成静态页面到一个目录，不部署 / write a static site into a directory, without deploying")
+  .option("--out <dir>", "输出目录 / output directory", "gallery-dist")
+  .action(async (opts: { out: string }) => {
+    try {
+      const result = await buildGallery({ outDir: opts.out });
+      console.log(`${c.green("✓")} 已生成模板画廊 / wrote the template gallery: ${result.outDir}`);
+      console.log(`  ${result.pages.length} 个模板页 / ${result.pages.length} template page(s)`);
+      if (result.note) console.log(result.note);
     } catch (err) {
       fail(err);
     }

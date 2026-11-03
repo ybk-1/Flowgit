@@ -4,9 +4,9 @@
 
 A `plugin` executor loads a plugin in this process and calls its `executor.run`. The plugin writes the outputs the stage declared.
 
-插件和 `script` 一样，是会在你电脑上执行的代码。从别处复制来的流程，运行前先看 `init` 列出来的插件名字和解析位置。
+插件和 `script` 一样，是会在你电脑上执行的代码。从别处复制来的流程，运行前先看 `init` 列出来的插件名字和解析位置。从 Git 地址复制来的流程，第一次运行前要确认（`flowgit trust`，或 `run` 时的询问）；确认之前不会加载插件。
 
-A plugin is code that runs on your machine, the same as a `script`. Before running a flow copied from somewhere else, read the plugin names and resolved paths that `init` lists.
+A plugin is code that runs on your machine, the same as a `script`. Before running a flow copied from somewhere else, read the plugin names and resolved paths that `init` lists. A flow copied from a Git URL must be confirmed before its first run (`flowgit trust`, or the question `run` asks); no plugin is loaded until then.
 
 ## 执行器 / The executor
 

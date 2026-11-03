@@ -280,6 +280,13 @@ export interface StageStatus {
   state: StageState;
   latest?: RunRecord;
   runs: number;
+  /**
+   * The successful run whose output snapshot the files on disk match (the
+   * newest, if several). After a restore it is the restored run, not `latest`.
+   * Set for an ok stage, and for a stale one with more than one successful
+   * run; unset for a hand edit, an error or a wait.
+   */
+  current?: number;
   /** Upstream stage ids that have no successful run yet. */
   missingUpstream: string[];
 }

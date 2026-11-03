@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Meeting actions",
+  "description": "One row per action. owner and due are \"\" when the meeting named no owner or no date; the check asks a person to fill them in.",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["owner", "task", "due", "source"],
+    "properties": {
+      "owner": { "type": "string" },
+      "task": { "type": "string", "minLength": 1 },
+      "due": { "type": "string" },
+      "source": { "type": "string", "minLength": 1 }
+    }
+  }
+}
