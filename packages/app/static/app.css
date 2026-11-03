@@ -1,0 +1,92 @@
+/* Web app additions on top of the board's style.css: the top bar, the key dialog and the home page. */
+.app-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 24px;
+  border-bottom: 1px solid var(--hair);
+  background: var(--surface);
+  font-size: 14px;
+}
+.app-home {
+  color: var(--ink);
+  text-decoration: none;
+  font-weight: 600;
+}
+.app-home:hover,
+.app-home:focus-visible {
+  text-decoration: underline;
+}
+.app-note {
+  flex: 1;
+  margin: 0;
+  color: var(--muted);
+}
+.app-note.warn {
+  color: var(--stale);
+}
+.app-keys {
+  margin-left: auto;
+}
+.keys-dialog {
+  max-width: 520px;
+  width: calc(100% - 32px);
+  border: var(--rule-w) solid var(--rule);
+  background: var(--surface);
+  color: var(--ink);
+  padding: 20px 24px;
+}
+.keys-dialog .field {
+  display: grid;
+  gap: 4px;
+  margin: 12px 0;
+}
+.keys-dialog .check {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 10px 0;
+}
+.keys-dialog .dialog-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+.home-main {
+  display: grid;
+  gap: 32px;
+  padding: 24px;
+  max-width: 1100px;
+}
+.flow-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+}
+.flow-list li {
+  background: var(--surface);
+  border: 1px solid var(--hair);
+  padding: 14px 16px;
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+.flow-list h3 {
+  margin: 0;
+  font-size: 16px;
+}
+.flow-list p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.flow-list .row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}

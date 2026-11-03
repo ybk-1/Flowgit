@@ -12,6 +12,7 @@
     "typecheck": "pnpm -r run typecheck",
     "test": "pnpm -r run test",
     "test:e2e": "playwright test --config packages/web/playwright.config.ts",
+    "test:e2e:app": "playwright test --config packages/app/playwright.config.ts",
     "flowgit": "node packages/cli/dist/index.js"
   },
   "devDependencies": {

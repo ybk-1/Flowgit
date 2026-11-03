@@ -1,4 +1,9 @@
-/** Board HTTP and the SSE connection. The only module that may call fetch or EventSource. */
+/**
+ * Board HTTP and the SSE connection. The only module that may call fetch or EventSource.
+ * The web app (packages/app) sets globalThis.flowgitTransport before this module loads, and
+ * then every request and the event stream are answered in the browser instead of by a server.
+ */
+const transport = globalThis.flowgitTransport;
 export const token = document.querySelector('meta[name="flowgit-token"]')?.getAttribute("content") ?? "";
 
 export function headers() {
@@ -6,7 +11,7 @@ export function headers() {
 }
 
 function request(url, init) {
-  return fetch(url, init);
+  return transport ? transport.fetch(url, init) : fetch(url, init);
 }
 
 export function getFlow() {
@@ -118,6 +123,6 @@ export function uploadFile(stageId, name, file) {
 
 /** The board's SSE connection. The page passes the URL; this is the only EventSource. */
 export function subscribe(url) {
-  return new EventSource(url);
+  return transport ? transport.events(url) : new EventSource(url);
 }
 

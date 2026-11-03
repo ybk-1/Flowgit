@@ -5,8 +5,17 @@ import { Ajv2020 } from "ajv/dist/2020.js";
 import type { Flow, Output, Stage, ValidationIssue } from "./types.js";
 import { isSafeRelative, outputRel } from "./util.js";
 
-/** Pick the validator for the schema's $schema: draft-07, 2019-09, or 2020-12 (also the default). */
-function compileSchema(schema: unknown) {
+/** One failed check, in the shape problems are reported. */
+export interface SchemaError {
+  path: string;
+  message: string;
+}
+
+/** Compiles a JSON Schema into a check; throws when the schema itself is unusable. */
+export type SchemaCompiler = (schema: unknown) => (data: unknown) => SchemaError[];
+
+/** Pick the ajv validator for the schema's $schema: draft-07, 2019-09, or 2020-12 (also the default). */
+function ajvCompile(schema: unknown) {
   const opts = { allErrors: true, strict: false };
   const declared = schema && typeof schema === "object" ? (schema as { $schema?: unknown }).$schema : undefined;
   const draft = typeof declared === "string" ? declared : "";
@@ -16,6 +25,29 @@ function compileSchema(schema: unknown) {
     throw new Error(`不支持 $schema "${draft}"，请用 draft-07、2019-09 或 2020-12 / unsupported $schema "${draft}"; use draft-07, 2019-09 or 2020-12`);
   }
   return new Ajv2020(opts).compile(schema as object);
+}
+
+const ajvCompiler: SchemaCompiler = (schema) => {
+  const validate = ajvCompile(schema);
+  return (data) => {
+    if (validate(data) || !validate.errors) return [];
+    return validate.errors.map((error) => ({ path: problemPath(error), message: problemMessage(error) }));
+  };
+};
+
+let compiler: SchemaCompiler = ajvCompiler;
+
+/**
+ * Swap how output schemas are compiled. ajv (the default) generates code with new Function,
+ * which a page with a strict Content-Security-Policy may not run; such a page plugs in an
+ * interpreting validator instead. Pass nothing to go back to ajv.
+ */
+export function setSchemaCompiler(next?: SchemaCompiler): void {
+  compiler = next ?? ajvCompiler;
+}
+
+function compileSchema(schema: unknown): (data: unknown) => SchemaError[] {
+  return compiler(schema);
 }
 
 export interface SchemaProblem {
@@ -96,12 +128,7 @@ export function schemaProblems(dir: string, stage: Stage): SchemaProblem[] {
       problems.push({ file: rel, path: "/", message: "不是合法的 JSON / is not valid JSON" });
       continue;
     }
-    const validate = compileSchema(loaded.schema);
-    if (!validate(data) && validate.errors) {
-      for (const error of validate.errors) {
-        problems.push({ file: rel, path: problemPath(error), message: problemMessage(error) });
-      }
-    }
+    for (const error of compileSchema(loaded.schema)(data)) problems.push({ file: rel, ...error });
   }
   return problems;
 }

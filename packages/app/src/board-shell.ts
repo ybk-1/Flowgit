@@ -1,0 +1,141 @@
+// Runs before the board's own modules (see scripts/build.mjs): it answers the board's API inside the
+// page, loads the flow named by ?flow= from the browser's storage, and adds the key settings.
+import { I18N } from "./i18n.js";
+import { loadFlow } from "@flowgit/core";
+import type { I18nApi } from "./dom.js";
+import { applyKeys, rememberedKeys, storeKeys, VENDORS, type KeySettings } from "./keys.js";
+import { BrowserBoard } from "./router.js";
+import { flowDir, openWorkspace, validFlowId, type Workspace } from "./workspace.js";
+
+const i18n = I18N as I18nApi;
+const params = new URLSearchParams(location.search);
+const flowId = params.get("flow");
+if (!validFlowId(flowId)) location.replace("./index.html");
+const dir = flowDir(validFlowId(flowId) ? flowId : "missing");
+// `ready` is declared below; settled only runs after the first request has awaited it.
+const board = new BrowserBoard({ dir, settled: () => ready.then((ws) => ws.saved()) });
+let keys: KeySettings | undefined = rememberedKeys();
+const demoKey = `flowgit.app.demo.${flowId}`;
+
+function demoOn(): boolean {
+  try {
+    return localStorage.getItem(demoKey) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function setDemo(on: boolean): void {
+  try {
+    if (on) localStorage.setItem(demoKey, "1");
+    else localStorage.removeItem(demoKey);
+  } catch {
+    // private window
+  }
+}
+
+function applyEnv(ws: Workspace): void {
+  applyKeys(ws.env, keys);
+  const mockDir = `${dir}/demo-replies`;
+  if (demoOn() && ws.host.exists(mockDir)) ws.env.FLOWGIT_LLM_MOCK_DIR = mockDir;
+  else delete ws.env.FLOWGIT_LLM_MOCK_DIR;
+}
+
+const ready: Promise<Workspace> = openWorkspace(validFlowId(flowId) ? flowId : undefined).then((ws) => {
+  if (!ws.host.exists(`${dir}/flow.json`) && !ws.host.exists(`${dir}/flow.md`)) {
+    location.replace("./index.html#missing");
+  }
+  applyEnv(ws);
+  return ws;
+});
+
+// The board's api.js reads this when it loads (packages/web/public/api.js).
+(globalThis as { flowgitTransport?: unknown }).flowgitTransport = {
+  fetch: async (url: string, init?: RequestInit) => {
+    await ready;
+    return board.fetch(url, init);
+  },
+  events: (url: string) => board.events(url),
+};
+
+/** Say which stages a browser can't run, with what to run instead, and whether files are kept. */
+function paintNote(ws: Workspace): void {
+  const note = document.getElementById("app-note");
+  if (!note) return;
+  const parts: string[] = [];
+  if (!ws.persistent) parts.push("这个浏览器不能保存文件，关掉页面就没了 / This browser can't keep files; they are gone when the page closes");
+  try {
+    const computer = loadFlow(dir).flow.stages.filter((stage) => ["script", "agent", "mcp", "plugin"].includes(stage.executor.type));
+    if (computer.length) {
+      const names = computer.map((stage) => stage.name).join("、");
+      const ids = computer.map((stage) => stage.name).join(", ");
+      parts.push(`要在电脑上运行：${names} / Needs a computer: ${ids}`);
+    }
+  } catch {
+    // the board shows flow errors itself
+  }
+  if (demoOn()) parts.push("正在用示例回复，不调用模型 / Using demo replies, no model calls");
+  else if (!keys?.key) parts.push("还没有填模型 key / No model key yet");
+  note.hidden = parts.length === 0;
+  note.classList.toggle("warn", !ws.persistent);
+  i18n.raw(note, parts.join(" · "));
+}
+
+function setUpKeys(ws: Workspace): void {
+  const dialog = document.getElementById("keys-dialog") as HTMLDialogElement | null;
+  const open = document.getElementById("app-keys");
+  const vendor = document.getElementById("keys-vendor") as HTMLSelectElement | null;
+  const key = document.getElementById("keys-key") as HTMLInputElement | null;
+  const remember = document.getElementById("keys-remember") as HTMLInputElement | null;
+  const demo = document.getElementById("keys-demo") as HTMLInputElement | null;
+  const demoRow = document.getElementById("keys-demo-row");
+  const getKey = document.getElementById("keys-get") as HTMLAnchorElement | null;
+  if (!dialog || !open || !vendor || !key || !remember || !demo || !demoRow || !getKey) return;
+  for (const item of VENDORS) {
+    const option = document.createElement("option");
+    option.value = item.id;
+    option.textContent = item.label;
+    vendor.append(option);
+  }
+  const syncLink = () => {
+    getKey.href = VENDORS.find((item) => item.id === vendor.value)?.keyUrl ?? "#";
+  };
+  vendor.addEventListener("change", syncLink);
+  open.addEventListener("click", () => {
+    vendor.value = keys?.vendor ?? VENDORS[0]!.id;
+    key.value = keys?.key ?? "";
+    remember.checked = keys?.remember ?? false;
+    demoRow.hidden = !ws.host.exists(`${dir}/demo-replies`);
+    demo.checked = demoOn();
+    syncLink();
+    dialog.showModal();
+  });
+  document.getElementById("keys-cancel")?.addEventListener("click", () => dialog.close());
+  document.getElementById("keys-forget")?.addEventListener("click", () => {
+    keys = undefined;
+    storeKeys(undefined);
+    key.value = "";
+    remember.checked = false;
+    applyEnv(ws);
+    paintNote(ws);
+  });
+  document.getElementById("keys-form")?.addEventListener("submit", () => {
+    const value = key.value.trim();
+    keys = value ? { vendor: vendor.value, key: value, remember: remember.checked } : undefined;
+    storeKeys(keys);
+    setDemo(demo.checked);
+    applyEnv(ws);
+    paintNote(ws);
+    board.changed();
+  });
+}
+
+void ready.then((ws) => {
+  const start = () => {
+    paintNote(ws);
+    setUpKeys(ws);
+    i18n.onChange(() => paintNote(ws));
+  };
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start, { once: true });
+  else start();
+});

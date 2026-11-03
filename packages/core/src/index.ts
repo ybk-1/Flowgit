@@ -26,6 +26,7 @@ export * from "./actions.js";
 export * from "./plugins.js";
 export * from "./trust.js";
 export * from "./host/index.js";
+export { setSchemaCompiler, type SchemaCompiler, type SchemaError } from "./schema-check.js";
 export { nodeHost } from "./host/node.js";
 // proxyHint and ignoredProxyVar already come through ./executors/index.js.
 export {

@@ -85,7 +85,8 @@ export function providerKey(p: ResolvedProvider, env: NodeJS.ProcessEnv = host()
 
 /** True for the default provider when it should keep reading ANTHROPIC_API_KEY / ANTHROPIC_AUTH_TOKEN through the SDK, as before. */
 function usesSdkCredentials(p: ResolvedProvider): boolean {
-  return p.id === DEFAULT_PROVIDER && p.apiKeyEnv === "ANTHROPIC_API_KEY";
+  // The SDK reads process.env itself, so only on the Node host; elsewhere the key comes from host().env.
+  return p.id === DEFAULT_PROVIDER && p.apiKeyEnv === "ANTHROPIC_API_KEY" && host().name === "node";
 }
 
 // Kept here too, where they used to live.

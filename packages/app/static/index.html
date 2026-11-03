@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!--CSP-->
+  <title>Flowgit · 网页版 / Web app</title>
+  <link rel="stylesheet" href="/style.css" />
+  <link rel="stylesheet" href="/app.css" />
+</head>
+<body class="web-app home">
+  <header class="top">
+    <div class="brand-block">
+      <p class="brand">Flowgit</p>
+      <h1 data-i18n-raw="网页版 / Web app">网页版</h1>
+      <p class="tagline" data-i18n-raw="打开一个流程就是一块看板。文件和 key 都留在你的设备上。 / Open a flow and it is a board. Files and keys stay on your device.">打开一个流程就是一块看板。文件和 key 都留在你的设备上。</p>
+    </div>
+    <div class="top-side">
+      <div class="lang-switch" role="group" aria-label="语言 / Language">
+        <button type="button" data-lang="zh" lang="zh-CN" aria-pressed="true">中文</button>
+        <button type="button" data-lang="en" lang="en" aria-pressed="false">EN</button>
+      </div>
+    </div>
+  </header>
+  <p id="home-note" class="notice" hidden></p>
+  <main class="home-main">
+    <section aria-labelledby="mine-heading">
+      <h2 id="mine-heading" data-i18n-raw="我的流程 / My flows">我的流程</h2>
+      <p id="mine-empty" class="hint" data-i18n-raw="还没有流程。从下面选一个模板开始。 / No flows yet. Start from a template below.">还没有流程。从下面选一个模板开始。</p>
+      <ul id="mine" class="flow-list"></ul>
+    </section>
+    <section aria-labelledby="templates-heading">
+      <h2 id="templates-heading" data-i18n-raw="模板 / Templates">模板</h2>
+      <ul id="templates" class="flow-list templates"></ul>
+    </section>
+  </main>
+  <script src="/vendor/i18next.js"></script>
+  <script type="module" src="/i18n.js"></script>
+  <script type="module" src="/home.js"></script>
+</body>
+</html>

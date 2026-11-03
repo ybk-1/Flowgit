@@ -1,7 +1,7 @@
 import { host, path } from "./host/current.js";
-import { Ajv2020 } from "ajv/dist/2020.js";
 import type { ErrorObject } from "ajv";
 import { flowSchemaJson } from "./flow-schema.generated.js";
+import { validate as validateFlowSchema } from "./flow-validate.generated.js";
 import { findCycle } from "./graph.js";
 import { outputSchemaIssues } from "./schema-check.js";
 import {
@@ -27,8 +27,8 @@ export const FLOW_FILES = [FLOW_FILE, FLOW_MD_FILE] as const;
 // The schema is compiled in (src/flow-schema.generated.ts) so loading needs no file and works in a browser.
 export const flowSchema = flowSchemaJson;
 
-const ajv = new Ajv2020({ allErrors: true, strict: false, discriminator: true });
-const validateSchema = ajv.compile(flowSchema);
+// Precompiled by scripts/gen-schema.mjs: no new Function at run time, so it also runs under a strict CSP.
+const validateSchema = validateFlowSchema as ((data: unknown) => boolean) & { errors?: ErrorObject[] | null };
 
 export class FlowValidationError extends Error {
   constructor(

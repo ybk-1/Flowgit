@@ -1,0 +1,22 @@
+<nav class="app-bar" aria-label="网页版 / Web app">
+  <a class="app-home" href="/index.html" data-i18n-raw="← 我的流程 / ← My flows">← 我的流程</a>
+  <p id="app-note" class="app-note" hidden></p>
+  <button id="app-keys" class="app-keys" type="button" data-i18n-raw="模型 key / Model key">模型 key</button>
+</nav>
+<dialog id="keys-dialog" class="keys-dialog">
+  <form id="keys-form" method="dialog">
+    <h2 data-i18n-raw="模型和 key / Model and key">模型和 key</h2>
+    <p class="hint" data-i18n-raw="key 默认只在这个页面的内存里，关掉页面就没了；不会写进流程文件或导出的文件。 / By default the key stays in this page's memory and is gone when you close it; it is never written to flow files or exports.">key 默认只在这个页面的内存里，关掉页面就没了；不会写进流程文件或导出的文件。</p>
+    <label class="field"><span data-i18n-raw="模型厂商 / Vendor">模型厂商</span><select id="keys-vendor"></select></label>
+    <label class="field"><span data-i18n-raw="API key / API key">API key</span><input id="keys-key" type="password" autocomplete="off" spellcheck="false" /></label>
+    <p class="hint"><a id="keys-get" href="#" target="_blank" rel="noopener noreferrer" data-i18n-raw="去厂商网站拿 key / Get a key from the vendor">去厂商网站拿 key</a></p>
+    <label class="check"><input id="keys-remember" type="checkbox" /> <span data-i18n-raw="在这台设备记住（存进这个浏览器）/ Remember on this device (stored in this browser)">在这台设备记住（存进这个浏览器）</span></label>
+    <label class="check" id="keys-demo-row" hidden><input id="keys-demo" type="checkbox" /> <span data-i18n-raw="用模板自带的示例回复，不调用模型 / Use the template's demo replies instead of a model">用模板自带的示例回复，不调用模型</span></label>
+    <p class="hint" data-i18n-raw="其他厂商（OpenAI、智谱、Kimi、通义）不允许网页直接调用，请在电脑上用 flowgit 命令运行。 / Other vendors (OpenAI, GLM, Kimi, Qwen) don't accept calls from a web page; run those with the flowgit command on a computer.">其他厂商（OpenAI、智谱、Kimi、通义）不允许网页直接调用，请在电脑上用 flowgit 命令运行。</p>
+    <div class="dialog-actions">
+      <button id="keys-forget" type="button" data-i18n-raw="清除 key / Clear key">清除 key</button>
+      <button id="keys-cancel" type="button" data-i18n-raw="取消 / Cancel">取消</button>
+      <button id="keys-save" type="submit" data-i18n-raw="保存 / Save">保存</button>
+    </div>
+  </form>
+</dialog>

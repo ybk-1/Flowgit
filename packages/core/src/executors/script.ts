@@ -28,7 +28,8 @@ export const scriptExecutor: StageExecutor = {
       FLOWGIT_OUTPUTS: JSON.stringify(stage.outputs.map((o) => ({ path: outputRel(o), type: o.type }))),
       FLOWGIT_FLOW_INPUTS: JSON.stringify(ctx.flowInputs),
     };
-    const missing = (ex.requires ?? []).filter((program) => !findOnPath(program, env));
+    // A host without commands (a browser) can't look programs up; exec says what to run instead.
+    const missing = host().platform === "browser" ? [] : (ex.requires ?? []).filter((program) => !findOnPath(program, env));
     if (missing.length) {
       throw new Error(
         `找不到 ${missing.join(", ")}：这个阶段需要它，请先安装再重跑 / ${missing.join(", ")} not found on PATH: this stage needs it; install it and run the stage again`,

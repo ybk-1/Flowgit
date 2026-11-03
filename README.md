@@ -389,6 +389,23 @@ The full spec is in [docs/spec.md](docs/spec.md); the JSON Schema is [packages/c
 
 To build your own flow from scratch, follow [docs/guide.md](docs/guide.md) (about 15 minutes, no API key needed); the finished flow is the bundled `weekly-report` template: `flowgit init ~/my-report -t weekly-report`.
 
+## 网页版 / Web app
+
+`packages/app` 是不用安装、在浏览器里用 Flowgit 的静态网站，以后放在 flowgit.dev/app。现在可以这样在本机试：
+
+`packages/app` is a static site for using Flowgit in a browser with nothing to install; it will live at flowgit.dev/app. For now, try it locally:
+
+```bash
+pnpm build
+pnpm --filter @flowgit/app serve   # 打开 / open http://127.0.0.1:4178/
+```
+
+- 首页选一个自带模板，复制成自己的流程；看板和 `flowgit board` 是同一套界面。/ Pick a bundled template on the home page to copy it as your own flow; the board is the same interface as `flowgit board`.
+- 流程和 `runs/` 里的每个版本存在浏览器的私有存储（OPFS）里。/ Flows and every version under `runs/` are kept in the browser's private storage (OPFS).
+- llm 阶段用 DeepSeek 或 Anthropic 的 key 直接从浏览器调用。key 默认只在内存里，勾选“在这台设备上记住”才存进浏览器，永远不写进流程文件；有示例回复的模板可以不填 key 先试。其他服务商在网页里还不能直接调用，请在电脑上运行。/ llm stages call DeepSeek or Anthropic straight from the browser. A key stays in memory unless you tick "remember on this device", which stores it in the browser, never in flow files; templates with demo replies run without a key. Other providers can't be called from the page yet; run those on a computer.
+- script、agent、MCP 和插件阶段在网页里不运行，会显示“要在电脑上运行”和要用的命令。/ Script, agent, MCP and plugin stages don't run in the page; they say "run this on a computer" and show the command.
+- 页面用严格的 Content-Security-Policy：不加载第三方脚本，不收集数据，只连接 DeepSeek 和 Anthropic 的接口。/ The page has a strict Content-Security-Policy: no third-party scripts, no data collection, and connections only to the DeepSeek and Anthropic APIs.
+
 ## 仓库结构 / Repository layout
 
 ```text
@@ -396,6 +413,7 @@ packages/
   core/   @flowgit/core  格式、校验、版本记录、执行器 / format, validation, runs, executors
   cli/    flowgit        命令行工具和模板 / CLI and templates
     templates/             自带模板：short-video（短视频）、weekly-report（周报入门）、article（图文）、support-sop（客服 SOP）、job-application（求职材料）、research-report（调研报告）、ecommerce-listing（电商上架）、slides（演示稿）、live-selling（直播带货）、short-drama（短剧）、lesson-plan（备课）、novel-serial（网文连载）、business-plan（商业计划书）、event-plan（活动策划）、hiring（招聘）、travel-guide（旅行攻略）、online-course（知识付费课程）、landing-page（落地页）、social-posts（社媒帖子）、data-report（数据报告）、meeting-notes（会议纪要）、podcast（播客单集）、picture-book（绘本 / 漫画）、product-launch（新品发布物料包）、micro-course（知识付费微课视频）/ bundled templates: short-video, weekly-report (starter), article, support-sop, job-application, research-report, ecommerce-listing, slides, live-selling, short-drama, lesson-plan, novel-serial, business-plan, event-plan, hiring, travel-guide, online-course, landing-page, social-posts, data-report, meeting-notes, podcast, picture-book, product-launch, micro-course
+  app/    @flowgit/app   网页版：在浏览器里用的静态网站（不发布到 npm）/ web app: a static site for the browser (not published to npm)
   web/    @flowgit/web   本机网页看板：查看、修改、运行、新增和删除阶段、填写输入、看历史、对比和回退、流程图、预演和 token 用量 / local web board: view, edit, run, add and remove stages, fill in inputs, browse history, compare, restore, a flow graph, preview, and token usage
 docs/
   spec.md                  格式规范 / format spec
@@ -412,6 +430,7 @@ pnpm install
 pnpm build        # 编译所有包 / compile every package
 pnpm typecheck
 pnpm test         # 单元测试 + 命令行端到端测试 / unit tests + CLI end-to-end tests
+pnpm test:e2e:app # Playwright 打开网页版（需要先 build）/ Playwright on the web app (after build)
 ```
 
 端到端测试运行编译后的 `dist/`，所以要先 `pnpm build`；渲染视频的测试需要 FFmpeg，没装会自动跳过。

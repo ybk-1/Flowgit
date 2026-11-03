@@ -34,6 +34,8 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 
 - 看板上可以剪辑短视频时间线：拖动镜头、改时长和字幕、换素材、预览，保存后成为手动修改，导出阶段需要重跑。字幕样式和 FFmpeg 导出共用 `scripts/caption-style.json`。分镜在看板上按镜头卡片显示。
 - The board can edit a short-video timeline: drag shots, change length and captions, swap assets and preview. Saving stores a hand edit, and the export stage needs a re-run. Captions share `scripts/caption-style.json` with the FFmpeg export. A storyboard opens as shot cards.
+- 人工阶段的文本产物还不存在时，点开它就是一个空的编辑框，可以直接在看板里写好保存，不用先在电脑上建文件。
+- When a human stage's text output doesn't exist yet, opening it shows an empty editor, so it can be written and saved on the board without creating the file first.
 - 看板界面一次只显示一种语言：右上角「中文 / EN」切换，选择记在浏览器里；第一次打开跟着浏览器语言（中文浏览器显示简体中文，其他显示英文）。文案在 `public/i18n.js`，用开源翻译库 [i18next](https://www.i18next.com)；服务器和流程文件里的双语提示（“中文 / English”）也只显示当前语言那一半。
 - The board shows one language at a time: switch with "中文 / EN" at the top right, remembered in the browser; the first visit follows the browser language (Simplified Chinese for a Chinese browser, English otherwise). Strings live in `public/i18n.js` on the open-source [i18next](https://www.i18next.com) library, and bilingual messages from the server and from flow files ("中文 / English") show only the current language's half.
 - 看板更有立体感：卡片有分层阴影，高度表示状态（可以运行的浮得最高，等上游的凹下去），编号是立体字，按钮像键帽一样能按下去；用鼠标时，卡片会朝鼠标倾斜，里面的内容分层浮起。流程图默认是 2.5D：阶段是倾斜地面上的方块，可以运行的方块轻轻浮动，通向正在运行阶段的连线会流动；流程图右上角可以切回平面图，选择记在浏览器里。系统打开“减少动态效果”时，倾斜和浮动都会关掉。
@@ -47,8 +49,15 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 - 看板收到无法解析的请求路径（例如 `//`）时返回 400，不再是 500。
 - A request path the board cannot parse (for example `//`) returns 400 instead of 500.
 
+### 网页版 / Web app
+
+- 新增 `packages/app`（`@flowgit/app`）：不用装任何东西、在浏览器里用 Flowgit 的静态网页。首页列出自带模板，选一个就复制成自己的流程；看板和本机看板是同一套界面，只是接口在页面里由 `@flowgit/core` 的浏览器入口回答。流程和每个版本的 `runs/` 存在浏览器的私有存储（OPFS）里，刷新也不会丢；手动改过的产物照样先存成 `manual` 版本。llm 阶段可以用 DeepSeek 或 Anthropic 的 key 直接从浏览器调用；key 默认只在内存里，勾选“在这台设备上记住”才存进浏览器，永远不写进流程文件。有示例回复的模板可以不填 key 先试跑。script、agent、MCP 和插件阶段在网页里不运行，而是说“要在电脑上运行”并给出命令。页面有严格的 Content-Security-Policy：不加载第三方脚本，不收集数据，只连接 DeepSeek 和 Anthropic 的接口。这是第一部分；本机文件夹、GitHub 仓库、zip 导入导出和部署到 flowgit.dev 在后面的 PR 里。
+- New `packages/app` (`@flowgit/app`): a static site for using Flowgit in a browser with nothing to install. The home page lists the bundled templates, and picking one copies it as your own flow; the board is the same interface as the local board, with its API answered inside the page by `@flowgit/core`'s browser entry. Flows and every version under `runs/` are kept in the browser's private storage (OPFS) and survive a reload, and a hand-edited output is still saved as a `manual` version first. llm stages call DeepSeek or Anthropic straight from the browser with your key; a key stays in memory unless you tick "remember on this device", which stores it in the browser, never in flow files. Templates with demo replies can be tried without a key. Script, agent, MCP and plugin stages don't run in the page; they say "run this on a computer" and show the command. The page has a strict Content-Security-Policy: no third-party scripts, no data collection, and connections only to the DeepSeek and Anthropic APIs. This is the first part; local folders, GitHub repos, zip import and export, and deploying to flowgit.dev come in later PRs.
+
 ### 核心库 / Core library
 
+- flow.json 的 schema 校验在构建时预编译（`src/flow-validate.generated.ts`），运行时不再用 `new Function`，所以在禁止 eval 的页面里也能校验；产物的 JSON Schema 校验器可以用 `setSchemaCompiler()` 换掉（网页版换成不生成代码的校验器）。
+- flow.json schema validation is precompiled at build time (`src/flow-validate.generated.ts`) and no longer uses `new Function` at run time, so it also works on pages that forbid eval; the JSON Schema checker for outputs can be swapped with `setSchemaCompiler()` (the web app plugs in one that generates no code).
 - `@flowgit/core` 的文件读写、哈希、运行命令、网络请求和环境变量都改成经过 `Host` 接口：电脑上是 `nodeHost`，行为和以前一样；`createMemoryHost()` 把文件放在内存里，给测试用，也是以后网页版的底子。新增浏览器入口（`package.json` 的 `browser` 条件，或 `@flowgit/core/browser`），不导入任何 `node:` 模块；在浏览器里 script、agent、MCP 和插件阶段会给出“要在电脑上运行”的双语错误。命令行和本机看板用起来没有变化。
 - File access, hashing, commands, network requests and environment variables in `@flowgit/core` now go through a `Host` interface: `nodeHost` on a computer, behaving as before, and `createMemoryHost()`, which keeps files in memory, for tests and as the base of the coming web app. A new browser entry (the `browser` condition in `package.json`, or `@flowgit/core/browser`) imports no `node:` module; there, script, agent, MCP and plugin stages fail with a bilingual "needs to run on a computer" error. The CLI and the local board work the same as before.
 

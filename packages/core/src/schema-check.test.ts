@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { listRuns, loadFlow, runStage, stageStatus, validateFlow, type Flow, type LlmComplete, type LlmRequest, type RunEvent } from "./index.js";
+import { listRuns, loadFlow, runStage, setSchemaCompiler, stageStatus, validateFlow, type Flow, type LlmComplete, type LlmRequest, type RunEvent } from "./index.js";
 
 const dirs: string[] = [];
 
@@ -15,6 +15,7 @@ function write(dir: string, rel: string, content: string): void {
 afterEach(() => {
   for (const dir of dirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
   delete process.env.FLOWGIT_LLM_MOCK_DIR;
+  setSchemaCompiler();
 });
 
 const schema = JSON.stringify({
@@ -46,6 +47,21 @@ function project(dir: string, body: string): Flow {
 }
 
 describe("JSON output schemas", () => {
+  it("uses a plugged-in compiler instead of ajv (for pages whose CSP forbids new Function)", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-schema-plug-"));
+    dirs.push(dir);
+    project(dir, `import fs from "node:fs";\nfs.writeFileSync("out.json", JSON.stringify({ n: 1 }) + "\\n");\n`);
+    const seen: unknown[] = [];
+    setSchemaCompiler((compiled) => (data) => {
+      seen.push(compiled, data);
+      return [{ path: "/n", message: "plugged in" }];
+    });
+    await expect(runStage(loadFlow(dir), "make", { inputs: { topic: "x" } })).rejects.toThrow(/\/n: plugged in/);
+    expect(seen).toContainEqual({ n: 1 });
+    setSchemaCompiler();
+    expect((await runStage(loadFlow(dir), "make", { inputs: { topic: "x" } })).status).toBe("ok");
+  });
+
   it("accepts a valid output and fails an invalid one with the JSON path", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-schema-ok-"));
     dirs.push(dir);

@@ -36,5 +36,6 @@ export * from "./actions.js";
 export * from "./plugins.js";
 export * from "./trust.js";
 export * from "./proxy-env.js";
+export { setSchemaCompiler, type SchemaCompiler, type SchemaError } from "./schema-check.js";
 export * from "./host/index.js";
 export { hashPath, listFiles, isTextType, wantsJson, isDirOutput, outputRel, isSafeRelative, findOnPath, staysInside, readFlowText } from "./util.js";

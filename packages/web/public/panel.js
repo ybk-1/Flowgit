@@ -564,6 +564,11 @@ export async function openOutput(output, stage, options) {
             renderFileList(rel, [], stage, options);
             return;
         }
+        // A person's text output that doesn't exist yet: start it here (in the web app this is the only way).
+        if (res.status === 404 && output.text && stage && stage.executor === "human" && !readOnly) {
+            renderEditor(rel, "", options);
+            return;
+        }
         const message = res.status === 404 ? errorEl("panel-error", "", "file.notFound") : errorEl("panel-error", "", "file.openError", res.status);
         showPanel([message], options);
         return;
