@@ -137,6 +137,7 @@ test("时间线：拖动、裁时长、改字幕、保存、撤销 / timeline: d
     });
     await page.goto(session.url);
     await page.locator('[data-input="topic"]').fill("为什么猫喜欢纸箱");
+    await page.locator('[data-input="platform"]').selectOption("youtube-shorts");
     await saveInputs(page);
 
     await page.locator("#run-all").click();
@@ -162,16 +163,27 @@ test("时间线：拖动、裁时长、改字幕、保存、撤销 / timeline: d
     await expect(page.locator('.tl-row[data-track="voice"]')).toBeVisible();
     await expect(page.locator('.tl-row[data-track="music"]')).toBeVisible();
     await expect(page.locator(".tl-reexport")).toBeVisible();
+    await expect(page.locator(".tl-safe")).toBeVisible();
+    await expect(page.locator(".tl-style")).toBeVisible();
+    await expect(page.locator(".tl-volume")).toBeVisible();
+    await expect(page.locator(".tl-gap").first()).toHaveAttribute("data-type", "fade");
+    await page.locator(".tl-gap").first().click();
+    await expect(page.locator(".tl-gap").first()).toHaveAttribute("data-type", "slide");
+    await page.getByRole("button", { name: "撤销" }).click();
+    await expect(page.locator(".tl-gap").first()).toHaveAttribute("data-type", "fade");
     await expect(page.locator(".tl-still")).toBeVisible();
     await expect.poll(() => page.locator(".tl-still").evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true);
 
     await page.waitForTimeout(700);
     await shoot(page, "light", "timeline-light.png");
+    await shoot(page, "light", "export-presets-light.png");
     await shoot(page, "dark", "timeline-dark.png");
+    await shoot(page, "dark", "export-presets-dark.png");
     await page.emulateMedia({ colorScheme: "light" });
     await page.setViewportSize({ width: 390, height: 844 });
     await page.waitForTimeout(300);
     await shoot(page, "light", "timeline-phone.png");
+    await shoot(page, "light", "export-presets-phone.png");
     await page.setViewportSize({ width: 1440, height: 900 });
 
     const file = path.join(session.dir, "timeline.json");

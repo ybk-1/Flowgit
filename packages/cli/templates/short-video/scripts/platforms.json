@@ -1,0 +1,85 @@
+{
+  "platforms": {
+    "douyin": {
+      "name": { "zh": "抖音", "en": "Douyin" },
+      "width": 720,
+      "height": 1280,
+      "maxDuration": 900,
+      "sources": [
+        "https://open.douyin.com/platform/resource/docs/ability/content-management/douyin-publish-solution",
+        "https://open.douyin.com/platform/resource/docs/openapi/video-management/douyin/create/upload/"
+      ],
+      "notes": "时长 15 分钟以内。开放平台写“推荐 720p（1280x720）及以上的竖版视频”，同时又写了 16:9；上传接口的响应样例是竖版 720×1280，导出用这个样例。没有公布帧率、建议码率或安全区。 / Up to 15 minutes. The docs say a vertical video at 720p (1280x720) or above, and also say 16:9; the upload sample response is a vertical 720×1280, which is the size used here. No published frame rate, suggested bitrate, or safe area.",
+      "omitted": ["fps", "videoBitrateKbps", "safeArea"]
+    },
+    "channels": {
+      "name": { "zh": "视频号", "en": "WeChat Channels" },
+      "maxDuration": 7200,
+      "minDuration": 3,
+      "phoneMaxDuration": 1800,
+      "aspectMin": 0.33,
+      "aspectMax": 3,
+      "sources": [
+        "https://developers.weixin.qq.com/community/minihome/doc/000e62d83dcb4069b7bfc5d4057000"
+      ],
+      "notes": "微信开放社区里视频号运营的回复：宽高比 0.33～3.0，建议 16:9 或 9:16；手机 3 秒～30 分钟，电脑端视频号助手 3 秒～2 小时；建议 1080p 及以上，没有给出像素。没有公布帧率、建议码率或安全区。导出不改时间线的像素，时长上限用电脑端的 2 小时。 / A WeChat Channels operator on the WeChat Open Community: aspect 0.33–3.0, 16:9 or 9:16 suggested; phone 3s–30min, Channels assistant on a computer 3s–2h; 1080p or above, with no pixel size. No published frame rate, suggested bitrate, or safe area. Export keeps the timeline's pixels and caps length at the 2-hour computer limit.",
+      "omitted": ["width", "height", "fps", "videoBitrateKbps", "safeArea"]
+    },
+    "xiaohongshu": {
+      "name": { "zh": "小红书", "en": "Xiaohongshu" },
+      "maxDuration": 14400,
+      "maxBytes": 21474836480,
+      "maxBytesLong": 68719476736,
+      "sources": [
+        "https://creator.xiaohongshu.com/publish/publish"
+      ],
+      "notes": "创作服务平台发布页脚本（2026-11-03）：视频须在 4 小时以内（videoDurationLimit 为 144e5 毫秒，文案是“支持时长4小时以内”）；默认文件上限 0x500000000 字节（20 GiB），更长视频权限是 0x1000000000 字节（64 GiB）；“建议上传1080P及以上”，没有像素。照片的 720×960 不是视频规格。没有公布帧率、建议码率或安全区。 / Creator-platform publish script (2026-11-03): videos must be within 4 hours (videoDurationLimit is 144e5 ms; the label says up to 4 hours); the default file cap is 0x500000000 bytes (20 GiB), and the long-video cap is 0x1000000000 bytes (64 GiB); it suggests 1080P or above, with no pixel size. The 720×960 line is for photos, not video. No published frame rate, suggested bitrate, or safe area.",
+      "omitted": ["width", "height", "fps", "videoBitrateKbps", "safeArea"]
+    },
+    "bilibili": {
+      "name": { "zh": "哔哩哔哩", "en": "Bilibili" },
+      "maxDuration": 18000,
+      "maxDurationExclusive": true,
+      "maxVideoBitrateKbps": 60000,
+      "maxFps": 120,
+      "maxWidth": 4096,
+      "maxHeight": 2160,
+      "sources": [
+        "https://open.bilibili.com/doc/4/0c532c6a-e6fb-0aff-8021-905ae2409095"
+      ],
+      "notes": "开放平台《文件上传预处理》：时长小于 5 小时，峰值码率最大 60Mbps，分辨率最大 4096×2160，帧率最大 120fps。这些是上限，不是建议的竖屏尺寸或码率，所以导出不改像素和帧率，只保证短于 5 小时，并把视频码率封在 60Mbps。没有公布安全区。 / Open-platform upload init: shorter than 5 hours, peak bitrate at most 60 Mbps, resolution at most 4096×2160, frame rate at most 120 fps. Those are ceilings, not a suggested vertical size or bitrate, so export keeps the timeline's pixels and frame rate, stays under 5 hours, and caps video bitrate at 60 Mbps. No published safe area.",
+      "omitted": ["width", "height", "fps", "videoBitrateKbps", "safeArea"]
+    },
+    "youtube-shorts": {
+      "name": { "zh": "YouTube Shorts", "en": "YouTube Shorts" },
+      "width": 1080,
+      "height": 1920,
+      "fps": 30,
+      "maxDuration": 180,
+      "videoBitrateKbps": 8000,
+      "audioBitrateKbps": 384,
+      "safeArea": { "width": 1080, "height": 1920, "top": 288, "right": 192, "bottom": 672, "left": 48 },
+      "sources": [
+        "https://support.google.com/youtube/answer/15424877?hl=en",
+        "https://support.google.com/youtube/answer/10059070?hl=en",
+        "https://support.google.com/youtube/answer/1722171?hl=en",
+        "https://support.google.com/youtube/answer/6375112?hl=en",
+        "https://services.google.com/fh/files/helpcenter/ytadsafezones.pdf"
+      ],
+      "notes": "Shorts：方形或竖屏、最长 3 分钟，上传最高 1080p。编码建议里 1080p、标准帧率（24/25/30）的 SDR 视频码率是 8 Mbps，立体声音频 384 kbps；30 fps 是列出的常见帧率之一。9:16 在分辨率说明里被点名。1080×1920 和安全区（上 288、右 192、下 672、左 48）印在 YouTube 竖版视频广告安全区 PDF 上，不是 Shorts 自然播放界面的实测。 / Shorts: square or vertical, up to 3 minutes, uploads at most 1080p. The encoding page recommends 8 Mbps for 1080p SDR at a standard frame rate (24/25/30) and 384 kbps for stereo audio; 30 fps is one of the listed common rates. 9:16 is named in the resolution article. 1080×1920 and the safe area (top 288, right 192, bottom 672, left 48) are printed on YouTube's vertical video-ad safe-zone PDF, not measured from the organic Shorts player.",
+      "omitted": []
+    },
+    "tiktok": {
+      "name": { "zh": "TikTok", "en": "TikTok" },
+      "width": 720,
+      "height": 1280,
+      "maxDuration": 1800,
+      "sources": [
+        "https://support.tiktok.com/en/using-tiktok/creating-videos/creator-tools-on-tiktok",
+        "https://ads.tiktok.com/help/article/tiktok-auction-in-feed-ads"
+      ],
+      "notes": "创作者工具页写 TikTok Studio 上传须为 MP4 或 WebM、720×1280 或更高、最长 30 分钟、小于 10GB。竞价信息流广告页另写竖版建议 9:16、不小于 540×960、广告最长 10 分钟、码率不低于 516 kbps；安全区随文案行数变化，页面没有单一边距。导出用 Studio 的 720×1280 和 30 分钟。相机工具页仍写应用内上传最长 3 分钟，和 Studio 不一致，这里不采用。没有采用广告码率当建议码率，也没有安全区数字。 / The creator-tools page says TikTok Studio uploads must be MP4 or WebM, 720×1280 or higher, up to 30 minutes, and under 10 GB. The in-feed auction ads page separately says vertical 9:16 at 540×960 or more, ads up to 10 minutes, and bitrate at least 516 kbps; the safe zone changes with the caption length and the page gives no single margin. Export uses Studio's 720×1280 and 30 minutes. The camera-tools page still says in-app uploads last up to 3 minutes, which disagrees with Studio, and that figure is not used. The ad bitrate is not used as a suggested rate, and there is no safe-area number.",
+      "omitted": ["fps", "videoBitrateKbps", "safeArea"]
+    }
+  }
+}

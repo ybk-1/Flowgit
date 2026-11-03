@@ -22,6 +22,7 @@ Script → voiceover → storyboard → assets → edit → export.
 | `style` | 轻松科普 | 风格和语气 | Tone and style |
 | `audience` | 短视频平台的普通观众 | 目标观众 | Who it is for |
 | `language` | `zh` | 脚本、字幕和模板提示用的语言：`zh` 或 `en` | Language of the script, captions and template messages: `zh` or `en` |
+| `platform` | `douyin` | 导出预设。见下面的平台表 | Export preset. See the platform table below |
 
 ## 运行 / Run
 
@@ -64,13 +65,13 @@ Put images or videos in `assets/`, named after the shot ids in the storyboard, e
 - **视频**同样用模糊背景铺满画面。
 - **没有素材的镜头**是缓慢流动的双色渐变文字卡（FFmpeg 6.0 以上；更旧的版本用纯色）。
 - **标题**在第一个镜头上显示约 2.5 秒后淡出；**字幕**放在半透明底框上。
-- **转场**：镜头之间交叉淡化，开头淡入、结尾淡出，总时长不变。
+- **转场**：镜头之间默认交叉淡化，也可以改成硬切、滑动或缩放。开头淡入、结尾淡出，总时长不变。
 
 - **Images** slowly zoom in or out (in on odd shots, out on even ones). A landscape picture in a vertical video sits on a blurred, darkened copy of itself instead of black bars.
 - **Videos** get the same blurred fill.
 - **Shots without an asset** become text cards on a slowly moving two-colour gradient (FFmpeg 6.0+; a flat colour on older builds).
 - **The title** shows over the first shot for about 2.5 seconds, then fades; **captions** sit on a translucent box.
-- **Transitions**: clips cross-fade, with a fade in at the start and out at the end; the total length stays the same.
+- **Transitions**: clips cross-fade by default, or use a cut, slide or zoom. The picture fades in at the start and out at the end; the total length stays the same.
 
 在 `timeline.json` 里可以调整 / You can tweak these in `timeline.json`:
 
@@ -81,9 +82,13 @@ Put images or videos in `assets/`, named after the shot ids in the storyboard, e
 }
 ```
 
-`transition.type` 写 `"none"` 关掉转场；镜头的 `motion` 可以是 `"zoom-in"`、`"zoom-out"` 或 `"none"`（只对图片有效）。
+`transition.type` 可以是 `"fade"`、`"slide"`、`"zoom"`、`"cut"`（`"none"` 和硬切一样）。写在时间线上是所有缝隙的默认值；写在某一个镜头上，只影响它和下一个镜头之间的那一条缝。镜头的 `motion` 可以是 `"zoom-in"`、`"zoom-out"` 或 `"none"`（只对图片有效）。
 
-Set `transition.type` to `"none"` to turn transitions off; a clip's `motion` can be `"zoom-in"`, `"zoom-out"` or `"none"` (images only).
+`transition.type` can be `"fade"`, `"slide"`, `"zoom"` or `"cut"` (`"none"` is a cut). On the timeline it is the default for every gap; on one clip it only affects the gap after that clip. A clip's `motion` can be `"zoom-in"`, `"zoom-out"` or `"none"` (images only).
+
+在看板上点两个镜头之间的缝隙，转场会在硬切、淡化、滑动、缩放之间换，预览里也能看到。字幕样式在同一条工具栏上选，预览和导出读的是同一份 `scripts/caption-style.json`（`classic`、`bold`、`outline`、`soft`、`lower`）。
+
+On the board, click the gap between two shots to cycle cut, fade, slide and zoom; the preview shows it too. The caption style is on the same toolbar. Preview and export read the same `scripts/caption-style.json` (`classic`, `bold`, `outline`, `soft`, `lower`).
 
 ## 配音 / Voiceover
 
@@ -174,15 +179,34 @@ When you record into `assets/`, `voice.path` is `assets/voice.mp3` instead.
 
 ## 背景音乐 / Music
 
-把音乐文件命名为 `music.mp3`（或 `music.m4a`、`music.wav`、`bgm.mp3` 等）放进 `assets/`，剪辑阶段会把它写进 `timeline.json`，导出时自动循环或截到视频长度，开头淡入、结尾淡出。音量在 `timeline.json` 里改：
+把音乐文件命名为 `music.mp3`（或 `music.m4a`、`music.wav`、`bgm.mp3` 等）放进 `assets/`，剪辑阶段会把它写进 `timeline.json`，导出时自动循环或截到视频长度，开头淡入、结尾淡出。有配音时，音乐在人声下面用 FFmpeg 的 `sidechaincompress` 压低（参数和范围见 [ffmpeg 文档](https://ffmpeg.org/ffmpeg-filters.html#sidechaincompress)），人声过去之后再回来。音量可以在看板上拖，也可以改 `timeline.json`：
 
-Put a music file named `music.mp3` (or `music.m4a`, `music.wav`, `bgm.mp3`, …) in `assets/`. The edit stage adds it to `timeline.json`, and the export loops or trims it to the video's length with a fade in and out. Change the volume in `timeline.json`:
+Put a music file named `music.mp3` (or `music.m4a`, `music.wav`, `bgm.mp3`, …) in `assets/`. The edit stage adds it to `timeline.json`, and the export loops or trims it to the video's length with a fade in and out. When there is a voiceover, FFmpeg `sidechaincompress` ducks the music under the voice (the parameters and their ranges are in the [ffmpeg docs](https://ffmpeg.org/ffmpeg-filters.html#sidechaincompress)) and lets it return after the voice. Drag the volume on the board, or change it in `timeline.json`:
 
 ```json
 { "music": { "path": "assets/music.mp3", "volume": 0.6 } }
 ```
 
 请只用你有权使用的音乐。/ Only use music you have the rights to.
+
+## 平台预设 / Platform presets
+
+`platform` 决定导出用哪一套规格。数字只来自平台自己的文档或创作者后台；某一项没有官方出处就留空，导出时不猜。出处和取舍写在 `scripts/platforms.json`。时间线上会画出有出处的安全区；没有安全区数字的平台会写明。
+
+`platform` picks the export spec. A number is included only when that platform's own docs or creator center publish it; anything without a source is left empty and the export does not guess. Sources and the choices are in `scripts/platforms.json`. The timeline draws a safe-area guide when a source gives one, and says so when it does not.
+
+| 平台 / Platform | 尺寸 / Size | 帧率 / fps | 时长上限 / Max length | 码率 / Bitrate | 安全区 / Safe area | 来源 / Source |
+| --- | --- | --- | --- | --- | --- | --- |
+| 抖音 `douyin` | 720×1280 | （没有公布 / not published） | 15 分钟 / 15 min | （没有公布 / not published） | （没有公布 / not published） | [发布方案](https://open.douyin.com/platform/resource/docs/ability/content-management/douyin-publish-solution)、[上传样例 720×1280](https://open.douyin.com/platform/resource/docs/openapi/video-management/douyin/create/upload/) |
+| 视频号 `channels` | （建议 1080p 及以上，没有像素 / 1080p or above, no pixels） | （没有公布 / not published） | 电脑 2 小时，手机 30 分钟 / 2 h on a computer, 30 min on a phone | （没有公布 / not published） | （没有公布 / not published） | [微信开放社区](https://developers.weixin.qq.com/community/minihome/doc/000e62d83dcb4069b7bfc5d4057000) |
+| 小红书 `xiaohongshu` | （建议 1080P 及以上，没有像素 / 1080P or above, no pixels） | （没有公布 / not published） | 4 小时 / 4 h | （没有公布 / not published） | （没有公布 / not published） | [创作服务平台发布页](https://creator.xiaohongshu.com/publish/publish) |
+| 哔哩哔哩 `bilibili` | （上限 4096×2160，不是建议尺寸 / ceiling 4096×2160, not a suggested size） | （上限 120，不是建议值 / ceiling 120, not a suggested value） | 小于 5 小时 / under 5 h | （峰值上限 60 Mbps，不是建议值 / peak ceiling 60 Mbps, not a suggested value） | （没有公布 / not published） | [开放平台上传预处理](https://open.bilibili.com/doc/4/0c532c6a-e6fb-0aff-8021-905ae2409095) |
+| YouTube Shorts `youtube-shorts` | 1080×1920 | 30（列出的常见帧率之一 / one of the listed common rates） | 3 分钟 / 3 min | 视频 8 Mbps，立体声 384 kbps / video 8 Mbps, stereo 384 kbps | 上 288、右 192、下 672、左 48（竖版广告安全区，1080×1920） / top 288, right 192, bottom 672, left 48 (vertical ad safe zone, 1080×1920) | [3 分钟](https://support.google.com/youtube/answer/15424877?hl=en)、[1080p](https://support.google.com/youtube/answer/10059070?hl=en)、[码率](https://support.google.com/youtube/answer/1722171?hl=en)、[9:16](https://support.google.com/youtube/answer/6375112?hl=en)、[安全区 PDF](https://services.google.com/fh/files/helpcenter/ytadsafezones.pdf) |
+| TikTok `tiktok` | 720×1280 | （没有公布 / not published） | 30 分钟（Studio） / 30 min (Studio) | （没有把广告下限 516 kbps 当成建议值 / the 516 kbps ad minimum is not used as a suggestion） | （没有单一数字 / no single number） | [创作者工具](https://support.tiktok.com/en/using-tiktok/creating-videos/creator-tools-on-tiktok)、[信息流广告](https://ads.tiktok.com/help/article/tiktok-auction-in-feed-ads) |
+
+抖音文档同时写了“16:9、720p（1280×720）”和“竖版”，上传接口的响应样例是 720×1280，所以用样例这组像素。视频号和小红书只说了 1080p 及以上，没有像素，导出就保持时间线原来的尺寸。B 站写的是上限，不是建议的竖屏尺寸。YouTube 的安全区来自竖版视频广告 PDF，不是 Shorts 自然播放界面的实测。TikTok 的相机工具页仍写应用内上传最长 3 分钟，和 Studio 的 30 分钟不一致，这里用 Studio。
+
+Douyin's docs say both "16:9, 720p (1280×720)" and "vertical"; the upload sample response is 720×1280, so that is the size used. WeChat Channels and Xiaohongshu only say 1080p or above, with no pixels, so the export keeps the timeline's size. Bilibili publishes ceilings, not a suggested vertical size. YouTube's safe area is the vertical video-ad PDF, not a measurement of the organic Shorts player. TikTok's camera-tools page still says in-app uploads last up to 3 minutes, which disagrees with Studio's 30 minutes; Studio is what this preset uses.
 
 ## 在时间线上剪辑 / Edit on the timeline
 
@@ -192,13 +216,13 @@ After the edit stage writes `timeline.json`, open it on the board and change it 
 
 - 拖动镜头改变顺序，拖边缘改变时长。拖边缘时，靠近配音结尾会吸附到配音的长度；「吸附配音」按配音总长重分各镜头。
 - 双击字幕改文字。点一个镜头，从 `assets/` 里已上传的文件换素材。
-- 刻度可以缩放，播放头可以拖。预览用画面、字幕、配音和背景音乐播放。字幕的位置、字号和描边跟 FFmpeg 导出一致，规则在 `scripts/caption-style.json`（剪辑阶段会抄一份到时间线上，预览读这份；导出时 `render.mjs` 再读这个文件）。
+- 刻度可以缩放，播放头可以拖。预览用画面、字幕、配音和背景音乐播放，镜头之间的转场在预览里也能看到。字幕的位置、字号和描边跟 FFmpeg 导出一致，规则在 `scripts/caption-style.json`（剪辑阶段会抄一份到时间线上，预览读这份；导出时 `render.mjs` 再读这个文件）。选了平台之后，有官方安全区的会在预览上画出参考线。背景音乐的音量在音乐条上拖。
 - 键盘：Tab 选中镜头，左右键移动，`[` `]` 改变时长，空格播放。撤销和重做保留 50 步。系统开了「减少动态效果」时，预览不再做推拉镜头。
 - 保存后，这次修改成为手动修改，导出阶段显示为需要重跑。时间线顶部的「重新导出」会再跑导出。
 
 - Drag a shot to reorder it, or drag an edge to change its length. An edge near the end of the voiceover snaps to that length; "Snap to voice" shares the voiceover across the shots.
 - Double-click a caption to edit the text. Click a shot to swap its asset for a file already in `assets/`.
-- Zoom the ruler and drag the playhead. The preview plays picture, captions, voice and music. Caption position, size and outline match the FFmpeg export; the rules live in `scripts/caption-style.json` (the edit stage copies them onto the timeline for the preview, and `render.mjs` reads the file again on export).
+- Zoom the ruler and drag the playhead. The preview plays picture, captions, voice and music, including the transition between shots. Caption position, size and outline match the FFmpeg export; the rules live in `scripts/caption-style.json` (the edit stage copies them onto the timeline for the preview, and `render.mjs` reads the file again on export). When the platform publishes a safe area, the preview draws it. Drag the music volume on the music bar.
 - Keyboard: Tab selects a shot, the arrow keys move it, `[` and `]` change its length, and Space plays. Undo and redo keep 50 steps. With "reduce motion" on, the preview does not zoom the picture.
 - Saving stores the change as a hand edit, and the export stage shows that it needs a re-run. "Re-export" at the top of the timeline runs the export again.
 

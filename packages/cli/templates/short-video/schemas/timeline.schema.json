@@ -12,17 +12,23 @@
     "height": { "type": "integer", "minimum": 1 },
     "fps": { "type": "number", "exclusiveMinimum": 0 },
     "duration": { "type": "number", "minimum": 0 },
-    "transition": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "type": { "enum": ["fade", "none"] },
-        "duration": { "type": "number", "minimum": 0 }
-      }
-    },
+    "transition": { "$ref": "#/$defs/transition" },
     "voice": { "$ref": "#/$defs/audio" },
     "music": { "$ref": "#/$defs/audio" },
     "captionStyle": { "type": "object" },
+    "captionPreset": { "type": "string", "minLength": 1 },
+    "platform": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "width": { "type": "integer", "minimum": 1 },
+        "height": { "type": "integer", "minimum": 1 },
+        "fps": { "type": "number", "exclusiveMinimum": 0 },
+        "maxDuration": { "type": "number", "exclusiveMinimum": 0 },
+        "safeArea": { "type": "object" }
+      }
+    },
     "clips": {
       "type": "array",
       "minItems": 1,
@@ -45,12 +51,21 @@
           },
           "caption": { "type": "string" },
           "narration": { "type": "string" },
-          "motion": { "enum": ["zoom-in", "zoom-out", "none"] }
+          "motion": { "enum": ["zoom-in", "zoom-out", "none"] },
+          "transition": { "$ref": "#/$defs/transition" }
         }
       }
     }
   },
   "$defs": {
+    "transition": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": { "enum": ["cut", "fade", "slide", "zoom", "none"] },
+        "duration": { "type": "number", "minimum": 0 }
+      }
+    },
     "audio": {
       "type": "object",
       "additionalProperties": false,

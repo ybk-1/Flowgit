@@ -38,12 +38,12 @@ describe.skipIf(!hasFfmpeg)("short-video export script", () => {
 
   afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
 
-  function render(timeline: object) {
+  function render(timeline: object, inputs: Record<string, unknown> = {}) {
     fs.writeFileSync(path.join(dir, "timeline.json"), JSON.stringify({ width: 360, height: 640, fps: 15, ...timeline }));
     const r = spawnSync(process.execPath, [path.join(dir, "scripts", "render.mjs")], {
       cwd: dir,
       encoding: "utf8",
-      env: { ...process.env, FLOWGIT_PROJECT_DIR: dir, FLOWGIT_FLOW_INPUTS: JSON.stringify({ language: "en" }) },
+      env: { ...process.env, FLOWGIT_PROJECT_DIR: dir, FLOWGIT_FLOW_INPUTS: JSON.stringify({ language: "en", ...inputs }) },
     });
     return { code: r.status, out: `${r.stdout}${r.stderr}` };
   }
@@ -129,7 +129,101 @@ describe.skipIf(!hasFfmpeg)("short-video export script", () => {
     expect(r.out).toContain("music assets/nope.mp3 not found");
     expect(probe(path.join(dir, "final.mp4"), "stream=codec_type", "a")).toBe("");
   });
+
+  const platforms = JSON.parse(fs.readFileSync(path.join(template, "scripts", "platforms.json"), "utf8")).platforms as Record<string, {
+    width?: number;
+    height?: number;
+    fps?: number;
+    maxDuration?: number;
+    maxDurationExclusive?: boolean;
+  }>;
+
+  it.each(Object.entries(platforms))("exports %s at the preset size and inside its length limit", (id, spec) => {
+    const width = spec.width || 160;
+    const height = spec.height || 284;
+    const r = render(
+      {
+        width,
+        height,
+        fps: spec.fps || 12,
+        transition: { type: "cut" },
+        clips: [
+          { id: "s1", duration: 0.6, source: { kind: "card" }, caption: "a", narration: "one" },
+          { id: "s2", duration: 0.6, source: { kind: "card" }, caption: "b", narration: "two" },
+        ],
+      },
+      { platform: id },
+    );
+    expect(r.code, r.out).toBe(0);
+    expect(r.out).toContain(`platform: ${id}`);
+    const final = path.join(dir, "final.mp4");
+    const [w, h] = probe(final, "stream=width,height", "v").split(",").map(Number);
+    expect(w).toBe(width);
+    expect(h).toBe(height);
+    const dur = Number(probe(final, "format=duration"));
+    expect(spec.maxDuration).toBeGreaterThan(0);
+    if (spec.maxDurationExclusive) expect(dur).toBeLessThan(spec.maxDuration as number);
+    else expect(dur).toBeLessThanOrEqual((spec.maxDuration as number) + 0.05);
+  });
+
+  it("shortens an export that is over the platform length limit", () => {
+    const preset = JSON.parse(fs.readFileSync(path.join(dir, "scripts", "platforms.json"), "utf8")) as { platforms: { douyin: { maxDuration: number } } };
+    preset.platforms.douyin.maxDuration = 1.2;
+    fs.writeFileSync(path.join(dir, "scripts", "platforms.json"), JSON.stringify(preset));
+    const r = render({ transition: { type: "cut" }, width: 160, height: 284, fps: 12, clips: cards }, { platform: "douyin" });
+    expect(r.code, r.out).toBe(0);
+    expect(r.out).toContain("length limit of 1.2s");
+    const dur = Number(probe(path.join(dir, "final.mp4"), "format=duration"));
+    expect(dur).toBeLessThanOrEqual(1.35);
+    expect(dur).toBeGreaterThan(0.8);
+  });
+
+  it("ducks background music while the voice is present", () => {
+    tone("voice.wav", 2.5, 200);
+    tone("music.wav", 8, 1000);
+    const clips = [
+      { id: "s1", duration: 2, source: { kind: "card" }, caption: "a", narration: "one" },
+      { id: "s2", duration: 2, source: { kind: "card" }, caption: "b", narration: "two" },
+      { id: "s3", duration: 2, source: { kind: "card" }, caption: "c", narration: "three" },
+    ];
+    const withVoice = render({
+      width: 160,
+      height: 284,
+      fps: 12,
+      transition: { type: "cut" },
+      voice: { path: "assets/voice.wav", volume: 1 },
+      music: { path: "assets/music.wav", volume: 1 },
+      clips,
+    });
+    expect(withVoice.code, withVoice.out).toBe(0);
+    expect(withVoice.out).toContain("music ducks under the voice");
+    const mixed = path.join(dir, "final.mp4");
+    const during = bandMean(mixed, 0.9, 1, 1000);
+    const after = bandMean(mixed, 3.3, 1, 1000);
+    fs.renameSync(mixed, path.join(dir, "with-voice.mp4"));
+    const musicOnly = render({
+      width: 160,
+      height: 284,
+      fps: 12,
+      transition: { type: "cut" },
+      music: { path: "assets/music.wav", volume: 1 },
+      clips,
+    });
+    expect(musicOnly.code, musicOnly.out).toBe(0);
+    const alone = bandMean(path.join(dir, "final.mp4"), 0.9, 1, 1000);
+    // mean_volume is negative dB. The music band is quieter while the voice plays.
+    expect(during).toBeLessThan(after - 3);
+    expect(during).toBeLessThan(alone - 3);
+  });
 });
+
+function bandMean(file: string, start: number, seconds: number, hz: number): number {
+  const af = `atrim=start=${start}:end=${(start + seconds).toFixed(3)},asetpts=PTS-STARTPTS,bandpass=f=${hz}:width_type=h:w=80,volumedetect`;
+  const r = spawnSync("ffmpeg", ["-hide_banner", "-i", file, "-af", af, "-f", "null", "-"], { encoding: "utf8" });
+  const match = `${r.stderr}`.match(/mean_volume:\s*(-?[0-9.]+) dB/);
+  expect(match, r.stderr).toBeTruthy();
+  return Number(match?.[1]);
+}
 
 describe("short-video timeline voiceover choice", () => {
   let dir: string;
