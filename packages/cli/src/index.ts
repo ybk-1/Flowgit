@@ -84,7 +84,7 @@ import {
   type RunRecord,
   type RunOptions,
 } from "@flowgit/core";
-import { openBrowser, startBoard } from "@flowgit/web";
+import { openBrowser, parseOrigin, startBoard, WEB_APP_ORIGIN } from "@flowgit/web";
 import { runBatch } from "./batch.js";
 import { registerNew } from "./commands/new.js";
 import { registerServeMcp } from "./commands/serve-mcp.js";
@@ -1582,14 +1582,20 @@ program
   .description("在浏览器打开本地看板，可查看、修改、运行、填写输入、看历史、对比和回退 / open a local board in the browser to view, edit, run, fill in inputs, browse history, compare, and restore")
   .option("--port <port>", "端口，只绑定 127.0.0.1 / port, bound to 127.0.0.1 only", "4747")
   .option("--no-open", "不打开浏览器 / do not open a browser")
-  .action(async (opts: { port: string; open: boolean }) => {
+  .option(
+    "--allow-origin <origin>",
+    "另外允许这个网页（比如自己部署的网页版）带令牌调用看板，可以写多次；默认只允许 https://flowgit.dev / also let this web page (such as your own copy of the web app) call the board with the token; repeatable; by default only https://flowgit.dev",
+    (value: string, previous: string[] | undefined) => [...(previous ?? []), value],
+  )
+  .action(async (opts: { port: string; open: boolean; allowOrigin?: string[] }) => {
     try {
       const port = Number(opts.port);
       if (!Number.isInteger(port) || port < 0 || port > 65535) {
         throw new Error(`端口不合法 / invalid port: ${opts.port}`);
       }
       const dir = loadFlow(dirOf()).dir; // fail early, with the usual hint, when there is no flow file
-      const board = await startBoard({ dir, port, open: false });
+      const allowOrigins = [WEB_APP_ORIGIN, ...(opts.allowOrigin ?? []).map(parseOrigin)];
+      const board = await startBoard({ dir, port, open: false, allowOrigins });
       console.log(`${c.green("✓")} 看板 / board: ${board.url}`);
       console.log(c.dim("绑定 127.0.0.1。可以修改产物，也可以运行、填写输入、看历史、对比和回退。按 Ctrl+C 停止 / bound to 127.0.0.1. Outputs can be edited; you can also run stages, edit inputs, browse history, compare, and restore. Press Ctrl+C to stop"));
       if (opts.open) openBrowser(board.url);

@@ -2,6 +2,8 @@
   <a class="app-home" href="/index.html" data-i18n-raw="← 我的流程 / ← My flows">← 我的流程</a>
   <p id="app-note" class="app-note" hidden></p>
   <button id="app-access" class="app-access btn small primary" type="button" hidden data-i18n-raw="允许读写这个文件夹 / Allow access to this folder">允许读写这个文件夹</button>
+  <button id="app-save-folder" class="app-save-folder btn small" type="button" hidden data-i18n-raw="存到文件夹 / Save to a folder">存到文件夹</button>
+  <button id="app-local" class="app-local btn small" type="button" hidden data-i18n-raw="本机看板 / Local board">本机看板</button>
   <button id="app-export" class="app-export btn small" type="button" data-i18n-raw="导出 zip / Export zip">导出 zip</button>
   <button id="app-keys" class="app-keys btn small" type="button" data-i18n-raw="模型 key / Model key">模型 key</button>
 </nav>
@@ -19,6 +21,20 @@
       <button id="keys-forget" class="btn quiet" type="button" data-i18n-raw="清除 key / Clear key">清除 key</button>
       <button id="keys-cancel" class="btn" type="button" data-i18n-raw="取消 / Cancel">取消</button>
       <button id="keys-save" class="btn primary" type="submit" data-i18n-raw="保存 / Save">保存</button>
+    </div>
+  </form>
+</dialog>
+<dialog id="local-dialog" class="keys-dialog">
+  <form id="local-form">
+    <h2 data-i18n-raw="交给本机看板运行 / Hand off to the local board">交给本机看板运行</h2>
+    <p class="hint" data-i18n-raw="网页不能运行命令。在这个流程的文件夹里运行 flowgit board，把它打印的链接（结尾是 ?token=…）粘贴到这里；之后要在电脑上运行的步骤会交给它跑，结果会回到这个页面。链接只留在这个页面的内存里。 / A web page can't run commands. Run flowgit board in this flow's folder and paste the link it prints (ending in ?token=…) here; steps that need a computer then run there and their results come back to this page. The link stays in this page's memory only.">网页不能运行命令。在这个流程的文件夹里运行 flowgit board，把它打印的链接（结尾是 ?token=…）粘贴到这里；之后要在电脑上运行的步骤会交给它跑，结果会回到这个页面。链接只留在这个页面的内存里。</p>
+    <label class="field"><span data-i18n-raw="flowgit board 的链接 / Link from flowgit board">flowgit board 的链接</span><input id="local-link" type="text" inputmode="url" autocomplete="off" spellcheck="false" placeholder="http://127.0.0.1:4747/?token=…" /></label>
+    <p class="hint" data-i18n-raw="Chrome 会问是否允许这个网站访问本地网络，请选允许。 / Chrome asks whether this site may access your local network; choose Allow.">Chrome 会问是否允许这个网站访问本地网络，请选允许。</p>
+    <p id="local-status" class="local-status" role="status" hidden></p>
+    <div class="dialog-actions">
+      <button id="local-forget" class="btn quiet" type="button" data-i18n-raw="断开 / Disconnect">断开</button>
+      <button id="local-cancel" class="btn" type="button" data-i18n-raw="关闭 / Close">关闭</button>
+      <button id="local-connect" class="btn primary" type="submit" data-i18n-raw="连接 / Connect">连接</button>
     </div>
   </form>
 </dialog>

@@ -38,11 +38,13 @@ import {
   writeFlowFile,
   type AddStageSpec,
   type Output,
+  type Stage,
 } from "@flowgit/core";
 // The same view models the local board serves; these two modules only use core.
 import { flowBoard } from "../../web/src/routes/flow.js";
 import { flowGraph } from "../../web/src/routes/graph.js";
 import { EventHub } from "./events.js";
+import { COMPUTER_EXECUTORS } from "./handoff.js";
 
 /**
  * The local board's HTTP API, answered inside the page. The board's api.js sends every request
@@ -194,6 +196,16 @@ export interface BrowserBoardOptions {
   onChanged?: () => void;
   /** Resolves once changed files are in lasting storage; awaited before a change is answered. */
   settled?: () => Promise<void>;
+  /**
+   * Where a stage that needs a computer runs (the local board), or undefined to answer with the
+   * "run this on a computer" error. Called after `settled`, so the files it reads are saved.
+   */
+  remote?: () => RemoteRunner | undefined;
+}
+
+/** Runs one stage elsewhere and answers like POST /api/run. */
+export interface RemoteRunner {
+  run(stage: string, model?: string): Promise<{ status: number; body: Record<string, unknown> }>;
 }
 
 export class BrowserBoard {
@@ -420,6 +432,9 @@ export class BrowserBoard {
     if (this.running) return json(409, { error: "已有运行在进行 / a run is already in progress" });
     const trust = trustState(loaded);
     if (trust.needed) return json(409, { error: new TrustNeededError(loaded, trust).message, trust: trustPayload(trust) });
+    const target = stage === "all" ? undefined : loaded.flow.stages.find((item) => item.id === stage);
+    const remote = target && COMPUTER_EXECUTORS.includes(target.executor.type) ? this.options.remote?.() : undefined;
+    if (target && remote) return this.runRemote(remote, target, model);
     this.running = true;
     this.hub.history = [];
     const options = { ...(model ? { model } : {}), onEvent: (event: RunEvent) => this.publishRunEvent(event) };
@@ -453,6 +468,42 @@ export class BrowserBoard {
         this.hub.publish("run:end", { ok: false, error });
         return json(status, { error });
       }
+    } finally {
+      this.running = false;
+      this.changed();
+    }
+  }
+
+  /** Hand one stage to the local board; its files come back through the folder both of them use. */
+  private async runRemote(remote: RemoteRunner, stage: Stage, model: string | undefined): Promise<Response> {
+    this.running = true;
+    this.hub.history = [];
+    const name = stage.name;
+    this.hub.publish("stage:start", { stage: stage.id, name, executor: stage.executor.type });
+    this.hub.publish("stage:log", { stage: stage.id, line: "交给电脑上的本机看板运行 / handed to the local board on this computer" });
+    try {
+      await this.flush();
+      let answer: { status: number; body: Record<string, unknown> };
+      try {
+        answer = await remote.run(stage.id, model);
+      } catch (err) {
+        answer = { status: 502, body: { error: err instanceof Error ? err.message : String(err) } };
+      }
+      const { status, body } = answer;
+      if (status === 200 && body.ok === true) {
+        if (body.waiting || body.budget) this.hub.publish("run:end", body);
+        else {
+          this.hub.publish("stage:log", { stage: stage.id, line: "本机看板运行完了 / the local board finished" });
+          this.hub.publish("run:end", { ok: true });
+        }
+        return json(200, body);
+      }
+      let error = typeof body.error === "string" ? body.error : `本机看板出错 / the local board failed (${status})`;
+      // The local board keeps its own confirmations for copied flows.
+      if (body.trust) error = `${error}\n请在本机看板上确认这个流程后再试 / Confirm this flow on the local board, then try again`;
+      this.hub.publish("stage:error", { stage: stage.id, name, error });
+      this.hub.publish("run:end", { ok: false, error });
+      return json(status === 200 ? 500 : status, { error });
     } finally {
       this.running = false;
       this.changed();

@@ -2,7 +2,8 @@
 .app-bar {
   display: flex;
   align-items: center;
-  gap: 16px;
+  flex-wrap: wrap;
+  gap: 8px 16px;
   padding: 10px 24px;
   border-bottom: 1px solid var(--hair);
   background: var(--surface);
@@ -45,6 +46,24 @@
   gap: 8px;
   align-items: flex-start;
   margin: 10px 0;
+}
+.local-status {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  margin: 12px 0 0;
+  color: var(--ok);
+}
+.local-status.warn {
+  color: var(--error);
+}
+/* Connected to the local board: a lit dot on its button. */
+.app-local.on::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+  background: var(--ok);
 }
 .keys-dialog .dialog-actions {
   display: flex;

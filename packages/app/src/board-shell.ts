@@ -6,17 +6,27 @@ import type { I18nApi } from "./dom.js";
 import { applyKeys, rememberedKeys, storeKeys, VENDORS, type KeySettings } from "./keys.js";
 import { BrowserBoard } from "./router.js";
 import { flowDir, openWorkspace, validFlowId, type Workspace } from "./workspace.js";
-import { folderAccess, folderStore, watchFolder } from "./folder.js";
-import { getFolder, isFolderId } from "./folders.js";
+import { canOpenFolders, folderAccess, folderStore, watchFolder } from "./folder.js";
+import { addFolder, getFolder, isFolderId } from "./folders.js";
+import { COMPUTER_EXECUTORS, handOff, LocalBoard, NOT_IN_FOLDER, otherFlowMessage, parseBoardLink, sameFlow, type RemoteFlow } from "./handoff.js";
 import { type Files, zipFlow } from "./import.js";
+import { flowBoard } from "../../web/src/routes/flow.js";
 
 const i18n = I18N as I18nApi;
 const params = new URLSearchParams(location.search);
 const flowId = params.get("flow");
 if (!validFlowId(flowId)) location.replace("./index.html");
 const dir = flowDir(validFlowId(flowId) ? flowId : "missing");
+/** The local board this page hands computer stages to; the link (with its token) stays in memory. */
+let local: LocalBoard | undefined;
+/** Reads the folder at once (folder flows only), so a local board's run shows up right away. */
+let pollFolder: (() => Promise<void>) | undefined;
 // `ready` is declared below; settled only runs after the first request has awaited it.
-const board = new BrowserBoard({ dir, settled: () => ready.then((ws) => ws.saved()) });
+const board = new BrowserBoard({
+  dir,
+  settled: () => ready.then((ws) => ws.saved()),
+  remote: () => (local ? handOff(local, { folder: folderName, flow: pageFlow, poll: pollFolder }) : undefined),
+});
 let keys: KeySettings | undefined = rememberedKeys();
 const demoKey = `flowgit.app.demo.${flowId}`;
 
@@ -75,7 +85,7 @@ async function openFolderWorkspace(id: string): Promise<Workspace> {
   }
   const store = folderStore(entry.handle);
   const ws = await openWorkspace(id, { store, persistent: true });
-  watchFolder(ws, store, dir, () => board.changed());
+  pollFolder = watchFolder(ws, store, dir, () => board.changed()).now;
   return ws;
 }
 
@@ -98,6 +108,11 @@ const ready: Promise<Workspace> = opened.then((ws) => {
   events: (url: string) => board.events(url),
 };
 
+/** The page's own view of the flow, in the shape the local board's GET /api/flow has. */
+function pageFlow(): RemoteFlow {
+  return flowBoard(dir) as unknown as RemoteFlow;
+}
+
 /** Say which stages a browser can't run, with what to run instead, and whether files are kept. */
 function paintNote(ws: Workspace): void {
   const note = document.getElementById("app-note");
@@ -110,11 +125,16 @@ function paintNote(ws: Workspace): void {
   }
   if (!ws.persistent) parts.push(["这个浏览器不能保存文件，关掉页面就没了", "This browser can't keep files; they are gone when the page closes"]);
   try {
-    const computer = loadFlow(dir).flow.stages.filter((stage) => ["script", "agent", "mcp", "plugin"].includes(stage.executor.type));
-    if (computer.length) {
+    const computer = loadFlow(dir).flow.stages.filter((stage) => COMPUTER_EXECUTORS.includes(stage.executor.type));
+    if (computer.length && local) {
       parts.push([
-        `要在电脑上运行：${computer.map((stage) => i18n.pick(stage.name)).join("、")}`,
-        `Needs a computer: ${computer.map((stage) => stage.id).join(", ")}`,
+        `交给本机看板运行：${computer.map((stage) => i18n.pick(stage.name)).join("、")}`,
+        `Runs on the local board: ${computer.map((stage) => stage.id).join(", ")}`,
+      ]);
+    } else if (computer.length) {
+      parts.push([
+        `要在电脑上运行：${computer.map((stage) => i18n.pick(stage.name)).join("、")}（可以连接本机看板）`,
+        `Needs a computer: ${computer.map((stage) => stage.id).join(", ")} (you can connect the local board)`,
       ]);
     }
   } catch {
@@ -207,9 +227,103 @@ function setUpExport(ws: Workspace): void {
   });
 }
 
+/** Connect the local board: the person pastes the link `flowgit board` printed. */
+function setUpLocalBoard(ws: Workspace): void {
+  const open = document.getElementById("app-local");
+  const dialog = document.getElementById("local-dialog") as HTMLDialogElement | null;
+  const form = document.getElementById("local-form") as HTMLFormElement | null;
+  const input = document.getElementById("local-link") as HTMLInputElement | null;
+  const status = document.getElementById("local-status");
+  if (!open || !dialog || !form || !input || !status) return;
+  let computer = false;
+  try {
+    computer = loadFlow(dir).flow.stages.some((stage) => COMPUTER_EXECUTORS.includes(stage.executor.type));
+  } catch {
+    // the board shows flow errors itself
+  }
+  open.hidden = !computer;
+  const say = (zh: string, en: string, warn = false) => {
+    status.textContent = i18n.lang() === "en" ? en : zh;
+    status.classList.toggle("warn", warn);
+    status.hidden = false;
+  };
+  open.addEventListener("click", () => {
+    input.value = "";
+    status.hidden = true;
+    if (local) say(`已连接 ${local.link.origin}`, `Connected to ${local.link.origin}`);
+    dialog.showModal();
+  });
+  document.getElementById("local-cancel")?.addEventListener("click", () => dialog.close());
+  document.getElementById("local-forget")?.addEventListener("click", () => {
+    local = undefined;
+    status.hidden = true;
+    open.classList.remove("on");
+    paintNote(ws);
+  });
+  const bilingual = (err: unknown): [string, string] => {
+    const text = err instanceof Error ? err.message : String(err);
+    // "中文 / English", where the Chinese half may end in a full-width bracket: "（…）/ The link …"
+    const cut = /\s?\/ (?=[A-Z])/.exec(text);
+    return cut ? [text.slice(0, cut.index), text.slice(cut.index + cut[0].length)] : [text, text];
+  };
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    let link: LocalBoard;
+    let remote: RemoteFlow;
+    try {
+      link = new LocalBoard(parseBoardLink(input.value));
+      say("正在连接…", "Connecting…");
+      remote = await link.flow();
+    } catch (err) {
+      say(...bilingual(err), true);
+      return;
+    }
+    local = link;
+    open.classList.add("on");
+    paintNote(ws);
+    if (!folderName) say(...bilingual(new Error(NOT_IN_FOLDER)), true);
+    else if (!sameFlow(remote, pageFlow())) say(...bilingual(new Error(otherFlowMessage(folderName))), true);
+    else dialog.close();
+  });
+}
+
+/**
+ * Copy a flow kept in the browser into a new folder on the computer (named after the flow, inside
+ * the folder the person picks) and open it from there, so the CLI and the local board can use it.
+ */
+function setUpSaveToFolder(ws: Workspace): void {
+  const button = document.getElementById("app-save-folder");
+  if (!button || folderName || !canOpenFolders() || !validFlowId(flowId)) return;
+  button.hidden = false;
+  button.addEventListener("click", async () => {
+    let parent: FileSystemDirectoryHandle;
+    try {
+      const pick = (globalThis as unknown as { showDirectoryPicker(o: { mode: string }): Promise<FileSystemDirectoryHandle> }).showDirectoryPicker;
+      parent = await pick.call(globalThis, { mode: "readwrite" });
+    } catch {
+      return; // cancelled
+    }
+    try {
+      const target = await parent.getDirectoryHandle(flowId, { create: true });
+      for await (const _ of (target as unknown as { keys(): AsyncIterable<string> }).keys()) {
+        throw new Error(`「${parent.name}」里已经有一个不是空的「${flowId}」文件夹，请换一个位置 / "${parent.name}" already has a folder "${flowId}" that isn't empty; pick another place`);
+      }
+      await ws.saved();
+      const store = folderStore(target);
+      for (const [rel, data] of Object.entries(flowFilesOnHost(ws))) await store.apply(flowId, { type: "write", path: rel, data });
+      const entry = await addFolder(target);
+      location.href = `./board.html?flow=${encodeURIComponent(entry.id)}`;
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err));
+    }
+  });
+}
+
 void ready.then((ws) => {
   const start = () => {
     setUpExport(ws);
+    setUpLocalBoard(ws);
+    setUpSaveToFolder(ws);
     paintNote(ws);
     setUpKeys(ws);
     i18n.onChange(() => paintNote(ws));

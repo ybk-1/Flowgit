@@ -1,13 +1,15 @@
 // Folder mode against a real folder and the real CLI: the page writes through a directory handle,
 // `flowgit status` sees the page's hand edit, and changes made by the CLI reach the page.
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { host, setHost, setSchemaCompiler } from "@flowgit/core";
+import { flowBoard } from "../../web/src/routes/flow.js";
 import { folderStore, watchFolder } from "./folder.js";
+import { handOff, LocalBoard, parseBoardLink, type RemoteFlow } from "./handoff.js";
 import { BrowserBoard } from "./router.js";
 import { flowDir, openWorkspace } from "./workspace.js";
 
@@ -144,4 +146,75 @@ describe.skipIf(!fs.existsSync(cli))("folder mode (run pnpm build first)", () =>
     await expect.poll(() => ws.host.exists(`${dir}/notes.md`), { timeout: 5000 }).toBe(false);
     stop2();
   });
+
+  it("hands a script stage to the local board the CLI started on the same folder, and reads its result back", async () => {
+    const work = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-app-handoff-"));
+    fs.cpSync(template, work, { recursive: true });
+    for (const junk of ["runs", "notes.md", "report.md", "check.json", "flowgit.local.json"]) fs.rmSync(path.join(work, junk), { recursive: true, force: true });
+    const id = "folder-handoff";
+    const dir = flowDir(id);
+    const store = folderStore(new NodeDir(work) as unknown as FileSystemDirectoryHandle);
+    const ws = await openWorkspace(id, { store, persistent: true });
+    ws.env.FLOWGIT_LLM_MOCK_DIR = `${dir}/demo-replies`;
+    const watcher = watchFolder(ws, store, dir, () => {}, 60_000);
+    let local: LocalBoard | undefined;
+    const page = { folder: "handoff", flow: () => flowBoard(dir) as unknown as RemoteFlow, poll: watcher.now };
+    const board = new BrowserBoard({ dir, settled: () => ws.saved(), remote: () => (local ? handOff(local, page) : undefined) });
+    const child = spawn(process.execPath, [cli, "board", "--no-open", "--port", "0"], {
+      cwd: work,
+      env: { ...process.env, FLOWGIT_HOME: home, NO_COLOR: "1" },
+    });
+    try {
+      // The browser runs what it can.
+      expect((await call(board, "/api/inputs", { method: "PUT", body: JSON.stringify({ name: "小林" }) })).status).toBe(200);
+      expect((await call(board, "/api/file?path=notes.md", { method: "PUT", body: "- 修好了导出\n" })).status).toBe(200);
+      expect((await call(board, "/api/run", { method: "POST", body: JSON.stringify({ stage: "notes" }) })).status).toBe(200);
+      expect((await call(board, "/api/run", { method: "POST", body: JSON.stringify({ stage: "draft" }) })).status).toBe(200);
+
+      // Without a local board the script stage says it needs a computer.
+      const alone = await call(board, "/api/run", { method: "POST", body: JSON.stringify({ stage: "check" }) });
+      expect(alone.status).toBe(500);
+      expect(String(alone.body.error)).toMatch(/电脑上运行/);
+
+      // With the link `flowgit board` printed, the stage runs there and its run comes back.
+      const link = await new Promise<string>((resolve, reject) => {
+        let out = "";
+        child.stdout.on("data", (chunk: Buffer) => {
+          out += chunk.toString();
+          const found = /http:\/\/127\.0\.0\.1:\d+\/\?token=[0-9a-f]+/.exec(out);
+          if (found) resolve(found[0]);
+        });
+        child.on("exit", (code) => reject(new Error(`flowgit board exited (${code})`)));
+      });
+      local = new LocalBoard(parseBoardLink(link));
+      const events: string[] = [];
+      const stream = board.events("/api/events");
+      for (const type of ["stage:start", "stage:error", "run:end"]) stream.addEventListener(type, () => events.push(type));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      const handed = await call(board, "/api/run", { method: "POST", body: JSON.stringify({ stage: "check" }) });
+      expect(handed.status, JSON.stringify(handed.body)).toBe(200);
+      // (The stream first replays the earlier failed run, like the local board does for a late client.)
+      expect(events.slice(events.lastIndexOf("stage:start"))).toEqual(["stage:start", "run:end"]);
+      stream.close();
+      expect(fs.existsSync(path.join(work, "runs/check/2/run.json"))).toBe(true);
+      expect(ws.host.exists(`${dir}/runs/check/2/run.json`)).toBe(true);
+      expect(ws.host.readFile(`${dir}/check.json`, "utf8")).toBe(fs.readFileSync(path.join(work, "check.json"), "utf8"));
+      const shown = await call(board, "/api/flow");
+      // v1 is the browser's failed try; v2 is the local board's run, now current on the page too.
+      expect((shown.body.stages as { id: string }[]).find((stage) => stage.id === "check")).toMatchObject({ state: "ok", runs: 2, latest: { n: 2, status: "ok" } });
+
+      // A board on another flow is refused before anything runs there.
+      const other = handOff(local, { ...page, flow: () => ({ name: "别的流程", stages: [] }) });
+      await expect(other.run("check")).rejects.toThrow(/another flow open/);
+      // A flow kept in the browser can't be handed off at all.
+      await expect(handOff(local, { flow: page.flow }).run("check")).rejects.toThrow(/Save to a folder/);
+    } finally {
+      watcher();
+      // Windows keeps the folder busy until the board (its working directory) has exited.
+      const exited = new Promise((resolve) => (child.exitCode !== null || child.signalCode !== null ? resolve(null) : child.once("exit", resolve)));
+      child.kill();
+      await exited;
+      fs.rmSync(work, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+    }
+  }, 30_000);
 });

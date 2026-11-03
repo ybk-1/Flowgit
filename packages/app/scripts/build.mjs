@@ -18,6 +18,8 @@ const templatesDir = path.join(root, "..", "cli", "templates");
 export const MODEL_HOSTS = ["https://api.deepseek.com", "https://api.anthropic.com"];
 /** Public GitHub, read-only: a repository's file list (API) and its files (raw). */
 export const GITHUB_HOSTS = ["https://api.github.com", "https://raw.githubusercontent.com"];
+// The local board started by `flowgit board` (bound to this computer only), for stages that need a computer.
+export const LOCAL_BOARD_HOSTS = ["http://127.0.0.1:*", "http://localhost:*"];
 
 const CSP = [
   "default-src 'none'",
@@ -25,7 +27,7 @@ const CSP = [
   "style-src 'self'",
   "img-src 'self' blob: data:",
   "media-src 'self' blob:",
-  `connect-src 'self' ${[...MODEL_HOSTS, ...GITHUB_HOSTS].join(" ")}`,
+  `connect-src 'self' ${[...MODEL_HOSTS, ...GITHUB_HOSTS, ...LOCAL_BOARD_HOSTS].join(" ")}`,
   "base-uri 'none'",
   "form-action 'none'",
 ].join("; ");

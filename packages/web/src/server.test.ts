@@ -1948,3 +1948,56 @@ describe("POST /api/generate", () => {
     }
   }, 30_000);
 });
+
+describe("the web app calling the local board", () => {
+  it("answers https://flowgit.dev (and --allow-origin pages) cross-origin, still only with the token", async () => {
+    const work = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-web-cors-"));
+    const flowDir = path.join(work, "video");
+    expect(flowgit(["init", flowDir]).status).toBe(0);
+    const board = await startBoard({ dir: flowDir, port: 0, open: false });
+    try {
+      const preflight = await httpCall(board.port, "OPTIONS", "/api/run", undefined, {
+        Origin: "https://flowgit.dev",
+        "Access-Control-Request-Method": "POST",
+        "Access-Control-Request-Headers": "x-flowgit-token, content-type",
+        "Access-Control-Request-Private-Network": "true",
+      });
+      expect(preflight.status).toBe(204);
+      expect(preflight.headers["access-control-allow-origin"]).toBe("https://flowgit.dev");
+      expect(preflight.headers["access-control-allow-headers"]).toContain("X-Flowgit-Token");
+      expect(preflight.headers["access-control-allow-private-network"]).toBe("true");
+
+      const ok = await httpGet(board.port, "/api/flow", { Origin: "https://flowgit.dev", "X-Flowgit-Token": board.token });
+      expect(ok.status).toBe(200);
+      expect(ok.headers["access-control-allow-origin"]).toBe("https://flowgit.dev");
+      expect(ok.headers.vary).toBe("Origin");
+
+      // The token is still needed; CORS only lets the page read the answer.
+      const noToken = await httpGet(board.port, "/api/flow", { Origin: "https://flowgit.dev" });
+      expect(noToken.status).toBe(401);
+
+      // Any other page gets no CORS headers, so its browser hides the answer; its preflight is refused.
+      const other = await httpGet(board.port, "/api/flow", { Origin: "https://evil.example", "X-Flowgit-Token": board.token });
+      expect(other.headers["access-control-allow-origin"]).toBeUndefined();
+      const otherPreflight = await httpCall(board.port, "OPTIONS", "/api/run", undefined, { Origin: "https://evil.example" });
+      expect(otherPreflight.status).toBe(405);
+      expect(otherPreflight.headers["access-control-allow-origin"]).toBeUndefined();
+      // The page itself and the event stream are never offered cross-origin.
+      const page = await httpGet(board.port, `/?token=${board.token}`, { Origin: "https://flowgit.dev" });
+      expect(page.headers["access-control-allow-origin"]).toBeUndefined();
+    } finally {
+      await board.close();
+    }
+
+    const own = await startBoard({ dir: flowDir, port: 0, open: false, allowOrigins: ["http://127.0.0.1:4179"] });
+    try {
+      const res = await httpGet(own.port, "/api/flow", { Origin: "http://127.0.0.1:4179", "X-Flowgit-Token": own.token });
+      expect(res.headers["access-control-allow-origin"]).toBe("http://127.0.0.1:4179");
+      const app = await httpGet(own.port, "/api/flow", { Origin: "https://flowgit.dev", "X-Flowgit-Token": own.token });
+      expect(app.headers["access-control-allow-origin"]).toBeUndefined();
+    } finally {
+      await own.close();
+    }
+    await expect(startBoard({ dir: flowDir, port: 0, allowOrigins: ["https://flowgit.dev/app/"] })).rejects.toThrow(/origin/);
+  });
+});

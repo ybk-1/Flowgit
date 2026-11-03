@@ -97,6 +97,28 @@ export interface StartBoardOptions {
   port?: number;
   /** Open a browser once listening. Default false; the CLI turns it on. */
   open?: boolean;
+  /**
+   * Web pages that may call /api/* from another origin (still with the token), so the web app can
+   * hand it a stage that needs a computer. Default: the web app at https://flowgit.dev only.
+   */
+  allowOrigins?: string[];
+}
+
+/** The web app's origin: the only page that may call the local board's API by default. */
+export const WEB_APP_ORIGIN = "https://flowgit.dev";
+
+/** `value` as an origin ("https://host[:port]"), or an error. */
+export function parseOrigin(value: string): string {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error(`不是一个网址 / not a URL: ${value}`);
+  }
+  if ((url.protocol !== "https:" && url.protocol !== "http:") || url.origin !== value.replace(/\/+$/, "")) {
+    throw new Error(`只能写来源，例如 https://flowgit.dev / give only an origin, such as https://flowgit.dev: ${value}`);
+  }
+  return url.origin;
 }
 
 export interface BoardServer {
@@ -130,6 +152,12 @@ export function startBoard(options: StartBoardOptions): Promise<BoardServer> {
   if (!fs.existsSync(path.join(publicDir, "index.html"))) {
     return Promise.reject(new Error(`找不到看板页面 / board files not found: ${publicDir}`));
   }
+  let origins: Set<string>;
+  try {
+    origins = new Set((options.allowOrigins ?? [WEB_APP_ORIGIN]).map(parseOrigin));
+  } catch (err) {
+    return Promise.reject(err);
+  }
   const token = crypto.randomBytes(32).toString("hex");
   const bound = { port: options.port ?? 4747 };
   const ctx: HandlerCtx = {
@@ -142,6 +170,7 @@ export function startBoard(options: StartBoardOptions): Promise<BoardServer> {
     clients: new Set(),
     watchers: [],
     watching: false,
+    origins,
   };
   const server = http.createServer((req, res) => {
     try {
@@ -188,6 +217,30 @@ export function startBoard(options: StartBoardOptions): Promise<BoardServer> {
   });
 }
 
+/**
+ * Let an allowed page (the web app) call /api/* from its own origin. The token is still required on
+ * every request; this only lets the browser show the answer to that page. Returns true when the
+ * request was a preflight and has been answered.
+ * CORS: https://developer.mozilla.org/docs/Web/HTTP/CORS
+ * Private Network Access preflight: https://wicg.github.io/private-network-access/#headers
+ */
+function crossOrigin(req: http.IncomingMessage, res: http.ServerResponse, ctx: HandlerCtx): boolean {
+  const origin = headerString(req, "origin");
+  if (!origin || !ctx.origins.has(origin)) return false;
+  res.setHeader("Access-Control-Allow-Origin", origin);
+  res.setHeader("Vary", "Origin");
+  if (req.method !== "OPTIONS") return false;
+  req.resume();
+  const headers: Record<string, string> = {
+    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE",
+    "Access-Control-Allow-Headers": "X-Flowgit-Token, Content-Type",
+    "Access-Control-Max-Age": "600",
+  };
+  if (headerString(req, "access-control-request-private-network") === "true") headers["Access-Control-Allow-Private-Network"] = "true";
+  send(res, 204, "", headers);
+  return true;
+}
+
 export const STAGE_BUSY = "正在运行，结束后再改阶段 / a run is in progress; change stages when it finishes";
 
 export function handle(req: http.IncomingMessage, res: http.ServerResponse, ctx: HandlerCtx): void {
@@ -206,6 +259,8 @@ export function handle(req: http.IncomingMessage, res: http.ServerResponse, ctx:
     return;
   }
   const pathname = url.pathname.length > 1 ? url.pathname.replace(/\/+$/, "") : url.pathname;
+
+  if (pathname.startsWith("/api/") && pathname !== "/api/events" && crossOrigin(req, res, ctx)) return;
 
   if (pathname === "/api/events") {
     if (req.method !== "GET") {

@@ -38,6 +38,8 @@ export interface HandlerCtx {
   watching: boolean;
   /** Debounce timer for filesystem events. Cleared by `close()`. */
   changeTimer?: ReturnType<typeof setTimeout>;
+  /** Origins allowed to call /api/* from a web page (still with the token): the web app. */
+  origins: Set<string>;
   /** The last preview from POST /api/generate, written only after the board confirms it. */
   pendingGenerate?: { id: string; dir: string; preview: GeneratePreview };
 }

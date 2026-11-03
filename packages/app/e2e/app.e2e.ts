@@ -1,9 +1,33 @@
+import { spawn, type ChildProcess } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test, type Page } from "@playwright/test";
 
 const dist = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "dist");
+const cli = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "cli", "dist", "index.js");
+const template = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "cli", "templates", "weekly-report");
+
+/** `flowgit board` on a copy of weekly-report; resolves with the link it prints. */
+async function localBoard(args: string[]): Promise<{ link: string; child: ChildProcess; dir: string }> {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-app-e2e-board-"));
+  fs.cpSync(template, dir, { recursive: true });
+  const child = spawn(process.execPath, [cli, "board", "--no-open", "--port", "0", ...args], {
+    cwd: dir,
+    env: { ...process.env, FLOWGIT_HOME: dir, NO_COLOR: "1" },
+  });
+  const link = await new Promise<string>((resolve, reject) => {
+    let out = "";
+    child.stdout!.on("data", (chunk: Buffer) => {
+      out += chunk.toString();
+      const found = /http:\/\/127\.0\.0\.1:\d+\/\?token=[0-9a-f]+/.exec(out);
+      if (found) resolve(found[0]);
+    });
+    child.on("exit", (code) => reject(new Error(`flowgit board exited (${code})`)));
+  });
+  return { link, child, dir };
+}
 /** The bundled weekly-report template, as the build wrote it: { files: { rel: base64 } }. */
 function templateFiles(): Record<string, string> {
   return (JSON.parse(fs.readFileSync(path.join(dist, "templates", "weekly-report.json"), "utf8")) as { files: Record<string, string> }).files;
@@ -249,4 +273,70 @@ test("从 GitHub 和社区模板复制：记下来源，只复制流程文件 / 
   await page.locator('li[data-community="weekly-copy"] button').click();
   await expect(page).toHaveURL(/board\.html\?flow=weekly-report-2$/);
   await expect(page.locator("#flow-name")).toHaveText("周报（入门示例）");
+});
+
+// The whole handoff (a folder flow, the stage run by the local board, its files back on the page) is
+// tested with the real CLI in src/folder.test.ts. Here: the browser really calls the local board across
+// origins, and the board answers only the origins it allows.
+test("连接本机看板：允许的网页能连上，其他网页连不上 / connecting the local board: an allowed page reaches it, others can't", async ({ page, baseURL }) => {
+  const appOrigin = new URL(baseURL!).origin;
+  const allowed = await localBoard(["--allow-origin", appOrigin]);
+  const closed = await localBoard([]);
+  try {
+    await page.goto("./");
+    await page.locator('li[data-template="weekly-report"] button').click();
+    await expect(page.locator("#flow-name")).toHaveText("周报（入门示例）");
+    await expect(page.locator("#app-note")).toContainText("可以连接本机看板");
+
+    // A board that only allows https://flowgit.dev: the browser blocks the answer.
+    await page.locator("#app-local").click();
+    await page.locator("#local-link").fill(closed.link);
+    await page.locator("#local-connect").click();
+    await expect(page.locator("#local-status")).toContainText("连不上本机看板");
+    await expect(page.locator("#app-local")).not.toHaveClass(/\bon\b/);
+
+    // Not a link to this computer: refused before anything is sent.
+    await page.locator("#local-link").fill("http://192.168.1.5:4747/?token=0123456789abcdef");
+    await page.locator("#local-connect").click();
+    await expect(page.locator("#local-status")).toContainText("链接要指向这台电脑");
+
+    // The board started with --allow-origin answers. This flow lives in the browser, so the page says
+    // to save it to a folder first, and a run of the script stage says the same.
+    await page.locator("#local-link").fill(allowed.link);
+    await page.locator("#local-connect").click();
+    await expect(page.locator("#local-status")).toContainText("存到文件夹");
+    await expect(page.locator("#app-local")).toHaveClass(/\bon\b/);
+    await page.locator("#local-cancel").click();
+    await expect(page.locator("#app-note")).toContainText("交给本机看板运行：检查");
+    // Get check's upstreams done in the browser (demo replies) so it can run.
+    await page.locator('[data-input="name"]').fill("小林");
+    await page.locator("#inputs-save").click();
+    await expect(page.locator("#inputs-status")).toContainText("已保存");
+    await card(page, "notes").locator("button.thumb", { hasText: "notes.md" }).click();
+    await page.locator("#panel textarea").fill("- 修好了导出\n");
+    await page.locator("#panel button.save").click();
+    await expect(page.locator("#panel .save-ok")).toHaveText("已保存");
+    await page.locator("#panel-close").click();
+    await runButton(page, "notes").click();
+    await expect(card(page, "notes")).toHaveAttribute("data-state", "ok");
+    await runButton(page, "draft").click();
+    await expect(card(page, "draft")).toHaveAttribute("data-state", "ok");
+    await runButton(page, "check").click();
+    await expect(page.locator("#log")).toContainText("交给电脑上的本机看板运行");
+    await expect(page.locator("#log")).toContainText("先点“存到文件夹”");
+    // Nothing ran on the computer.
+    expect(fs.existsSync(path.join(allowed.dir, "runs", "check"))).toBe(false);
+
+    await page.locator("#app-local").click();
+    await page.locator("#local-forget").click();
+    await page.locator("#local-cancel").click();
+    await expect(page.locator("#app-note")).toContainText("可以连接本机看板");
+  } finally {
+    for (const board of [allowed, closed]) {
+      const exited = new Promise((resolve) => (board.child.exitCode !== null ? resolve(null) : board.child.once("exit", resolve)));
+      board.child.kill();
+      await exited;
+      fs.rmSync(board.dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+    }
+  }
 });

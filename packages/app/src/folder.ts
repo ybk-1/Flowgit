@@ -156,10 +156,10 @@ export function watchFolder(
   dir: string,
   onChange: (paths: string[]) => void,
   everyMs = 1500,
-): () => void {
+): (() => void) & { now(): Promise<void> } {
   let stopped = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const tick = async () => {
+  const poll = async () => {
     let paths: string[] = [];
     await ws.enqueue(async () => {
       const { changed, removed } = await store.poll();
@@ -175,11 +175,16 @@ export function watchFolder(
       });
     });
     if (paths.length) onChange(paths);
+  };
+  const tick = async () => {
+    await poll();
     if (!stopped) timer = setTimeout(() => void tick(), everyMs);
   };
   timer = setTimeout(() => void tick(), everyMs);
-  return () => {
+  const stop = () => {
     stopped = true;
     if (timer) clearTimeout(timer);
   };
+  // `now` reads the folder at once, e.g. right after the local board ran a stage in it.
+  return Object.assign(stop, { now: poll });
 }
