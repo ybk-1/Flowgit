@@ -15,7 +15,7 @@
  */
 "use strict";
 
-const FX = (() => {
+export const FX = (() => {
   const motion = typeof window.matchMedia === "function" ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
   const reduced = () => Boolean(motion && motion.matches);
 

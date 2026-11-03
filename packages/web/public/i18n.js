@@ -13,7 +13,7 @@
  */
 "use strict";
 
-const I18N = (() => {
+export const I18N = (() => {
   const STORE_KEY = "flowgit.board.lang";
   const LANGS = ["zh", "en"];
 
@@ -434,7 +434,7 @@ const I18N = (() => {
     return first === "zh" || first.startsWith("zh-") ? "zh" : "en";
   }
 
-  const engine = i18next.createInstance();
+  const engine = globalThis.i18next.createInstance();
   engine.init({
     lng: stored() || fromBrowser(),
     fallbackLng: "zh",
