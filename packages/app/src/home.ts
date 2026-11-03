@@ -179,7 +179,9 @@ interface CommunityEntry {
   ref?: string;
 }
 
-const REGISTRY = "https://raw.githubusercontent.com/cgold9820-dotcom/Flowgit/main/registry/community.json";
+// The site build writes the merged community list at the site root, next to /app/ (https://flowgit.dev/registry.json).
+// Same origin, so the page's connect-src 'self' covers it.
+const REGISTRY = "/registry.json";
 
 function both(text: CommunityEntry["name"] | undefined): string {
   if (!text) return "";

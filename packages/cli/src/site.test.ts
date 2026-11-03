@@ -113,6 +113,8 @@ describe("flowgit site build", () => {
         expect(fs.existsSync(file), ref).toBe(true);
       }
 
+      const published = JSON.parse(fs.readFileSync(path.join(out, "registry.json"), "utf8")) as { id: string }[];
+      expect(published.map((item) => item.id)).toContain("agent-page");
       expect(findDeadLinks(out)).toEqual([]);
     } finally {
       fs.rmSync(out, { recursive: true, force: true });

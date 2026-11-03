@@ -5,9 +5,15 @@ import { fileURLToPath } from "node:url";
 /** This repository on GitHub. The gallery points a bundled template's relative README links here. */
 export const REPO_WEB_URL = "https://github.com/cgold9820-dotcom/Flowgit";
 
-/** Raw registry on the default branch, used when this checkout has no registry file. */
-export const DEFAULT_COMMUNITY_REGISTRY_URL =
-  "https://raw.githubusercontent.com/cgold9820-dotcom/Flowgit/main/registry/community.json";
+/**
+ * Published registry. `templates --all` tries this before the checkout.
+ * A checkout that still has the old single file, or `FLOWGIT_REGISTRY` pointing
+ * at one, is read by `loadCommunityRegistry` too.
+ */
+export const PUBLISHED_REGISTRY_URL = "https://flowgit.dev/registry.json";
+
+/** @deprecated Use `PUBLISHED_REGISTRY_URL`. Kept so older imports still resolve. */
+export const DEFAULT_COMMUNITY_REGISTRY_URL = PUBLISHED_REGISTRY_URL;
 
 /** One line, bilingual. Printed when `templates --all` cannot use the registry. */
 export const COMMUNITY_LIST_NOTE =
@@ -129,7 +135,10 @@ export function validateCommunityRegistry(data: unknown): RegistryIssues {
     let ref: string | undefined;
     if (item.ref !== undefined) {
       if (!nonEmpty(item.ref)) errors.push(`${at}/ref: 要是非空字符串 / must be a non-empty string`);
-      else ref = item.ref.trim();
+      else if (item.ref.trim().startsWith("-") || /\s/.test(item.ref.trim())) {
+        // A ref is passed to git; one that starts with "-" would be read as an option.
+        errors.push(`${at}/ref: 不能以 - 开头，也不能有空格 / must not start with - or contain spaces`);
+      } else ref = item.ref.trim();
     }
     if (!nonEmpty(item.author)) errors.push(`${at}/author: 要是非空字符串 / must be a non-empty string`);
     let tags: string[] = [];
@@ -189,12 +198,19 @@ export function validateCommunityRegistry(data: unknown): RegistryIssues {
   return { ok: true, entries };
 }
 
-/** `registry/community.json` in this checkout, walking up from `start`. */
+/**
+ * `registry/community/` (one JSON file per entry) in this checkout, or the old
+ * `registry/community.json` when the directory is not there. Walks up from `start`.
+ */
 export function findRepoRegistry(start = process.cwd()): string | undefined {
   let dir = path.resolve(start);
   for (let i = 0; i < 16; i++) {
-    const candidate = path.join(dir, "registry", "community.json");
-    if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) return candidate;
+    const folder = path.join(dir, "registry", "community");
+    if (fs.existsSync(folder) && fs.statSync(folder).isDirectory() && fs.readdirSync(folder).some((name) => name.endsWith(".json"))) {
+      return folder;
+    }
+    const file = path.join(dir, "registry", "community.json");
+    if (fs.existsSync(file) && fs.statSync(file).isFile()) return file;
     const parent = path.dirname(dir);
     if (parent === dir) return undefined;
     dir = parent;
@@ -203,13 +219,14 @@ export function findRepoRegistry(start = process.cwd()): string | undefined {
 }
 
 /**
- * Where to read the registry. `FLOWGIT_REGISTRY` wins. Otherwise the checkout's
- * `registry/community.json` when we are inside the repo, otherwise the raw URL.
+ * Where a local build reads the registry. `FLOWGIT_REGISTRY` wins. Otherwise the
+ * checkout's `registry/community/` (or the old single file), otherwise the published URL.
+ * `templates --all` does not use this: it tries the published URL first.
  */
 export function registryLocation(env: NodeJS.ProcessEnv = process.env, cwd = process.cwd()): string {
   const override = env.FLOWGIT_REGISTRY?.trim();
   if (override) return override;
-  return findRepoRegistry(cwd) ?? DEFAULT_COMMUNITY_REGISTRY_URL;
+  return findRepoRegistry(cwd) ?? PUBLISHED_REGISTRY_URL;
 }
 
 /** Drop userinfo so a registry URL in an error cannot repeat a token. */
@@ -225,9 +242,17 @@ export function publicRegistrySource(source: string): string {
   }
 }
 
-async function readRegistryText(source: string): Promise<string> {
+export interface RegistryReadOptions {
+  fetch?: typeof fetch;
+  cwd?: string;
+  env?: NodeJS.ProcessEnv;
+  /** Timeout for an http(s) source. The automatic published-URL probe uses 4s. */
+  timeoutMs?: number;
+}
+
+async function readRegistryText(source: string, fetchImpl: typeof fetch, timeoutMs: number): Promise<string> {
   if (/^https?:\/\//i.test(source)) {
-    const res = await fetch(source, { signal: AbortSignal.timeout(8000), redirect: "follow" });
+    const res = await fetchImpl(source, { signal: AbortSignal.timeout(timeoutMs), redirect: "follow" });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.text();
   }
@@ -235,28 +260,93 @@ async function readRegistryText(source: string): Promise<string> {
   return fs.readFileSync(file, "utf8");
 }
 
-/** Read and check the registry. A missing file or a failed request is `unreadable`; bad JSON or a bad entry is `invalid`. */
-export async function loadCommunityRegistry(source = registryLocation()): Promise<CommunityLoad> {
+function parseRegistryJson(text: string, label: string): { data?: unknown; error?: string } {
+  try {
+    return { data: JSON.parse(text) as unknown };
+  } catch (err) {
+    return { error: `${label}: 不是合法的 JSON / is not valid JSON: ${(err as Error).message}` };
+  }
+}
+
+/** An old array file, or one entry object. A per-entry file's name must match `id`. */
+function documentsFromParsed(data: unknown, label: string): { items: unknown[]; errors: string[] } {
+  if (Array.isArray(data)) return { items: data, errors: [] };
+  if (isRecord(data)) {
+    const errors: string[] = [];
+    const base = path.basename(label, ".json");
+    if (base !== "community" && typeof data.id === "string" && data.id !== base) {
+      errors.push(`${label}: 文件名要和 id 一样 / the file name must match id (${base} ≠ ${data.id})`);
+    }
+    return { items: [data], errors };
+  }
+  return { items: [], errors: [] };
+}
+
+function loadParsedRegistry(items: unknown[], extraErrors: string[], from: string): CommunityLoad {
+  const result = validateCommunityRegistry(items);
+  const errors = [...extraErrors, ...(result.ok ? [] : result.errors)];
+  if (errors.length || !result.ok) return { ok: false, kind: "invalid", from, note: COMMUNITY_LIST_NOTE, errors };
+  return { ok: true, entries: result.entries, from };
+}
+
+/** Read one registry source: a URL, a directory of entry files, or one JSON file (array or a single entry). */
+export async function readCommunitySource(source: string, opts: RegistryReadOptions = {}): Promise<CommunityLoad> {
   const from = publicRegistrySource(source);
+  const fetchImpl = opts.fetch ?? fetch;
+  const timeoutMs = opts.timeoutMs ?? 8000;
+  if (!/^https?:\/\//i.test(source)) {
+    const file = source.startsWith("file:") ? fileURLToPath(source) : source;
+    if (fs.existsSync(file) && fs.statSync(file).isDirectory()) {
+      const names = fs.readdirSync(file).filter((name) => name.endsWith(".json")).sort((a, b) => a.localeCompare(b));
+      const items: unknown[] = [];
+      const errors: string[] = [];
+      for (const name of names) {
+        let text: string;
+        try {
+          text = fs.readFileSync(path.join(file, name), "utf8");
+        } catch {
+          return { ok: false, kind: "unreadable", from, note: COMMUNITY_LIST_NOTE, errors: [] };
+        }
+        const parsed = parseRegistryJson(text, name);
+        if (parsed.error) errors.push(parsed.error);
+        else {
+          const doc = documentsFromParsed(parsed.data, name);
+          errors.push(...doc.errors);
+          items.push(...doc.items);
+        }
+      }
+      if (errors.length) return { ok: false, kind: "invalid", from, note: COMMUNITY_LIST_NOTE, errors };
+      return loadParsedRegistry(items, [], from);
+    }
+  }
   let text: string;
   try {
-    text = await readRegistryText(source);
+    text = await readRegistryText(source, fetchImpl, timeoutMs);
   } catch {
     return { ok: false, kind: "unreadable", from, note: COMMUNITY_LIST_NOTE, errors: [] };
   }
-  let data: unknown;
-  try {
-    data = JSON.parse(text) as unknown;
-  } catch (err) {
-    return {
-      ok: false,
-      kind: "invalid",
-      from,
-      note: COMMUNITY_LIST_NOTE,
-      errors: [`不是合法的 JSON / is not valid JSON: ${(err as Error).message}`],
-    };
-  }
-  const result = validateCommunityRegistry(data);
-  if (!result.ok) return { ok: false, kind: "invalid", from, note: COMMUNITY_LIST_NOTE, errors: result.errors };
-  return { ok: true, entries: result.entries, from };
+  const parsed = parseRegistryJson(text, from);
+  if (parsed.error) return { ok: false, kind: "invalid", from, note: COMMUNITY_LIST_NOTE, errors: [parsed.error] };
+  const doc = documentsFromParsed(parsed.data, source);
+  return loadParsedRegistry(doc.items, doc.errors, from);
+}
+
+/**
+ * Read the registry. With no source: `FLOWGIT_REGISTRY` if set, otherwise
+ * https://flowgit.dev/registry.json, and if that does not give a valid list, the
+ * checkout directory (or the old single file). An explicit source is read as given.
+ */
+export async function loadCommunityRegistry(source?: string, opts: RegistryReadOptions = {}): Promise<CommunityLoad> {
+  if (source) return readCommunitySource(source, opts);
+  const env = opts.env ?? process.env;
+  const cwd = opts.cwd ?? process.cwd();
+  const override = env.FLOWGIT_REGISTRY?.trim();
+  if (override) return readCommunitySource(override, opts);
+  const remote = await readCommunitySource(PUBLISHED_REGISTRY_URL, { ...opts, timeoutMs: opts.timeoutMs ?? 4000 });
+  if (remote.ok) return remote;
+  // Before the site is deployed, the address may answer with something that is not the registry.
+  // A checkout then still has the real list.
+  const local = findRepoRegistry(cwd);
+  if (local) return readCommunitySource(local, opts);
+  return remote;
 }

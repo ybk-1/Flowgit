@@ -1,8 +1,9 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { gitFragmentProblem, splitGitFragment, validateCommunityRegistry } from "./registry.js";
+import { gitFragmentProblem, loadCommunityRegistry, splitGitFragment, validateCommunityRegistry } from "./registry.js";
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 
@@ -21,7 +22,7 @@ function entry(over: Record<string, unknown> = {}) {
 }
 
 describe("community registry schema", () => {
-  it("accepts a good entry and the committed registry", () => {
+  it("accepts a good entry and the committed registry", async () => {
     const good = validateCommunityRegistry([entry(), entry({ id: "notes", language: ["zh"], ref: "main", tags: [] })]);
     expect(good.ok).toBe(true);
     if (good.ok) {
@@ -29,8 +30,7 @@ describe("community registry schema", () => {
       expect(good.entries[1]?.ref).toBe("main");
     }
 
-    const file = JSON.parse(fs.readFileSync(path.join(repo, "registry", "community.json"), "utf8")) as unknown;
-    const committed = validateCommunityRegistry(file);
+    const committed = await loadCommunityRegistry(path.join(repo, "registry", "community"));
     expect(committed.ok, committed.ok ? "" : committed.errors.join("\n")).toBe(true);
     if (committed.ok) {
       expect(committed.entries[0]).toMatchObject({
@@ -48,6 +48,16 @@ describe("community registry schema", () => {
     expect([...schema.$defs.entry.required].sort()).toEqual(["author", "description", "git", "id", "language", "license", "name", "tags"]);
   });
 
+  it("keeps the old registry/community.json for flowgit 0.1.0, as a copy of entries in registry/community/", async () => {
+    // flowgit 0.1.0 reads this file from raw.githubusercontent.com. New entries go in registry/community/ only.
+    const legacy = await loadCommunityRegistry(path.join(repo, "registry", "community.json"));
+    const current = await loadCommunityRegistry(path.join(repo, "registry", "community"));
+    expect(legacy.ok && current.ok).toBe(true);
+    if (legacy.ok && current.ok) {
+      for (const item of legacy.entries) expect(current.entries.find((other) => other.id === item.id), item.id).toEqual(item);
+    }
+  });
+
   it("rejects bad entries", () => {
     const cases: { name: string; doc: unknown; match: RegExp }[] = [
       { name: "not an array", doc: { templates: [] }, match: /数组|array/ },
@@ -61,6 +71,8 @@ describe("community registry schema", () => {
       { name: "path escapes", doc: [entry({ git: "https://github.com/org/repo.git#path=../secret" })], match: /#path=/ },
       { name: "empty tag", doc: [entry({ tags: [""] })], match: /tags\/0/ },
       { name: "empty ref", doc: [entry({ ref: "  " })], match: /ref/ },
+      { name: "ref that reads as an option", doc: [entry({ ref: "--upload-pack=touch /tmp/x" })], match: /must not start with -/ },
+      { name: "ref with a space", doc: [entry({ ref: "main extra" })], match: /contain spaces/ },
       { name: "bad id", doc: [entry({ id: "Agent_Page" })], match: /id/ },
     ];
     for (const item of cases) {
@@ -81,5 +93,48 @@ describe("community registry schema", () => {
     });
     expect(gitFragmentProblem("https://github.com/org/repo.git#path=../secret")).toMatch(/#path=/);
     expect(gitFragmentProblem("file:///tmp/repo.git#path=examples/mini")).toBeUndefined();
+  });
+
+  it("reads the old single-file array, then prefers the published URL and falls back to a directory", async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-registry-"));
+    const oldFile = path.join(root, "community.json");
+    fs.writeFileSync(oldFile, JSON.stringify([entry({ id: "from-file" })]));
+    const old = await loadCommunityRegistry(oldFile);
+    expect(old.ok, old.ok ? "" : old.errors.join("\n")).toBe(true);
+    if (old.ok) expect(old.entries.map((item) => item.id)).toEqual(["from-file"]);
+
+    const calls: string[] = [];
+    const remote = await loadCommunityRegistry(undefined, {
+      cwd: root,
+      env: {},
+      fetch: async (input) => {
+        calls.push(String(input));
+        return new Response(JSON.stringify([entry({ id: "from-url" })]), { status: 200 });
+      },
+    });
+    expect(calls).toEqual(["https://flowgit.dev/registry.json"]);
+    expect(remote.ok).toBe(true);
+    if (remote.ok) expect(remote.entries[0]?.id).toBe("from-url");
+
+    fs.mkdirSync(path.join(root, "registry", "community"), { recursive: true });
+    fs.writeFileSync(path.join(root, "registry", "community", "from-dir.json"), JSON.stringify(entry({ id: "from-dir" })));
+    const fallback = await loadCommunityRegistry(undefined, {
+      cwd: root,
+      env: {},
+      fetch: async () => new Response("missing", { status: 404 }),
+    });
+    expect(fallback.ok, fallback.ok ? "" : fallback.errors.join("\n")).toBe(true);
+    if (fallback.ok) expect(fallback.entries.map((item) => item.id)).toEqual(["from-dir"]);
+
+    const overridden = await loadCommunityRegistry(undefined, {
+      cwd: root,
+      env: { FLOWGIT_REGISTRY: oldFile },
+      fetch: async () => {
+        throw new Error("FLOWGIT_REGISTRY must not fetch");
+      },
+    });
+    expect(overridden.ok).toBe(true);
+    if (overridden.ok) expect(overridden.entries[0]?.id).toBe("from-file");
+    fs.rmSync(root, { recursive: true, force: true });
   });
 });

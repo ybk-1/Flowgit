@@ -1,0 +1,56 @@
+# Pull requests that touch registry/community/: shallow-clone each entry over
+# https, read only, and report in both languages. The check itself is
+# scripts/registry-check.mjs (tested); this workflow only calls it.
+#
+# The report always goes to the job summary. It is also posted as a PR comment
+# when the branch is in this repository: a pull_request run from a fork gets a
+# read-only GITHUB_TOKEN and cannot comment, and this workflow does not use
+# pull_request_target, which would run the fork's code with a write token.
+# https://docs.github.com/en/actions/writing-workflows/choosing-when-your-workflow-runs/events-that-trigger-workflows#workflows-in-forked-repositories
+# https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/workflow-commands-for-github-actions#adding-a-job-summary
+name: Registry check
+
+on:
+  pull_request:
+    paths:
+      - "registry/community/**"
+
+permissions:
+  contents: read
+
+jobs:
+  registry:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: 检查社区登记 / Check community registry entries
+        id: check
+        env:
+          REGISTRY_BASE: ${{ github.event.pull_request.base.sha }}
+        run: node scripts/registry-check.mjs --comment registry-comment.md
+        continue-on-error: true
+      - name: 写进任务摘要 / Write the job summary
+        if: always() && hashFiles('registry-comment.md') != ''
+        run: cat registry-comment.md >> "$GITHUB_STEP_SUMMARY"
+      - name: 写一条双语评论 / Post one bilingual comment
+        if: always() && hashFiles('registry-comment.md') != '' && github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: gh pr comment "$PR" --body-file registry-comment.md
+      - name: 没通过就失败 / Fail when the check failed
+        if: steps.check.outcome == 'failure'
+        run: exit 1
