@@ -6,6 +6,10 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 
 ## [未发布 / Unreleased]
 
+### 编辑器 / Editor
+
+- VS Code 和 Cursor 插件（`packages/vscode`，不发布到 npm）：侧边栏按依赖顺序列出阶段和状态（与 `flowgit status --json` 一致），CodeLens 可运行阶段，命令通过编辑器任务执行，不读取、不保存密钥。说明见 [docs/vscode.md](docs/vscode.md)。 / A VS Code and Cursor extension (`packages/vscode`, not published to npm): the sidebar lists stages in dependency order with the same states as `flowgit status --json`, CodeLens can run a stage, and commands run as editor tasks. It never reads or stores a key. See [docs/vscode.md](docs/vscode.md).
+
 ### 命令行 / CLI
 
 - `flowgit publish [dir]` 检查流程能否公开（去隐私、校验、LICENSE、README 的「依据 / Sources」、没有密钥、没有 `runs/`），然后打印 `registry/community/<id>.json` 和手动登记步骤。社区登记改成一个条目一个文件；`templates --all` 先读 https://flowgit.dev/registry.json，读不到再读仓库目录，`FLOWGIT_REGISTRY` 仍可换来源，旧的单文件格式还能读。改了 `registry/community/` 的 Pull Request 会浅克隆条目（只接受 https）、只读检查，结果写进检查摘要，分支在本仓库时再写一条双语评论。画廊卡片在构建时显示 GitHub 星标（读不到就不显示），详情页可以接 `site/config.json` 里的 giscus（没配就不显示）。 / `flowgit publish [dir]` checks that a flow is safe to share (privacy, validation, LICENSE, a README 依据 / Sources section, no keys, no `runs/`), then prints `registry/community/<id>.json` and the manual registration steps. The community registry is one file per entry; `templates --all` reads https://flowgit.dev/registry.json first, then the checkout directory, `FLOWGIT_REGISTRY` still overrides the source, and the old single-file format still reads. A pull request that changes `registry/community/` shallow-clones each entry (https only), checks it read-only, and reports in the check summary, plus one bilingual comment when the branch is in this repository. Gallery cards show a GitHub star count read at build time (hidden when it cannot be read), and template pages can show giscus from `site/config.json` (hidden when it is not set).

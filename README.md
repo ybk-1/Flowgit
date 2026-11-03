@@ -441,6 +441,12 @@ pnpm --filter @flowgit/app serve   # 打开 / open http://127.0.0.1:4178/
 - 也可以把这些步骤交给电脑上的本机看板：流程要在电脑上的文件夹里（存在浏览器里的流程先点“存到文件夹”），在那个文件夹里运行 `flowgit board`，把它打印的链接粘贴到看板顶部的“本机看板”。之后点运行，这一步就在电脑上跑，结果回到网页。本机看板只接受 https://flowgit.dev 的网页（自己部署的网页版用 `flowgit board --allow-origin <网址>`），而且每个请求仍然要带链接里的令牌；Chrome 会问是否允许访问本地网络。/ You can also hand those steps to the local board on your computer: the flow must be in a folder on the computer (for a flow kept in the browser, use "Save to a folder" first); run `flowgit board` in that folder and paste the link it prints into "Local board" at the top of the board. Running the step then runs it on the computer, and the results come back to the page. The local board only answers pages from https://flowgit.dev (for your own copy of the web app, use `flowgit board --allow-origin <url>`), and every request still needs the token from the link; Chrome asks whether the site may access your local network.
 - 页面用严格的 Content-Security-Policy：不加载第三方脚本，不收集数据，只连接 DeepSeek 和 Anthropic 的接口、只读的 GitHub（api.github.com、raw.githubusercontent.com），以及这台电脑上的本机看板（127.0.0.1）。/ The page has a strict Content-Security-Policy: no third-party scripts, no data collection, and connections only to the DeepSeek and Anthropic APIs, read-only GitHub (api.github.com, raw.githubusercontent.com), and the local board on this computer (127.0.0.1).
 
+## 编辑器 / Editor
+
+VS Code 和 Cursor 可以在侧边栏看流程、运行阶段。插件不进应用商店，从源码打包安装，见 [docs/vscode.md](docs/vscode.md)。
+
+VS Code and Cursor can show a flow in the sidebar and run stages. The extension is not in a marketplace; package it from source, see [docs/vscode.md](docs/vscode.md).
+
 ## 仓库结构 / Repository layout
 
 ```text
@@ -450,9 +456,11 @@ packages/
     templates/             自带模板：short-video（短视频）、weekly-report（周报入门）、article（图文）、support-sop（客服 SOP）、job-application（求职材料）、research-report（调研报告）、ecommerce-listing（电商上架）、slides（演示稿）、live-selling（直播带货）、short-drama（短剧）、lesson-plan（备课）、novel-serial（网文连载）、business-plan（商业计划书）、event-plan（活动策划）、hiring（招聘）、travel-guide（旅行攻略）、online-course（知识付费课程）、landing-page（落地页）、social-posts（社媒帖子）、data-report（数据报告）、meeting-notes（会议纪要）、podcast（播客单集）、picture-book（绘本 / 漫画）、product-launch（新品发布物料包）、micro-course（知识付费微课视频）/ bundled templates: short-video, weekly-report (starter), article, support-sop, job-application, research-report, ecommerce-listing, slides, live-selling, short-drama, lesson-plan, novel-serial, business-plan, event-plan, hiring, travel-guide, online-course, landing-page, social-posts, data-report, meeting-notes, podcast, picture-book, product-launch, micro-course
   app/    @flowgit/app   网页版：在浏览器里用的静态网站（不发布到 npm）/ web app: a static site for the browser (not published to npm)
   web/    @flowgit/web   本机网页看板：查看、修改、运行、新增和删除阶段、填写输入、看历史、对比和回退、流程图、预演和 token 用量 / local web board: view, edit, run, add and remove stages, fill in inputs, browse history, compare, restore, a flow graph, preview, and token usage
+  vscode/ flowgit-vscode VS Code 和 Cursor 插件（不发布到 npm）/ VS Code and Cursor extension (not published to npm)
 docs/
   spec.md                  格式规范 / format spec
   guide.md                 教程：动手做一个流程 / tutorial: build your own flow
+  vscode.md                VS Code 和 Cursor 插件 / VS Code and Cursor extension
   releasing.md             怎么发布到 npm / how to publish to npm
 examples/                  只在仓库里的示例，比如 agent-page、subflow / repo-only examples such as agent-page and subflow
 CHANGELOG.md               每个版本的更新记录 / what changed in each version
