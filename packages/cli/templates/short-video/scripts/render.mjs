@@ -38,6 +38,114 @@ const FONT_CANDIDATES = [
 const font = FONT_CANDIDATES.find((f) => fs.existsSync(f));
 if (!font) console.warn(say("找不到中文字体，字幕会被跳过。可以设置 FLOWGIT_FONT=/path/to/font.ttc", "No CJK font found, captions are skipped. Set FLOWGIT_FONT=/path/to/font.ttc to enable them."));
 
+// Same object the board preview draws from (copied onto timeline.json by the edit stage).
+const CAPTION_STYLE_DEFAULT = {
+  caption: {
+    fontSizeRatio: 18,
+    color: "#ffffff",
+    box: { color: "#000000", alpha: 0.45, borderRatio: 45 },
+    lineSpacing: 12,
+    y: 0.76,
+    wrap: { perLine: 12, maxLines: 3, englishFactor: 2 },
+  },
+  title: {
+    fontSizeRatio: 13,
+    color: "#ffffff",
+    box: { color: "#000000", alpha: 0.5, borderRatio: 36 },
+    lineSpacingRatio: 60,
+    y: 0.12,
+    wrap: { perLine: 10, maxLines: 2, englishFactor: 2 },
+    hold: 2.2,
+    fade: 0.6,
+  },
+  card: {
+    fontSizeRatio: 16,
+    color: "#ffffff",
+    shadow: { color: "#000000", alpha: 0.35, x: 3, y: 3 },
+    lineSpacingRatio: 40,
+    y: "middle",
+    wrap: { perLine: 11, maxLines: 7, englishFactor: 2 },
+  },
+};
+
+function loadCaptionStyle() {
+  const file = path.join(dir, "scripts", "caption-style.json");
+  if (!fs.existsSync(file)) return CAPTION_STYLE_DEFAULT;
+  try {
+    const parsed = JSON.parse(fs.readFileSync(file, "utf8"));
+    return parsed && typeof parsed === "object" ? parsed : CAPTION_STYLE_DEFAULT;
+  } catch {
+    return CAPTION_STYLE_DEFAULT;
+  }
+}
+
+const captionStyle = loadCaptionStyle();
+
+function styleRule(name) {
+  const rule = captionStyle[name];
+  return rule && typeof rule === "object" ? rule : CAPTION_STYLE_DEFAULT[name];
+}
+
+function ffmpegColor(color) {
+  const hex = String(color || "#ffffff").toLowerCase();
+  if (hex === "#ffffff" || hex === "#fff") return "white";
+  if (hex === "#000000" || hex === "#000") return "black";
+  return hex;
+}
+
+function ffmpegAlpha(color, alpha) {
+  const name = ffmpegColor(color);
+  const value = Number(alpha);
+  if (!Number.isFinite(value) || value >= 1) return name;
+  return `${name}@${value}`;
+}
+
+function fontPx(rule) {
+  return Math.round(W / (Number(rule.fontSizeRatio) || 18));
+}
+
+function gapPx(rule) {
+  if (rule.lineSpacing != null && Number.isFinite(Number(rule.lineSpacing))) return Math.round(Number(rule.lineSpacing));
+  return Math.round(W / (Number(rule.lineSpacingRatio) || 40));
+}
+
+function yExpr(rule) {
+  if (rule.y === "middle") return "(h-text_h)/2";
+  const y = Number(rule.y);
+  return `h*${Number.isFinite(y) ? y : 0.76}`;
+}
+
+/** drawtext filter for one caption rule in scripts/caption-style.json. */
+function drawText(name, fileName, text) {
+  const rule = styleRule(name);
+  const wrap = rule.wrap || {};
+  const parts = [
+    `drawtext=fontfile='${esc(font)}'`,
+    `textfile='${textFile(fileName, wrapCaption(text, Number(wrap.perLine) || 12, Number(wrap.maxLines) || 3, Number(wrap.englishFactor) || 2))}'`,
+    `fontsize=${fontPx(rule)}`,
+    `fontcolor=${ffmpegColor(rule.color)}`,
+  ];
+  if (rule.box) {
+    parts.push("box=1", `boxcolor=${ffmpegAlpha(rule.box.color, rule.box.alpha)}`, `boxborderw=${Math.round(W / (Number(rule.box.borderRatio) || 45))}`);
+  }
+  if (rule.shadow) {
+    parts.push(
+      `shadowcolor=${ffmpegAlpha(rule.shadow.color, rule.shadow.alpha)}`,
+      `shadowx=${Math.round(Number(rule.shadow.x) || 0)}`,
+      `shadowy=${Math.round(Number(rule.shadow.y) || 0)}`,
+    );
+  }
+  parts.push(`line_spacing=${gapPx(rule)}`);
+  let tail = "";
+  if (rule.hold != null) {
+    const hold = Number(rule.hold);
+    const fade = Number(rule.fade ?? 0.6);
+    const until = Number((hold + fade).toFixed(3));
+    tail = `:alpha='if(lt(t,${hold}),1,max(0,(${until}-t)/${fade}))':enable='lt(t,${until})'`;
+  }
+  return `${parts.join(":")}${CENTER}:x=(w-text_w)/2:y=${yExpr(rule)}${tail}`;
+}
+
 // ffmpeg filter values: escape \ : ' for the filtergraph parser.
 const esc = (s) => s.replace(/\\/g, "/").replace(/:/g, "\\:").replace(/'/g, "\\'");
 
@@ -45,11 +153,11 @@ const work = fs.mkdtempSync(path.join(os.tmpdir(), "flowgit-render-"));
 const PALETTE = ["0x1f2937", "0x0f766e", "0x1d4ed8", "0x7c3aed", "0xb45309", "0xbe123c"];
 
 /** Break text into balanced lines (no lonely last character), at most maxLines lines. */
-function wrapCaption(text, perLine = 12, maxLines = 3) {
+function wrapCaption(text, perLine = 12, maxLines = 3, englishFactor = 2) {
   const clean = text.trim();
   // English and other space-separated text (no CJK): wrap on words, about twice as many characters per line
   if (/\s/.test(clean) && !/[\u2E80-\u9FFF\uAC00-\uD7AF\uF900-\uFAFF\uFF00-\uFFEF]/.test(clean)) {
-    const max = perLine * 2;
+    const max = perLine * englishFactor;
     const lines = [];
     let line = "";
     for (const word of clean.split(/\s+/)) {
@@ -149,21 +257,15 @@ clips.forEach((clip, i) => {
     filters.push("format=yuv420p");
     if (font && clip.narration) {
       // no asset: show the narration in the middle
-      filters.push(
-        `drawtext=fontfile='${esc(font)}':textfile='${textFile(`card-${i}.txt`, wrapCaption(clip.narration, 11, 7))}':fontsize=${Math.round(W / 16)}:fontcolor=white:shadowcolor=black@0.35:shadowx=3:shadowy=3:line_spacing=${Math.round(W / 40)}${CENTER}:x=(w-text_w)/2:y=(h-text_h)/2`,
-      );
+      filters.push(drawText("card", `card-${i}.txt`, clip.narration));
     }
   }
   if (font && i === 0 && timeline.title) {
     // Title over the first clip for about 2.5 seconds, then it fades away.
-    filters.push(
-      `drawtext=fontfile='${esc(font)}':textfile='${textFile("title.txt", wrapCaption(timeline.title, 10, 2))}':fontsize=${Math.round(W / 13)}:fontcolor=white:box=1:boxcolor=black@0.5:boxborderw=${Math.round(W / 36)}:line_spacing=${Math.round(W / 60)}${CENTER}:x=(w-text_w)/2:y=h*0.12:alpha='if(lt(t,2.2),1,max(0,(2.8-t)/0.6))':enable='lt(t,2.8)'`,
-    );
+    filters.push(drawText("title", "title.txt", timeline.title));
   }
   if (font && clip.caption) {
-    filters.push(
-      `drawtext=fontfile='${esc(font)}':textfile='${textFile(`cap-${i}.txt`, wrapCaption(clip.caption, 12))}':fontsize=${Math.round(W / 18)}:fontcolor=white:box=1:boxcolor=black@0.45:boxborderw=${Math.round(W / 45)}:line_spacing=12${CENTER}:x=(w-text_w)/2:y=h*0.76`,
-    );
+    filters.push(drawText("caption", `cap-${i}.txt`, clip.caption));
   }
   run([...inputArgs, "-filter_complex", `[0:v]${filters.join(",")}[v]`, "-map", "[v]", "-frames:v", String(frames), "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-r", String(FPS), "-pix_fmt", "yuv420p", out], `clip ${clip.id}`);
   segments.push(out);

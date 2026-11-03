@@ -32,6 +32,8 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 
 ### 看板 / Board
 
+- 看板上可以剪辑短视频时间线：拖动镜头、改时长和字幕、换素材、预览，保存后成为手动修改，导出阶段需要重跑。字幕样式和 FFmpeg 导出共用 `scripts/caption-style.json`。分镜在看板上按镜头卡片显示。
+- The board can edit a short-video timeline: drag shots, change length and captions, swap assets and preview. Saving stores a hand edit, and the export stage needs a re-run. Captions share `scripts/caption-style.json` with the FFmpeg export. A storyboard opens as shot cards.
 - 看板界面一次只显示一种语言：右上角「中文 / EN」切换，选择记在浏览器里；第一次打开跟着浏览器语言（中文浏览器显示简体中文，其他显示英文）。文案在 `public/i18n.js`，用开源翻译库 [i18next](https://www.i18next.com)；服务器和流程文件里的双语提示（“中文 / English”）也只显示当前语言那一半。
 - The board shows one language at a time: switch with "中文 / EN" at the top right, remembered in the browser; the first visit follows the browser language (Simplified Chinese for a Chinese browser, English otherwise). Strings live in `public/i18n.js` on the open-source [i18next](https://www.i18next.com) library, and bilingual messages from the server and from flow files ("中文 / English") show only the current language's half.
 - 看板更有立体感：卡片有分层阴影，高度表示状态（可以运行的浮得最高，等上游的凹下去），编号是立体字，按钮像键帽一样能按下去；用鼠标时，卡片会朝鼠标倾斜，里面的内容分层浮起。流程图默认是 2.5D：阶段是倾斜地面上的方块，可以运行的方块轻轻浮动，通向正在运行阶段的连线会流动；流程图右上角可以切回平面图，选择记在浏览器里。系统打开“减少动态效果”时，倾斜和浮动都会关掉。

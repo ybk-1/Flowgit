@@ -1,14 +1,26 @@
 import { spawnSync } from "node:child_process";
+import { createRequire } from "node:module";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { pathToFileURL, fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 // Runs the short-video template's export script directly on tiny timelines.
 const here = path.dirname(fileURLToPath(import.meta.url));
 const template = path.resolve(here, "..", "templates", "short-video");
 const hasFfmpeg = spawnSync("ffmpeg", ["-version"]).status === 0;
+
+const requireFromCore = createRequire(path.resolve(here, "../../core/package.json"));
+
+async function assertTimelineSchema(timeline: unknown) {
+  const ajvEntry = requireFromCore.resolve("ajv/dist/2020.js");
+  const mod = (await import(pathToFileURL(ajvEntry).href)) as { Ajv2020: new (opts: object) => { compile: (schema: object) => (data: unknown) => boolean & { errors?: unknown } } };
+  const schema = JSON.parse(fs.readFileSync(path.join(template, "schemas/timeline.schema.json"), "utf8")) as object;
+  const validate = new mod.Ajv2020({ allErrors: true, strict: false }).compile(schema);
+  const ok = validate(timeline);
+  expect(ok, JSON.stringify(validate.errors)).toBe(true);
+}
 
 function probe(file: string, entries: string, stream?: string): string {
   const args = ["-v", "error", ...(stream ? ["-select_streams", stream] : []), "-show_entries", entries, "-of", "csv=p=0", file];
@@ -71,13 +83,15 @@ describe.skipIf(!hasFfmpeg)("short-video export script", () => {
     expect(timeline.clips[0].duration).toBeCloseTo(1.05, 2);
     expect(timeline.clips[1].duration).toBeCloseTo(4.55, 2);
     expect(timeline.clips[1].start).toBeCloseTo(1.05, 2);
+    expect(timeline.captionStyle).toEqual(JSON.parse(fs.readFileSync(path.join(template, "scripts", "caption-style.json"), "utf8")));
 
     const r = render({ ...timeline, width: 360, height: 640, fps: 15 });
     expect(r.code, r.out).toBe(0);
     expect(r.out).toContain("voiceover: assets/voice.wav, volume 1");
     expect(r.out).toContain("music: assets/music.wav, volume 0.2");
     const final = path.join(dir, "final.mp4");
-    expect(Number(probe(final, "format=duration"))).toBeCloseTo(5.6, 0);
+    const probed = Number(probe(final, "format=duration"));
+    expect(Math.abs(probed - timeline.duration)).toBeLessThanOrEqual(0.1);
     expect(Number(probe(final, "stream=duration", "a"))).toBeCloseTo(5.6, 0);
   });
 
@@ -151,12 +165,13 @@ describe("short-video timeline voiceover choice", () => {
     };
   }
 
-  it("uses voice/voice.mp3 when nothing was recorded in assets/", () => {
+  it("uses voice/voice.mp3 when nothing was recorded in assets/", async () => {
     fs.mkdirSync(path.join(dir, "voice"));
     fs.writeFileSync(path.join(dir, "voice", "voice.mp3"), "not really audio");
     const { out, timeline } = build();
     expect(timeline.voice).toEqual({ path: "voice/voice.mp3", volume: 1 });
     expect(out).toContain("voiceover voice/voice.mp3");
+    await assertTimelineSchema(timeline);
   });
 
   it("prefers a recorded voiceover in assets/ over the generated file", () => {

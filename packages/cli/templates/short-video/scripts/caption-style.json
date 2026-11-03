@@ -1,0 +1,28 @@
+{
+  "caption": {
+    "fontSizeRatio": 18,
+    "color": "#ffffff",
+    "box": { "color": "#000000", "alpha": 0.45, "borderRatio": 45 },
+    "lineSpacing": 12,
+    "y": 0.76,
+    "wrap": { "perLine": 12, "maxLines": 3, "englishFactor": 2 }
+  },
+  "title": {
+    "fontSizeRatio": 13,
+    "color": "#ffffff",
+    "box": { "color": "#000000", "alpha": 0.5, "borderRatio": 36 },
+    "lineSpacingRatio": 60,
+    "y": 0.12,
+    "wrap": { "perLine": 10, "maxLines": 2, "englishFactor": 2 },
+    "hold": 2.2,
+    "fade": 0.6
+  },
+  "card": {
+    "fontSizeRatio": 16,
+    "color": "#ffffff",
+    "shadow": { "color": "#000000", "alpha": 0.35, "x": 3, "y": 3 },
+    "lineSpacingRatio": 40,
+    "y": "middle",
+    "wrap": { "perLine": 11, "maxLines": 7, "englishFactor": 2 }
+  }
+}

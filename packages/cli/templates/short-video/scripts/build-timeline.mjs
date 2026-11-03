@@ -110,6 +110,14 @@ if (voiceRel) {
   }
 }
 
+// The board preview draws from this copy. render.mjs reads the same file when it exports.
+function readCaptionStyle() {
+  const file = path.join(dir, "scripts", "caption-style.json");
+  if (!fs.existsSync(file)) return undefined;
+  return JSON.parse(fs.readFileSync(file, "utf8"));
+}
+const captionStyle = readCaptionStyle();
+
 const timeline = {
   format: "flowgit/timeline",
   version: "0.1",
@@ -123,6 +131,7 @@ const timeline = {
   // 有配音时背景音乐压低，免得盖过人声。 / With a voiceover the music sits lower so the voice stays clear.
   ...(voice ? { voice } : {}),
   ...(musicFile ? { music: { path: `assets/${musicFile}`, volume: voice ? 0.2 : 0.6 } } : {}),
+  ...(captionStyle ? { captionStyle } : {}),
   clips,
 };
 

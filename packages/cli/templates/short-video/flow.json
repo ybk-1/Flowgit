@@ -74,10 +74,10 @@
     {
       "id": "edit",
       "name": "剪辑",
-      "description": "把分镜和素材排成时间线。生成后可以直接改 timeline.json 调整顺序、时长和字幕。 / Lay out the storyboard and assets as a timeline. You can edit timeline.json afterwards to change order, durations and captions.",
+      "description": "把分镜和素材排成时间线。在看板上打开 timeline.json 可以拖动镜头、改时长和字幕并预览；也可以直接改文件。 / Lay out the storyboard and assets as a timeline. Open timeline.json on the board to drag shots, change length and captions and preview, or edit the file directly.",
       "inputs": ["storyboard", "assets", "voice"],
       "executor": { "type": "script", "run": "node scripts/build-timeline.mjs" },
-      "outputs": [{ "type": "flowgit/timeline+json", "path": "timeline.json" }]
+      "outputs": [{ "type": "flowgit/timeline+json", "path": "timeline.json", "schema": "schemas/timeline.schema.json" }]
     },
     {
       "id": "export",
