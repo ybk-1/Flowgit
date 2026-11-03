@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -20,7 +21,7 @@ export interface BoardSession {
  * copy, and start the board in-process on a random port. `close` stops the
  * server and deletes the temp directory.
  */
-export async function openBoard(template: string): Promise<BoardSession> {
+export async function openBoard(template: string, options: { markdown?: boolean } = {}): Promise<BoardSession> {
   const src = path.join(templates, template);
   if (!fs.existsSync(path.join(src, "flow.json"))) throw new Error(`找不到模板 / template not found: ${template}`);
   if (!fs.existsSync(path.join(webRoot, "dist", "index.js"))) {
@@ -28,6 +29,14 @@ export async function openBoard(template: string): Promise<BoardSession> {
   }
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), `flowgit-e2e-${template}-`));
   fs.cpSync(src, dir, { recursive: true });
+  if (options.markdown) {
+    const cli = path.join(repoRoot, "packages", "cli", "dist", "index.js");
+    const converted = spawnSync(process.execPath, [cli, "-C", dir, "convert", "--to", "md"], { encoding: "utf8" });
+    if (converted.status !== 0) {
+      fs.rmSync(dir, { recursive: true, force: true });
+      throw new Error(converted.stderr || converted.stdout || "convert failed");
+    }
+  }
   const previousMock = process.env.FLOWGIT_LLM_MOCK_DIR;
   const hadTts = Object.prototype.hasOwnProperty.call(process.env, "FLOWGIT_TTS_API_KEY");
   const previousTts = process.env.FLOWGIT_TTS_API_KEY;

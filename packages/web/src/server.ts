@@ -1,14 +1,14 @@
-import { serveEvents, stopWatching, watchFlow } from "./routes/events.js";
+import { publishFlowChanged, serveEvents, stopWatching, watchFlow } from "./routes/events.js";
 import { putFlowFile, serveFlowFile, uploadFlowFile } from "./routes/files.js";
-import { flowBoard } from "./routes/flow.js";
+import { flowBoard, putFlow } from "./routes/flow.js";
 import { postGenerate } from "./routes/generate.js";
 import { flowGraph } from "./routes/graph.js";
 import { boardInputs, putInputs } from "./routes/inputs.js";
 import { servePlan } from "./routes/plan.js";
 import { postRun } from "./routes/run.js";
 import { postRestore, serveDiff, serveRuns } from "./routes/runs.js";
-import { authorized, busy, type HandlerCtx, headerString, hostAllowed, send, sendError, sendJson, tokenMatches } from "./routes/shared.js";
-import { deleteStage, postStage } from "./routes/stage.js";
+import { authorized, busy, type HandlerCtx, headerString, hostAllowed, readJsonObject, send, sendError, sendJson, tokenMatches } from "./routes/shared.js";
+import { deleteStage, postStage, putStage } from "./routes/stage.js";
 import { serveThumb } from "./routes/thumb.js";
 import { postTrust } from "./routes/trust.js";
 import { serveUsage } from "./routes/usage.js";
@@ -318,6 +318,11 @@ export function handle(req: http.IncomingMessage, res: http.ServerResponse, ctx:
       void deleteStage(req, res, ctx, url).catch((err) => sendError(res, err));
       return;
     }
+    if (req.method === "PUT") {
+      if (busy(req, res, ctx, STAGE_BUSY)) return;
+      void putStage(req, res, ctx).catch((err) => sendError(res, err));
+      return;
+    }
     req.resume();
     sendJson(res, 405, { error: "不支持这个方法 / method not allowed" });
     return;
@@ -325,6 +330,16 @@ export function handle(req: http.IncomingMessage, res: http.ServerResponse, ctx:
   if (req.method === "PUT" && pathname === "/api/inputs") {
     if (!authorized(req, res, ctx)) return;
     void putInputs(req, res, ctx).catch((err) => sendError(res, err));
+    return;
+  }
+  if (req.method === "PUT" && pathname === "/api/flow") {
+    if (!authorized(req, res, ctx)) return;
+    if (busy(req, res, ctx, STAGE_BUSY)) return;
+    void (async () => {
+      const result = putFlow(ctx.dir, await readJsonObject(req));
+      if (result.status === 200) publishFlowChanged(ctx);
+      sendJson(res, result.status, result.body);
+    })().catch((err) => sendError(res, err));
     return;
   }
   if (req.method !== "GET" && req.method !== "HEAD") {

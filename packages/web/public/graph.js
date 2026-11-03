@@ -1,6 +1,7 @@
 /** Board graph. */
 import { getGraph } from "./api.js";
 import { paintBoard } from "./cards.js";
+import { bindGraph, editStatusLine, editSwitch, editing, openStageEditor, readPositions } from "./editor.js";
 import { I18N } from "./i18n.js";
 import { openStage } from "./panel.js";
 import { GAP_X, GAP_Y, GRID_3D, NODE_H, NODE_W, PAD, RUNNING, S, STATES, SVG_NS, boardEl, clipLabel, el, elt, isRunning, labelText, paintPlanNode, stageUsageLine, stateLabel, storeGraphStyle, t, withStatus } from "./state.js";
@@ -51,8 +52,14 @@ export function renderGraphView() {
         return wrap;
     }
     const bar = el("div", "graph-bar");
-    bar.append(renderLegend(), renderGraphStyleSwitch());
-    wrap.append(bar, S.graphStyle === "flat" ? drawGraph(S.graphPayload) : drawGraph3d(S.graphPayload));
+    const tools = el("div", "graph-tools");
+    tools.append(renderGraphStyleSwitch(), editSwitch());
+    bar.append(renderLegend(), tools);
+    const status = editStatusLine();
+    wrap.append(bar);
+    if (status)
+        wrap.append(status);
+    wrap.append(S.graphStyle === "flat" ? drawGraph(S.graphPayload) : drawGraph3d(S.graphPayload));
     return wrap;
 }
 
@@ -124,7 +131,7 @@ export function svgEl(name, attrs) {
  * Where each stage sits and how each edge runs, in px: one column per layer, rows inside it.
  * An edge that skips layers runs along its own lane under the stages.
  */
-export function graphLayout(nodes, edges, grid) {
+export function graphLayout(nodes, edges, grid, positions) {
     const { w, h, gx, gy, pad } = grid;
     let maxLayer = 0;
     let maxRow = 0;
@@ -136,7 +143,11 @@ export function graphLayout(nodes, edges, grid) {
             maxLayer = layer;
         if (row > maxRow)
             maxRow = row;
-        pos.set(node.id, { x: pad + layer * (w + gx), y: pad + row * (h + gy), layer });
+        const custom = positions && positions[node.id];
+        if (custom && Number.isFinite(custom.x) && Number.isFinite(custom.y))
+            pos.set(node.id, { x: custom.x, y: custom.y, layer });
+        else
+            pos.set(node.id, { x: pad + layer * (w + gx), y: pad + row * (h + gy), layer });
     }
     const laneGap = 14;
     const bottom = pad + (maxRow + 1) * h + maxRow * gy + 12;
@@ -165,8 +176,12 @@ export function graphLayout(nodes, edges, grid) {
         }
         routes.push({ from: edge.from, to: edge.to, d });
     }
-    const width = pad * 2 + (maxLayer + 1) * w + maxLayer * gx;
-    const height = bottom + (longLanes > 0 ? 8 + longLanes * laneGap : 8);
+    let width = pad * 2 + (maxLayer + 1) * w + maxLayer * gx;
+    let height = bottom + (longLanes > 0 ? 8 + longLanes * laneGap : 8);
+    for (const place of pos.values()) {
+        width = Math.max(width, place.x + w + pad);
+        height = Math.max(height, place.y + h + pad);
+    }
     return { pos, routes, width, height };
 }
 
@@ -192,7 +207,18 @@ export function graphEdges(layout, className) {
     defs.append(marker);
     svg.append(defs);
     for (const route of layout.routes) {
-        const path = svgEl("path", { class: "flow-edge", d: route.d, "marker-end": `url(#flow-arrow-${className})`, "data-to": route.to });
+        if (editing())
+            svg.append(svgEl("path", { class: "flow-edge-hit", d: route.d, "data-from": route.from, "data-to": route.to }));
+        const selected = S.selectedEdge && S.selectedEdge.from === route.from && S.selectedEdge.to === route.to;
+        const path = svgEl("path", {
+            class: selected ? "flow-edge is-selected" : "flow-edge",
+            d: route.d,
+            "marker-end": `url(#flow-arrow-${className})`,
+            "data-from": route.from,
+            "data-to": route.to,
+        });
+        if (editing())
+            path.setAttribute("pointer-events", "none");
         if (isRunning(route.to))
             path.setAttribute("data-running", "");
         svg.append(path);
@@ -215,8 +241,18 @@ export function nodeLabels(node) {
 /** Click or Enter / Space on a graph node opens its stage in the side panel. */
 export function wireNode(target, node) {
     const stage = stageForNode(node);
-    const open = () => openStage(stage);
-    target.addEventListener("click", open);
+    const open = () => {
+        if (editing())
+            openStageEditor(stage);
+        else
+            openStage(stage);
+    };
+    // A pointer click in edit mode is the drag gesture. Keyboard activation still opens the form.
+    target.addEventListener("click", (event) => {
+        if (editing() && event.detail !== 0)
+            return;
+        open();
+    });
     target.addEventListener("keydown", (event) => {
         if (event.key !== "Enter" && event.key !== " ")
             return;
@@ -233,7 +269,7 @@ export function drawGraph(payload) {
         scroll.append(elt("p", "graph-empty", "graph.empty"));
         return scroll;
     }
-    const layout = graphLayout(nodes, edges, { w: NODE_W, h: NODE_H, gx: GAP_X, gy: GAP_Y, pad: PAD });
+    const layout = graphLayout(nodes, edges, { w: NODE_W, h: NODE_H, gx: GAP_X, gy: GAP_Y, pad: PAD }, readPositions());
     const svg = graphEdges(layout, "flow-graph");
     svg.setAttribute("role", "group");
     svg.setAttribute("aria-label", t("graph.label"));
@@ -278,12 +314,24 @@ export function drawGraph(payload) {
             "data-type": node.type || "",
         });
         type.textContent = node.type || "";
+        g.dataset.x = String(place.x);
+        g.dataset.y = String(place.y);
+        g.dataset.w = String(NODE_W);
+        g.dataset.h = String(NODE_H);
         g.append(title, name, type);
+        if (editing()) {
+            const grip = svgEl("circle", { class: "node-grip", cx: place.x + NODE_W - 16, cy: place.y + 14, r: 5 });
+            const gripTitle = svgEl("title");
+            gripTitle.textContent = t("editor.grip");
+            grip.append(gripTitle);
+            g.append(grip);
+        }
         paintPlanNode(g);
         wireNode(g, node);
         svg.append(g);
     }
     scroll.append(svg);
+    bindGraph(scroll);
     return scroll;
 }
 
@@ -301,7 +349,7 @@ export function drawGraph3d(payload) {
         scroll.append(elt("p", "graph-empty", "graph.empty"));
         return scroll;
     }
-    const layout = graphLayout(nodes, edges, GRID_3D);
+    const layout = graphLayout(nodes, edges, GRID_3D, readPositions());
     const stage = el("div", "iso-stage");
     const plane = el("div", "iso-plane");
     plane.setAttribute("role", "group");
@@ -341,6 +389,10 @@ export function drawGraph3d(payload) {
         block.style.top = `${place.y}px`;
         block.style.width = `${GRID_3D.w}px`;
         block.style.height = `${GRID_3D.h}px`;
+        block.dataset.x = String(place.x);
+        block.dataset.y = String(place.y);
+        block.dataset.w = String(GRID_3D.w);
+        block.dataset.h = String(GRID_3D.h);
         const top = el("span", "iso-top");
         const name = el("span", "flow-name", labels.nodeName);
         const type = el("span", "flow-type", node.type || "");
@@ -352,12 +404,18 @@ export function drawGraph3d(payload) {
         for (const face of faces)
             face.setAttribute("aria-hidden", "true");
         block.append(...faces, top);
+        if (editing()) {
+            const grip = el("span", "node-grip");
+            grip.title = t("editor.grip");
+            block.append(grip);
+        }
         paintPlanNode(block);
         wireNode(block, node);
         plane.append(block);
     }
     stage.append(plane);
     scroll.append(stage);
+    bindGraph(scroll);
     fitGraph3d(scroll, stage, plane, layout);
     watchGraph3d(scroll, () => fitGraph3d(scroll, stage, plane, layout));
     return scroll;
@@ -393,6 +451,11 @@ export function watchGraph3d(scroll, refit) {
     });
     S.graphResize.observe(scroll);
 }
+
+document.addEventListener("flowgit-relayout", () => {
+    if (S.view === "graph")
+        paintBoard();
+});
 
 export function markSelected() {
     for (const node of boardEl.querySelectorAll(".flow-node")) {

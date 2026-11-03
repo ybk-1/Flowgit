@@ -1,0 +1,214 @@
+/* Graph editor. Colors come from the board tokens, so light and dark both work. */
+
+.graph-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.graph-edit button[aria-pressed="true"] {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.edit-status {
+  margin: 0;
+  color: var(--muted);
+}
+
+.edit-status.is-error {
+  color: var(--error);
+}
+
+.graph-scroll.is-editing .flow-node {
+  cursor: crosshair;
+}
+
+.node-grip {
+  cursor: grab;
+  fill: var(--surface);
+  stroke: var(--rule);
+  stroke-width: 1.5px;
+}
+
+.iso-node .node-grip {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 3;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--rule);
+  background: var(--surface);
+}
+
+.flow-edge-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 16px;
+  pointer-events: stroke;
+}
+
+.flow-edge.is-selected {
+  stroke: var(--accent);
+  stroke-width: 3px;
+}
+
+.edge-draft {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2px;
+  stroke-dasharray: 6 4;
+  pointer-events: none;
+}
+
+.edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.edit-form .field textarea,
+.edit-form .field input,
+.edit-form .field select,
+.edit-row input,
+.edit-input input,
+.edit-input select {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.edit-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.edit-row,
+.edit-input {
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--hair);
+  background: var(--surface);
+}
+
+.edit-row {
+  grid-template-columns: 1fr 1.4fr auto;
+  align-items: center;
+}
+
+.edit-input {
+  grid-template-columns: 1fr 1fr;
+}
+
+.edit-required {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.prompt-complete {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+  padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+}
+
+.prompt-complete[hidden] {
+  display: none;
+}
+
+.prompt-option {
+  text-align: left;
+  font: inherit;
+  background: transparent;
+  color: var(--ink);
+  border: 0;
+  padding: 4px 6px;
+  cursor: pointer;
+}
+
+.prompt-option[aria-selected="true"] {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+/* The edit forms sit in the side panel, which is dark in both themes: use its tokens, not the page's. */
+#panel-body .edit-form {
+  color-scheme: dark;
+}
+
+#panel-body .edit-form :is(.field-name, .field-help, .edit-required, .edit-status) {
+  color: var(--code-muted);
+}
+
+#panel-body .edit-form .edit-status.is-error {
+  color: var(--error);
+}
+
+#panel-body .edit-form :is(input:not([type="checkbox"]), select, textarea) {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  font-size: 14px;
+  color: var(--code-ink);
+  background: var(--code-bg-2);
+  border: 1px solid var(--code-line);
+  border-radius: 8px;
+  padding: 7px 9px;
+  box-shadow: none;
+}
+
+#panel-body .edit-form ::placeholder {
+  color: var(--code-muted);
+}
+
+#panel-body .edit-form input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+#panel-body .edit-form :is(.edit-row, .edit-input) {
+  background: transparent;
+  border: 1px solid var(--code-line);
+  border-radius: 8px;
+  padding: 10px;
+}
+
+#panel-body .edit-form .ghost {
+  border: 1px solid var(--code-line);
+  border-radius: 8px;
+  padding: 6px 12px;
+  background: transparent;
+  color: var(--code-ink);
+  font-weight: 600;
+}
+
+#panel-body .edit-form .ghost:hover:not(:disabled) {
+  background: var(--code-bg-2);
+  color: var(--code-ink);
+}
+
+.edit-block > .ghost {
+  align-self: flex-start;
+}
+
+/* An input row: name and type, enum and default, the description across, then required and remove. */
+.edit-input [data-field="description"] {
+  grid-column: 1 / -1;
+}
+
+.edit-input .edit-required {
+  white-space: nowrap;
+}
+
+.edit-input > .ghost {
+  justify-self: end;
+}

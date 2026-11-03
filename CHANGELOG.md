@@ -40,6 +40,8 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 
 ### 看板 / Board
 
+- 流程图上可以编辑流程：打开「编辑」后，从一个阶段拖到另一个阶段就加上依赖（它的 `inputs`），选中连线按 Delete 去掉；会形成环时说明原因并且不保存。点阶段可以改名字、执行器、模型、提示词、命令、超时、重试和产物；提示词里输入 `{{` 会补全 `{{inputs.名称}}`。也可以增删流程输入（类型、`enum`、默认值、说明），并改流程的名字、说明和同时运行的数量。节点位置只记在浏览器里。`PUT /api/stage` 和 `PUT /api/flow` 先按 `flowgit validate` 校验，有错返回 400 并且什么都不写，运行中返回 409；`flow.md` 改完还是 `flow.md`。
+- The graph can edit the flow: turn on Edit, drag from one stage to another to add a dependency (its `inputs`), and press Delete on a selected edge to remove it. An edge that would cycle is refused, with the reason, and nothing is saved. Click a stage to change its name, executor, model, prompt, command, timeout, retries and outputs; typing `{{` in a prompt completes `{{inputs.name}}`. Flow inputs can be added and removed (type, `enum`, default, description), and the flow's name, description and concurrency can change. Node positions stay in the browser. `PUT /api/stage` and `PUT /api/flow` validate like `flowgit validate`, return 400 and write nothing when that fails, and return 409 during a run; a `flow.md` flow stays `flow.md`.
 - 看板上可以剪辑短视频时间线：拖动镜头、改时长和字幕、换素材、预览，保存后成为手动修改，导出阶段需要重跑。字幕样式和 FFmpeg 导出共用 `scripts/caption-style.json`。分镜在看板上按镜头卡片显示。
 - The board can edit a short-video timeline: drag shots, change length and captions, swap assets and preview. Saving stores a hand edit, and the export stage needs a re-run. Captions share `scripts/caption-style.json` with the FFmpeg export. A storyboard opens as shot cards.
 - 人工阶段的文本产物还不存在时，点开它就是一个空的编辑框，可以直接在看板里写好保存，不用先在电脑上建文件。

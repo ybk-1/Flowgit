@@ -1,6 +1,6 @@
 import { publishFlowChanged } from "./events.js";
 import { type HandlerCtx, HttpError, readJsonObject, sendJson } from "./shared.js";
-import { type AddableStageType, addStage, type AddStageSpec, type AgentName, findFlowFile, type Flow, FLOW_FILE, FLOW_MD_FILE, type Output, promptSkeleton, readFlowFile, removeStage, validateFlow, type ValidationIssue, writeFlowFile } from "@flowgit/core";
+import { type AddableStageType, addStage, type AddStageSpec, type AgentName, editStage, EditError, findFlowFile, type Flow, FLOW_FILE, FLOW_MD_FILE, type Output, promptSkeleton, readFlowFile, removeStage, stagePatchFromBody, validateFlow, type ValidationIssue, writeFlowFile } from "@flowgit/core";
 import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
@@ -185,6 +185,41 @@ export async function deleteStage(req: http.IncomingMessage, res: http.ServerRes
     const message = err instanceof Error ? err.message : String(err);
     const missing = message.includes("没有阶段") || message.includes("No stage");
     throw new HttpError(missing ? 404 : 400, message);
+  }
+  const errors = validateFlow(next, { dir: ctx.dir }).filter((issue) => issue.level === "error");
+  if (errors.length) {
+    rejectIssues(res, errors);
+    return;
+  }
+  writeFlowFile(file, next);
+  publishFlowChanged(ctx);
+  sendJson(res, 200, { ok: true, id });
+}
+
+/**
+ * Change one stage. The body matches POST /api/stage, plus model, timeoutSec,
+ * retries, command, args and instructions. Validates before writing anything.
+ */
+export async function putStage(req: http.IncomingMessage, res: http.ServerResponse, ctx: HandlerCtx): Promise<void> {
+  const body = await readJsonObject(req);
+  let id: string;
+  let patch;
+  try {
+    ({ id, patch } = stagePatchFromBody(body));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    sendJson(res, err instanceof EditError ? err.status : 400, { error: message, issues: [{ path: "/", message }] });
+    return;
+  }
+  const { file, flow } = readFlowSource(ctx.dir);
+  let next: Flow;
+  try {
+    next = editStage(flow, id, patch);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const status = err instanceof EditError ? err.status : 400;
+    sendJson(res, status, { error: message, issues: [{ path: "/", message }] });
+    return;
   }
   const errors = validateFlow(next, { dir: ctx.dir }).filter((issue) => issue.level === "error");
   if (errors.length) {

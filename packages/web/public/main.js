@@ -1,11 +1,12 @@
 /** Board startup: listeners, hold-to-run, and the first load. */
 import { closeMenus, openAddStage, paintBoard, render, requestRemove, setView, submitStage, syncStageFields, syncViewToggle } from "./cards.js";
+import { startEditor } from "./editor.js";
 import { FX } from "./fx.js";
 import { startGenerate } from "./generate.js";
 import { I18N } from "./i18n.js";
 import { saveInputs } from "./inputs.js";
 import { closePanel, notePress } from "./panel.js";
-import { appendLog, connectEvents, previewAll, refresh, runAll, runHeld, startHoldPreview } from "./run.js";
+import { appendLog, connectEvents, previewAll, refresh, refreshNow, runAll, runHeld, startHoldPreview } from "./run.js";
 import { HOLD_MS, S, TAP_MS, boardEl, clearPlan, inputsForm, paintUsageTotal, panelEl, panelPortal, previewButton, removeDialog, removeForce, runAllButton, stageDialog, stageForm, t } from "./state.js";
 
 export function start() {
@@ -108,6 +109,10 @@ export function start() {
       syncStageFields();
   });
   startGenerate();
+  startEditor();
+  document.addEventListener("flowgit-edited", () => {
+    void refreshNow();
+  });
   connectEvents();
   refresh();
 }
