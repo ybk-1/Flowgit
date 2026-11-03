@@ -133,6 +133,45 @@ describe("read-only board", () => {
     expect(res.status).toBe(401);
   });
 
+  it("GET /api/graph requires a token, and nodes and edges match flow.json", async () => {
+    const denied = await httpGet(server.port, "/api/graph");
+    expect(denied.status).toBe(401);
+    const wrong = await httpGet(server.port, "/api/graph", { "X-Flowgit-Token": "not-the-token" });
+    expect(wrong.status).toBe(401);
+
+    const res = await httpGet(server.port, "/api/graph", authed());
+    expect(res.status).toBe(200);
+    const graph = JSON.parse(res.body) as {
+      nodes: Array<{ id: string; name: string; type: string; state: string; layer: number; row: number }>;
+      edges: Array<{ from: string; to: string }>;
+    };
+    const file = JSON.parse(fs.readFileSync(path.join(flowDir, "flow.json"), "utf8")) as {
+      stages: Array<{ id: string; name: string; inputs?: string[]; executor: { type: string } }>;
+    };
+    const flowRes = await httpGet(server.port, "/api/flow", authed());
+    const flowBody = JSON.parse(flowRes.body) as { stages: Array<{ id: string; state: string }> };
+
+    expect(graph.nodes.map((node) => ({ id: node.id, name: node.name, type: node.type }))).toEqual(
+      file.stages.map((stage) => ({ id: stage.id, name: stage.name, type: stage.executor.type })),
+    );
+    expect(graph.edges).toEqual(file.stages.flatMap((stage) => (stage.inputs ?? []).map((from) => ({ from, to: stage.id }))));
+    expect(graph.nodes.map((node) => node.state)).toEqual(flowBody.stages.map((stage) => stage.state));
+    expect(Object.fromEntries(graph.nodes.map((node) => [node.id, node.layer]))).toEqual({
+      script: 0,
+      storyboard: 1,
+      assets: 2,
+      edit: 3,
+      export: 4,
+    });
+    const rows = new Map<number, Set<number>>();
+    for (const node of graph.nodes) {
+      const used = rows.get(node.layer) ?? new Set<number>();
+      expect(used.has(node.row)).toBe(false);
+      used.add(node.row);
+      rows.set(node.layer, used);
+    }
+  });
+
   it("rejects a wrong Host", async () => {
     const res = await httpGet(server.port, "/api/flow", authed({ Host: "evil.example" }));
     expect(res.status).toBe(403);
@@ -378,6 +417,7 @@ describe("read-only board", () => {
     expect(app.body).toContain('stage.state === "waiting-upstream"');
     expect(app.body).toContain("stage.instructions");
     expect(app.body).toContain("上传文件 / Upload a file");
+    expect(app.body).toContain("uploadControl(stage, dir, options)");
     expect(app.body).toContain("provider/model");
     expect(app.body).toContain("必填 required");
     expect(app.body).toContain("/api/events?token=");
@@ -385,6 +425,11 @@ describe("read-only board", () => {
     expect(app.body).toContain("实时更新已断开，改为每 3 秒刷新 / live updates lost, refreshing every 3 seconds");
     expect(app.body).toContain("setInterval(refresh, 3000)");
     expect(page.body).toContain("实时更新 / live updates");
+    expect(page.body).toContain("卡片 / Cards");
+    expect(page.body).toContain("流程图 / Graph");
+    expect(app.body).toContain('"/api/graph"');
+    expect(app.body).toContain("localStorage.getItem");
+    expect(app.body).toContain("localStorage.setItem");
   });
 });
 
