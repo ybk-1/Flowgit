@@ -262,3 +262,70 @@ Files over 4 MB (video, audio, big pictures) stay out of memory: the content is 
 - Worker 的 secret（在 Cloudflare 后台 Workers & Pages → Worker → Settings → Variables and Secrets 填，不进仓库）：`GITHUB_CLIENT_ID`、`GITHUB_CLIENT_SECRET`、`GOOGLE_CLIENT_ID`、`GOOGLE_CLIENT_SECRET`；`VAULT_MASTER_KEY`（`openssl rand -base64 32`，设好以后不要换，换了旧 key 就解不开）；`VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`（`npx web-push generate-vapid-keys`）和 `VAPID_SUBJECT`（例如 `mailto:你的邮箱`）。没有 `VAULT_MASTER_KEY` 时存 key 返回 503；没有 VAPID 时只有站内通知。/ Worker secrets, set in the Cloudflare dashboard and never committed. `VAULT_MASTER_KEY` must not change once set (old keys would no longer decrypt). Without it, storing a key answers 503; without VAPID there are in-app notifications only.
 - OAuth 回调地址 / OAuth callback URLs：`https://<host>/api/auth/github/callback`、`https://<host>/api/auth/google/callback`（`<host>` 是 `flowgit.dev` 或 `staging.flowgit.dev`）。
 - 测试在 Cloudflare 官方的本机模拟环境里跑（`@cloudflare/vitest-plugin`），不连真的 Cloudflare：`pnpm --filter @flowgit/server test`。/ Tests run in Cloudflare's official local emulator (`@cloudflare/vitest-plugin`) and never reach the real Cloudflare.
+
+## 命令行 / CLI
+
+命令是 `flowgit login`、`flowgit logout`、`flowgit whoami`、`flowgit push`、`flowgit pull`、`flowgit clone` 和 `flowgit cloud run`。没登录时，本机的命令和以前一样。
+
+The commands are `flowgit login`, `flowgit logout`, `flowgit whoami`, `flowgit push`, `flowgit pull`, `flowgit clone` and `flowgit cloud run`. Signed out, local commands work as before.
+
+### 服务器地址 / The server address
+
+默认是 `https://flowgit.dev`。`--server <url>` 或环境变量 `FLOWGIT_CLOUD_URL` 可以换成别的，只保留协议、主机和端口。必须是 `https://`；只有 `localhost` 和 `127.0.0.1` 可以用 `http://`，避免登录令牌发到不安全的地址。模型的密钥不会经过这些命令。
+
+The default is `https://flowgit.dev`. `--server <url>` or `FLOWGIT_CLOUD_URL` switches it, and only the scheme, host and port are kept. It must be `https://`; only `localhost` and `127.0.0.1` may use `http://`, so the sign-in token is not sent to an insecure address. Model keys never go through these commands.
+
+### 登录 / Signing in
+
+`flowgit login` 走上面的设备码：打印 `user_code` 和 `verification_uri_complete`，能打开浏览器就打开，然后按 `interval` 轮询。`authorization_pending` 继续等；`expired_token` 和 `invalid_grant` 失败；429 会把间隔加长。令牌写进 `$FLOWGIT_HOME/credentials.json`，没有 `FLOWGIT_HOME` 时是 `~/.flowgit/credentials.json`（和 `trusted.json` 同一个目录）。每个服务器一条：`token`、`expires_at`、`user.id`、`user.name`。Unix 上文件权限是 600。令牌不会打印，也不会写进流程目录。
+
+`flowgit login` uses the device-code flow above: it prints `user_code` and `verification_uri_complete`, opens a browser when it can, then polls every `interval`. `authorization_pending` keeps waiting; `expired_token` and `invalid_grant` fail; a 429 lengthens the interval. The token goes to `$FLOWGIT_HOME/credentials.json`, or `~/.flowgit/credentials.json` when `FLOWGIT_HOME` is unset (the same directory as `trusted.json`). One entry per server: `token`, `expires_at`, `user.id` and `user.name`. On Unix the file is mode 600. The token is never printed and never written into the flow directory.
+
+`FLOWGIT_TOKEN` 优先，并且不读凭证文件，给 CI 用。`flowgit whoami` 调用 `GET /api/me`。401 会让人重新 `flowgit login`。`flowgit logout` 调用 `POST /api/auth/logout`，再删掉本机这一条。
+
+`FLOWGIT_TOKEN` wins and the credentials file is not read, for CI. `flowgit whoami` calls `GET /api/me`. A 401 says to run `flowgit login` again. `flowgit logout` calls `POST /api/auth/logout` and then deletes the local entry.
+
+### 同步哪些文件 / What syncs
+
+`push`、`pull` 和 `clone` 跳过 `.git/`、`node_modules/`、`.flowgit/` 和 `flowgit.local.json`。`runs/` 会同步。路径用 posix 的 `/`。服务器拒绝 `.git/` 和 `.flowgit-blobs/`。单个文件超过 50 MB 会报错。
+
+`push`, `pull` and `clone` skip `.git/`, `node_modules/`, `.flowgit/` and `flowgit.local.json`. `runs/` is synced. Paths use posix `/`. The server refuses `.git/` and `.flowgit-blobs/`. A file over 50 MB is an error.
+
+`.flowgit/cloud.json` 只有 `{ server, workspace, flow }`。上次同步的 sha256 在 `.flowgit/cloud-base.json`，里面没有凭证。
+
+`.flowgit/cloud.json` is only `{ server, workspace, flow }`. The sha256 from the last sync is in `.flowgit/cloud-base.json`, which has no credentials.
+
+### 推送和拉取 / Push and pull
+
+第一次 `flowgit push` 先 `GET /api/workspaces`。只有一个工作区就用它；没有终端时要 `--workspace <id>`。文件合计不超过 50 MB 时，`POST /api/workspaces/<ws>/flows` 一次建好；超过就先建 `flow.json` 或 `flow.md`，再逐个 `PUT /api/flows/<id>/raw?path=`。之后的推送对比 `GET /api/flows/<id>/files` 和上次的 sha256。云端有别人的改动就拒绝，并让人先 `pull`。否则上传本地的改动，本地删掉的用 `DELETE /raw` 删掉，再更新基准。409 且 `code` 是 `locked` 时显示谁在编辑，不重试。
+
+The first `flowgit push` calls `GET /api/workspaces`. A single workspace is used as it is; without a terminal, pass `--workspace <id>`. Up to 50 MB, `POST /api/workspaces/<ws>/flows` creates the flow at once; above that, it creates `flow.json` or `flow.md` and then `PUT /api/flows/<id>/raw?path=` one file at a time. Later pushes compare `GET /api/flows/<id>/files` with the last sha256. If the cloud changed, the push stops and says to `pull` first. Otherwise it uploads local changes, `DELETE /raw` removes local deletions, and the base is updated. A 409 with `code: "locked"` shows who is editing and does not retry.
+
+`flowgit pull` 比较云端 sha256、基准和本地：
+
+`flowgit pull` compares the cloud sha256, the base and the local files:
+
+- 只在云端：下载。如果这是阶段产物，而且本地产物被手动改过（`outputsHandEdited`），先 `recordManualEdit` 存成 `manual` 版本，再写入。 / Cloud only: download. When it is a stage output and the local outputs were hand-edited (`outputsHandEdited`), `recordManualEdit` saves a `manual` version first, then the file is written.
+- 只在本地：留着，不删。 / Local only: leave it. It is not deleted.
+- 两边相对基准都改了：不自动合并。有终端就逐个文件问保留哪一边。阶段产物换上云端之前会先存成 `manual` 版本；`flow.json`、提示词和脚本放到 `.flowgit/conflicts/<时间>/<路径>` 并打印出来。没有终端就什么都不改，列出文件，以非 0 退出。 / Both changed since the base: no automatic merge. A terminal asks file by file which side to keep. A stage output is saved as a `manual` version before the cloud copy replaces it; `flow.json`, prompts and scripts go to `.flowgit/conflicts/<time>/<path>` and that path is printed. Without a terminal, nothing is changed, the files are listed, and the exit code is non-zero.
+- `runs/` 里同一个版本号内容不同也是冲突，不会悄悄覆盖。 / The same version number under `runs/` with different contents is a conflict too, and is never overwritten quietly.
+
+基准只在写完之后更新。流程文件用 `findFlowFile` / `readFlowFile` / `writeFlowFile`。
+
+The base is updated only after the writes finish. Flow files go through `findFlowFile` / `readFlowFile` / `writeFlowFile`.
+
+### 克隆 / Clone
+
+`flowgit clone <网址或流程 id> [目录]`。接受 `https://<服务器>/app/board.html?flow=cloud-<id>` 和 `https://<服务器>/app/?flow=<id>`。只给 id 时用默认服务器或 `--server`。目标目录必须不存在或是空的。每个文件都会下载，包括 `runs/`，然后写上 `cloud.json` 和基准。
+
+`flowgit clone <url or flow id> [dir]`. It accepts `https://<server>/app/board.html?flow=cloud-<id>` and `https://<server>/app/?flow=<id>`. An id alone uses the default server or `--server`. The directory must be missing or empty. Every file is downloaded, including `runs/`, then `cloud.json` and the base are written.
+
+### 云端运行 / Cloud run
+
+`flowgit cloud run [阶段]` 不写阶段就是全部。`POST /api/flows/<id>/runs`，正文 `{ stage, model?, detach: true }`，202 返回 `{ ok, run }`，然后连上 `GET /api/flows/<id>/events` 的 WebSocket（晚连上也会先收到这次运行已有的日志）。帧是 `{ id, event, data }`，`data` 是对象。会打印 `stage:start`、`stage:log`、`stage:done`、`stage:error`，在 `run:end` 时退出。文本 `ping` 得到文本 `pong`。握手带 `Authorization`（Node 22 的 undici `WebSocket` 允许在第二个参数里放 `headers`）。如果这个 Node 做不到，就改轮询 `GET /api/flows/<id>/board/runs?stage=`，并在命令行说明。
+
+`flowgit cloud run [stage]` runs every stage when the stage is omitted. `POST /api/flows/<id>/runs` with `{ stage, model?, detach: true }` returns 202 `{ ok, run }`, then the CLI follows the WebSocket at `GET /api/flows/<id>/events` (a late connection still gets the log so far). Frames are `{ id, event, data }` with `data` an object. It prints `stage:start`, `stage:log`, `stage:done` and `stage:error`, and exits on `run:end`. A text `ping` gets a text `pong`. The handshake sends `Authorization` (Node 22's undici `WebSocket` accepts `headers` on the second argument). If this Node cannot do that, the CLI polls `GET /api/flows/<id>/board/runs?stage=` and says so.
+
+另一个运行占着锁时是 409。`waiting.kind` 为 `"computer"` 时，命令行会让人在本地跑这一步、`push`，再继续。带 `forkedFrom` 还没确认的流程返回 409 和 `trust`，命令行不会跳过确认。服务器回答 501 时打印双语说明并以非 0 退出。`--detach` 在请求返回后就退出，并打印网页地址 `https://<服务器>/app/?flow=<id>`。
+
+A 409 means another run holds the lock. When `waiting.kind` is `"computer"`, the CLI tells the person to run that stage locally, `push`, and continue. A flow with `forkedFrom` that has not been confirmed returns 409 with `trust`, and the CLI does not skip that confirmation. A 501 prints the bilingual message and exits non-zero. `--detach` exits once the request returns and prints the web app address `https://<server>/app/?flow=<id>`.
