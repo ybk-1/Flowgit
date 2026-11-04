@@ -75,7 +75,7 @@ export const flowSchemaJson: Record<string, unknown> = {
         "source": {
           "type": "string",
           "minLength": 1,
-          "description": "The Git URL that was cloned."
+          "description": "The Git URL that was cloned, or dify:<filename> / n8n:<filename> when flowgit import created the flow (file name only, never a local path)."
         },
         "ref": {
           "type": "string",

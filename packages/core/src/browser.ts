@@ -49,6 +49,21 @@ export * from "./privacy.js";
 export * from "./actions.js";
 export * from "./plugins.js";
 export * from "./trust.js";
+export {
+  ImportFormatError,
+  NOT_DIFY,
+  NOT_N8N,
+  UNKNOWN_IMPORT_FORMAT,
+  detectImportFormat,
+  fileNameOnly,
+  importSource,
+  importWorkflow,
+  presetModel,
+  upstreamNote,
+  type ImportFormat,
+  type ImportReportEntry,
+  type ImportResult,
+} from "./importers/index.js";
 export * from "./proxy-env.js";
 export { setSchemaCompiler, type SchemaCompiler, type SchemaError } from "./schema-check.js";
 export * from "./host/index.js";
