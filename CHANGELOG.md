@@ -6,6 +6,10 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 
 ## [未发布 / Unreleased]
 
+### 云端 / Cloud
+
+- Flowgit 云端第一版的地基（`packages/server`，跑在 Cloudflare）：用 GitHub 或 Google 登录（测试版凭邀请码注册），建工作区，按拥有者、编辑、只看邀请别人；流程连同 `runs/` 版本存在云端，看板的接口（看版本、对比、回退、改文件和阶段）原样可用；一个人改了文件，打开这个流程的人马上收到通知。命令行可以用设备码登录（命令在 #174）。云端运行还没上线。接口见 `docs/cloud.md`。 / The foundation of Flowgit Cloud (`packages/server`, on Cloudflare): sign in with GitHub or Google (an invite-only beta), create workspaces and invite people as owners, editors or viewers; flows live in the cloud with their `runs/` versions, the board's API (versions, diffs, restores, editing files and stages) works as it is, and when someone changes a file everyone with the flow open hears about it at once. The CLI can sign in with a device code (the commands come in #174). Cloud runs are not available yet. The API is in `docs/cloud.md`.
+
 ### 命令行 / CLI
 
 - `flowgit import <文件> [--from dify|n8n] [--out 目录] [--dry-run]` 把 Dify DSL 或 n8n 工作流变成 Flowgit 流程：开始节点和触发器变成流程输入，模型调用变成 llm，代码变成带薄包装的 script，GET/POST 变成 service，分支、循环和认不出的节点留给人。来源记成 `forkedFrom.source` 的 `dify:<文件名>` 或 `n8n:<文件名>`，第一次运行前要确认。说明见 `docs/import.md`。 / `flowgit import <file> [--from dify|n8n] [--out dir] [--dry-run]` turns a Dify DSL or an n8n workflow into a Flowgit flow: start nodes and triggers become flow inputs, model calls become llm stages, code becomes a script with a thin wrapper, GET/POST becomes a service, and branches, loops and unknown nodes are left for a person. The source is `forkedFrom.source` as `dify:<filename>` or `n8n:<filename>`, and the first run asks you to confirm. See `docs/import.md`.

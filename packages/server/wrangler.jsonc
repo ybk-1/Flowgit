@@ -1,0 +1,63 @@
+// Flowgit Cloud: the Worker that answers flowgit.dev/api/*.
+// Config reference: https://developers.cloudflare.com/workers/wrangler/configuration/
+// The top level is the local emulator (`pnpm --filter @flowgit/server dev`, and the tests).
+// `env.staging` and `env.production` are deployed by .github/workflows/server.yml through
+// scripts/deploy.mjs, which looks up (or creates) the D1 database and R2 bucket by name and fills
+// in their ids, so no account-specific id is kept here. Secrets (GITHUB_CLIENT_ID, ...) are set
+// in the Cloudflare dashboard and never committed.
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "flowgit-api-local",
+  "main": "src/index.ts",
+  // https://developers.cloudflare.com/workers/configuration/compatibility-dates/
+  "compatibility_date": "2026-10-01",
+  // node:async_hooks (AsyncLocalStorage) for the per-request core host:
+  // https://developers.cloudflare.com/workers/runtime-apis/nodejs/
+  "compatibility_flags": ["nodejs_compat"],
+  // Templates (templates/<id>.json) and, on staging, the web app. Built by scripts/build.mjs.
+  // https://developers.cloudflare.com/workers/static-assets/binding/
+  "assets": { "directory": "./public", "binding": "ASSETS", "run_worker_first": ["/api/*"] },
+  "vars": { "ENVIRONMENT": "local", "ADMINS": "test:admin" },
+  "d1_databases": [{ "binding": "DB", "database_name": "flowgit-local", "database_id": "00000000-0000-0000-0000-000000000000", "migrations_dir": "migrations" }],
+  "r2_buckets": [{ "binding": "FILES", "bucket_name": "flowgit-files-local" }],
+  // One room per flow: https://developers.cloudflare.com/durable-objects/
+  "durable_objects": { "bindings": [{ "name": "ROOMS", "class_name": "FlowRoom" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["FlowRoom"] }],
+  // https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/
+  "ratelimits": [
+    { "name": "API_LIMITER", "namespace_id": "1001", "simple": { "limit": 600, "period": 60 } },
+    { "name": "AUTH_LIMITER", "namespace_id": "1002", "simple": { "limit": 20, "period": 60 } }
+  ],
+  "observability": { "enabled": true },
+  "send_metrics": false,
+  "env": {
+    "staging": {
+      "name": "flowgit-api-staging",
+      // A Workers custom domain: Cloudflare creates the DNS record and certificate.
+      // https://developers.cloudflare.com/workers/configuration/routing/custom-domains/
+      "routes": [{ "pattern": "staging.flowgit.dev", "custom_domain": true }],
+      "vars": { "ENVIRONMENT": "staging", "ADMINS": "github:347400613" },
+      "d1_databases": [{ "binding": "DB", "database_name": "flowgit-staging", "database_id": "FILLED_BY_DEPLOY", "migrations_dir": "migrations" }],
+      "r2_buckets": [{ "binding": "FILES", "bucket_name": "flowgit-files-staging" }],
+      "durable_objects": { "bindings": [{ "name": "ROOMS", "class_name": "FlowRoom" }] },
+      "ratelimits": [
+        { "name": "API_LIMITER", "namespace_id": "2001", "simple": { "limit": 600, "period": 60 } },
+        { "name": "AUTH_LIMITER", "namespace_id": "2002", "simple": { "limit": 20, "period": 60 } }
+      ]
+    },
+    "production": {
+      "name": "flowgit-api",
+      // In front of the Pages site on the same hostname, for /api/* only:
+      // https://developers.cloudflare.com/workers/configuration/routing/routes/
+      "routes": [{ "pattern": "flowgit.dev/api/*", "zone_name": "flowgit.dev" }],
+      "vars": { "ENVIRONMENT": "production", "ADMINS": "github:347400613" },
+      "d1_databases": [{ "binding": "DB", "database_name": "flowgit-production", "database_id": "FILLED_BY_DEPLOY", "migrations_dir": "migrations" }],
+      "r2_buckets": [{ "binding": "FILES", "bucket_name": "flowgit-files-production" }],
+      "durable_objects": { "bindings": [{ "name": "ROOMS", "class_name": "FlowRoom" }] },
+      "ratelimits": [
+        { "name": "API_LIMITER", "namespace_id": "3001", "simple": { "limit": 600, "period": 60 } },
+        { "name": "AUTH_LIMITER", "namespace_id": "3002", "simple": { "limit": 20, "period": 60 } }
+      ]
+    }
+  }
+}

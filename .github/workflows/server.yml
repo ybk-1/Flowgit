@@ -1,0 +1,50 @@
+# Flowgit Cloud (packages/server) on Cloudflare Workers.
+# Pushes to main deploy staging (staging.flowgit.dev); production (flowgit.dev/api/*) deploys
+# only when started by hand (Actions → Server → Run workflow). Both skip, without failing, when
+# the repository has no CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID secrets, like the site deploy.
+# Tests run in ci.yml with Cloudflare's local emulator; this workflow is the only place that
+# talks to the real Cloudflare. https://developers.cloudflare.com/workers/ci-cd/external-cicd/github-actions/
+name: Server
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packages/server/**"
+      - "packages/core/**"
+      - "packages/app/**"
+      - "packages/web/**"
+      - "packages/cli/templates/**"
+      - ".github/workflows/server.yml"
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "staging 或 production / staging or production"
+        type: choice
+        options: [staging, production]
+        default: staging
+
+permissions:
+  contents: read
+
+concurrency:
+  group: server-${{ github.event.inputs.environment || 'staging' }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: 部署云端 / Deploy the cloud
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node packages/server/scripts/deploy.mjs "${{ github.event.inputs.environment || 'staging' }}"

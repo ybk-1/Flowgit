@@ -1,0 +1,25 @@
+{
+  "name": "@flowgit/server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Flowgit Cloud on Cloudflare Workers: sign-in, workspaces, flows in R2, one room per flow. 云端：登录、工作区、存在 R2 的流程、每个流程一个房间。",
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs && wrangler deploy --dry-run --outdir dist",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node scripts/build.mjs && vitest run",
+    "dev": "wrangler dev",
+    "deploy": "node scripts/deploy.mjs"
+  },
+  "dependencies": {
+    "@flowgit/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "^1.5.1",
+    "@cloudflare/workers-types": "^5.20261103.1",
+    "esbuild": "^0.25.12",
+    "vitest": "^5.0.5",
+    "wrangler": "^4.157.0"
+  }
+}
