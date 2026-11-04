@@ -33,6 +33,9 @@ import { sandboxExec } from "../runs/sandbox.js";
 import { addUsage, requireQuota, usageOf } from "../runs/usage.js";
 import { CONTINUE_EVENT, type StepAnswer } from "../runs/workflow.js";
 import { decryptKeys, guardKeys, type OpenKey, recordKeyUses } from "../vault/vault.js";
+import { handleComments } from "./comments.js";
+import { assertWritable, type Collab } from "./locks.js";
+import { onLiveLeave, onLiveMessage } from "./presence.js";
 import { createMemoryHost, withFlowHost } from "../storage/context-host.js";
 import {
   blobKey,
@@ -113,7 +116,8 @@ export type StopAnswer = { status: number; body: Record<string, unknown> };
  * writes every change back to R2 in order, and tells everyone who has the flow open over
  * WebSocket (`flow:changed`, like the local board's SSE). It also holds the run lock: one cloud
  * run per flow (runs/workflow.ts drives it one stage per step), whose log streams to the same
- * sockets. Presence, locks and comments (#173) are added here later.
+ * sockets. Presence, locks and comments (#173) live in presence.ts, locks.ts and comments.ts;
+ * this file only dispatches to them.
  *
  * Durable Objects: https://developers.cloudflare.com/durable-objects/
  * WebSocket hibernation: https://developers.cloudflare.com/durable-objects/best-practices/websockets/
@@ -159,6 +163,11 @@ export class FlowRoom extends DurableObject<Env> {
 
   private async route(request: Request, url: URL, host: MemoryHost): Promise<Response> {
     const method = request.method.toUpperCase();
+    const writer = request.headers.get(ROOM_USER) ?? "";
+    // Comments are not flow files. Writing one broadcasts from the room; the text stays in D1.
+    if (url.pathname === "/comments" || url.pathname.startsWith("/comments/")) return handleComments(this.collab(writer), request, url);
+    // Someone else holding the stage (or the whole flow) answers 409 code "locked", distinct from a run's 409.
+    if (method !== "GET" && method !== "HEAD") await assertWritable(this.collab(writer), request, url);
     let response: Response;
     if (url.pathname === "/files" && method === "GET") response = this.listFiles(host);
     else if (url.pathname === "/raw") response = await this.raw(request, url, host);
@@ -322,8 +331,17 @@ export class FlowRoom extends DurableObject<Env> {
   }
 
   async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
-    // Clients only ping for now; #173 adds presence, locks and comments.
-    if (message === "ping") ws.send("pong");
+    // A raw ping still answers pong. Other frames are presence, locks and heartbeats; a bad one
+    // gets an error frame and the socket stays open.
+    if (message === "ping") {
+      ws.send("pong");
+      return;
+    }
+    try {
+      await onLiveMessage(this.collab(), ws, message);
+    } catch (err) {
+      console.error("live message", err instanceof Error ? err.message : err);
+    }
   }
 
   async webSocketClose(ws: WebSocket, code: number): Promise<void> {
@@ -332,6 +350,39 @@ export class FlowRoom extends DurableObject<Env> {
     } catch {
       // already closed
     }
+    // The lock lived on this socket. Tell everyone it is gone.
+    try {
+      await onLiveLeave(this.collab(), ws);
+    } catch (err) {
+      console.error("live leave", err instanceof Error ? err.message : err);
+    }
+  }
+
+  /** Adapts the room to presence, locks and comments. Those modules do the work. */
+  private collab(userId = ""): Collab {
+    return {
+      env: this.env,
+      flowId: this.flowId ?? "",
+      userId,
+      sockets: () => this.ctx.getWebSockets(),
+      tags: (ws) => this.ctx.getTags(ws),
+      send: (ws, event, data) => {
+        try {
+          ws.send(JSON.stringify({ id: ++this.frameId, event, data }));
+        } catch {
+          // closing
+        }
+      },
+      broadcast: (event, data) => this.broadcast(event, data),
+      stages: () => {
+        try {
+          if (!findFlowFile(FLOW_DIR)) return [];
+          return loadFlow(FLOW_DIR).flow.stages;
+        } catch {
+          return [];
+        }
+      },
+    };
   }
 
   /** Send an event to everyone who has the flow open, shaped like the local board's SSE frames. */

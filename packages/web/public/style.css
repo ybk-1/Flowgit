@@ -1695,3 +1695,126 @@ body {
 .more:focus-visible {
   border-color: var(--accent);
 }
+
+/* Cloud collaboration (#173). These nodes exist only when a signed-in cloud transport is connected. */
+.collab-bar {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 4;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  max-width: min(420px, calc(100vw - 24px));
+  padding: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--hair);
+  box-shadow: var(--elev-2);
+}
+.collab-people {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.collab-person {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+}
+.collab-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 13px;
+  font-weight: 700;
+  object-fit: cover;
+}
+.collab-name { font-size: 13px; }
+.collab-stage {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--muted);
+}
+.collab-bar button {
+  font: inherit;
+  font-size: 13px;
+  padding: 4px 8px;
+  border: 1px solid var(--hair);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.collab-panel {
+  position: fixed;
+  top: 64px;
+  left: 12px;
+  z-index: 4;
+  width: min(360px, calc(100vw - 24px));
+  max-height: min(70vh, 640px);
+  overflow: auto;
+  padding: 12px 14px 16px;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--hair);
+  box-shadow: var(--elev-2);
+}
+.collab-panel h2 {
+  margin: 0 0 8px;
+  font-size: 16px;
+}
+.collab-comment-list,
+.collab-mentions,
+.collab-activity-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.collab-comment,
+.collab-mention,
+.collab-activity-item {
+  margin: 0 0 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--hair);
+}
+.collab-comment[data-resolved="1"] { color: var(--muted); }
+.collab-comment-who,
+.collab-comment-body,
+.collab-comment-resolved,
+.collab-empty {
+  margin: 0 0 4px;
+}
+.collab-comment-body { white-space: pre-wrap; }
+.collab-comment-actions { margin: 0; }
+.collab-compose {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+.collab-path,
+.collab-body {
+  width: 100%;
+  font: inherit;
+  color: inherit;
+  background: var(--bg);
+  border: 1px solid var(--hair);
+  padding: 6px 8px;
+}
+.collab-lock {
+  margin: 12px 18px 0;
+  padding: 8px 10px;
+  border: 1px solid var(--stale);
+  color: var(--code-ink);
+}
+[data-flowgit-locked] { opacity: 0.45; }

@@ -1,10 +1,14 @@
 /** Board startup: listeners, hold-to-run, and the first load. */
+import { startActivity } from "./activity.js";
 import { closeMenus, openAddStage, paintBoard, render, requestRemove, setView, submitStage, syncStageFields, syncViewToggle } from "./cards.js";
+import { startComments } from "./comments.js";
 import { startEditor } from "./editor.js";
 import { FX } from "./fx.js";
 import { startGenerate } from "./generate.js";
 import { I18N } from "./i18n.js";
 import { saveInputs } from "./inputs.js";
+import { startLocks } from "./lock.js";
+import { startPresence } from "./presence.js";
 import { closePanel, notePress } from "./panel.js";
 import { appendLog, connectEvents, previewAll, refresh, refreshNow, runAll, runHeld, startHoldPreview } from "./run.js";
 import { HOLD_MS, S, TAP_MS, boardEl, clearPlan, inputsForm, paintUsageTotal, panelEl, panelPortal, previewButton, removeDialog, removeForce, runAllButton, stageDialog, stageForm, t } from "./state.js";
@@ -115,4 +119,8 @@ export function start() {
   });
   connectEvents();
   refresh();
+  startPresence();
+  startLocks();
+  startComments();
+  startActivity();
 }

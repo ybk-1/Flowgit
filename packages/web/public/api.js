@@ -156,3 +156,99 @@ export function postGenerate(payload) {
     cache: "no-store",
   });
 }
+
+/**
+ * Cloud live collaboration (#173). `transport.cloud` is set by the web app.
+ * When it is missing, this is a share link, or nobody is signed in, every helper no-ops.
+ *
+ * cloud: {
+ *   flowId, role, share, me: { id, name, avatar_url },
+ *   send(message), on(event, handler) => unsubscribe
+ * }
+ */
+export function cloudInfo() {
+    const cloud = transport?.cloud;
+    if (!cloud || cloud.share || !cloud.me || !cloud.flowId) return null;
+    return cloud;
+}
+
+export function sendLive(message) {
+    const cloud = cloudInfo();
+    if (!cloud || typeof cloud.send !== "function") return;
+    cloud.send(message);
+}
+
+export function onLive(event, handler) {
+    const cloud = cloudInfo();
+    if (!cloud || typeof cloud.on !== "function") return () => {};
+    const off = cloud.on(event, handler);
+    return typeof off === "function" ? off : () => {};
+}
+
+function cloudPath(suffix) {
+    const cloud = cloudInfo();
+    if (!cloud) return "";
+    return `/api/flows/${encodeURIComponent(cloud.flowId)}${suffix}`;
+}
+
+export function getComments() {
+    const path = cloudPath("/comments");
+    if (!path) return Promise.resolve(new Response(null, { status: 404 }));
+    return request(path, { headers: headers(), cache: "no-store" });
+}
+
+export function postComment(payload) {
+    const path = cloudPath("/comments");
+    if (!path) return Promise.resolve(new Response(null, { status: 404 }));
+    return request(path, {
+        method: "POST",
+        headers: { ...headers(), "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        cache: "no-store",
+    });
+}
+
+export function patchComment(id, payload) {
+    const path = cloudPath(`/comments/${encodeURIComponent(id)}`);
+    if (!path) return Promise.resolve(new Response(null, { status: 404 }));
+    return request(path, {
+        method: "PATCH",
+        headers: { ...headers(), "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        cache: "no-store",
+    });
+}
+
+export function deleteComment(id) {
+    const path = cloudPath(`/comments/${encodeURIComponent(id)}`);
+    if (!path) return Promise.resolve(new Response(null, { status: 404 }));
+    return request(path, { method: "DELETE", headers: headers(), cache: "no-store" });
+}
+
+export function getNotifications() {
+    if (!cloudInfo()) return Promise.resolve(new Response(null, { status: 404 }));
+    return request("/api/notifications", { headers: headers(), cache: "no-store" });
+}
+
+export function readNotifications(ids) {
+    if (!cloudInfo()) return Promise.resolve(new Response(null, { status: 404 }));
+    return request("/api/notifications/read", {
+        method: "POST",
+        headers: { ...headers(), "Content-Type": "application/json" },
+        body: JSON.stringify({ ids }),
+        cache: "no-store",
+    });
+}
+
+/** Cloud flow record (`workspace_id`), not the board's `/api/flow`. */
+export function getCloudFlow() {
+    const path = cloudPath("");
+    if (!path) return Promise.resolve(new Response(null, { status: 404 }));
+    return request(path, { headers: headers(), cache: "no-store" });
+}
+
+export function getAudit(workspaceId, before) {
+    if (!cloudInfo() || !workspaceId) return Promise.resolve(new Response(null, { status: 404 }));
+    const query = before ? `?before=${encodeURIComponent(before)}` : "";
+    return request(`/api/workspaces/${encodeURIComponent(workspaceId)}/audit${query}`, { headers: headers(), cache: "no-store" });
+}

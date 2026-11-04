@@ -21,6 +21,7 @@ import { acceptInvite, createInvite, isAdmin, listInvites, revokeInvite } from "
 import { mcpCalls, mcpSettings, revokeMcpGrant, setMcpEnabled } from "./mcp/manage.js";
 import { handleMcp } from "./mcp/server.js";
 import { listNotifications, markRead, subscribe, unsubscribe, vapidKeys } from "./notify/notify.js";
+import { listComments } from "./rooms/comments.js";
 import { page } from "./page.js";
 import { usageOf } from "./runs/usage.js";
 import { deleteKey, listKeys, listKeyUses, putKey } from "./vault/vault.js";
@@ -450,6 +451,56 @@ on("POST", "/api/push/subscriptions", async (ctx) => json(200, { ok: true, ...(a
 on("DELETE", "/api/push/subscriptions", async (ctx) => {
   await unsubscribe(ctx.env, user(ctx).user.id, (await readJson(ctx.request, 16 * 1024)).endpoint);
   return json(200, { ok: true });
+});
+
+// ---- comments and mentions (#173) ----
+
+on("GET", "/api/flows/:flow/comments", async (ctx) => {
+  const { flow } = await flowAccess(ctx.env, ctx.params.flow!, user(ctx).user.id, "viewer");
+  return json(200, { comments: await listComments(ctx.env, flow.id) });
+});
+on("POST", "/api/flows/:flow/comments", async (ctx) => {
+  const auth = user(ctx);
+  const { flow } = await flowAccess(ctx.env, ctx.params.flow!, auth.user.id, "editor");
+  const res = await room(ctx.env, flow.id).fetch(
+    roomRequest(flow.id, auth.user.id, "/comments", {
+      method: "POST",
+      headers: { "Content-Type": ctx.request.headers.get("Content-Type") ?? "application/json" },
+      body: ctx.request.body,
+    }),
+  );
+  if (res.ok) {
+    const created = (await res.clone().json()) as { comment?: { path?: string } };
+    await audit(ctx.env, { userId: auth.user.id, workspaceId: flow.workspace_id, flowId: flow.id, action: "comment.add", detail: { path: created.comment?.path ?? null } });
+  }
+  return res;
+});
+on("PATCH", "/api/flows/:flow/comments/:comment", async (ctx) => {
+  const auth = user(ctx);
+  const { flow } = await flowAccess(ctx.env, ctx.params.flow!, auth.user.id, "editor");
+  const res = await room(ctx.env, flow.id).fetch(
+    roomRequest(flow.id, auth.user.id, `/comments/${ctx.params.comment}`, {
+      method: "PATCH",
+      headers: { "Content-Type": ctx.request.headers.get("Content-Type") ?? "application/json" },
+      body: ctx.request.body,
+    }),
+  );
+  if (res.ok) {
+    const updated = (await res.clone().json()) as { comment?: { path?: string } };
+    await audit(ctx.env, { userId: auth.user.id, workspaceId: flow.workspace_id, flowId: flow.id, action: "comment.resolve", detail: { path: updated.comment?.path ?? null } });
+  }
+  return res;
+});
+on("DELETE", "/api/flows/:flow/comments/:comment", async (ctx) => {
+  const auth = user(ctx);
+  // The author may delete their own comment even as a viewer; the room allows the author or an owner.
+  const { flow } = await flowAccess(ctx.env, ctx.params.flow!, auth.user.id, "viewer");
+  const res = await room(ctx.env, flow.id).fetch(roomRequest(flow.id, auth.user.id, `/comments/${ctx.params.comment}`, { method: "DELETE" }));
+  if (res.ok) {
+    const removed = (await res.clone().json()) as { comment?: { path?: string } };
+    await audit(ctx.env, { userId: auth.user.id, workspaceId: flow.workspace_id, flowId: flow.id, action: "comment.delete", detail: { path: removed.comment?.path ?? null } });
+  }
+  return res;
 });
 
 // ---- the test console (static files in public/console/) ----

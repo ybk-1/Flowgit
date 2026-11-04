@@ -311,6 +311,23 @@ export const I18N = (() => {
       empty: "没有镜头",
       visual: "画面",
     },
+    collab: {
+      presence: "在线",
+      editing: "{{name}} 正在编辑",
+      comments: "评论",
+      commentHint: "写一条评论，用 @名字 提到同工作区的人",
+      commentPath: "文件",
+      commentSend: "发送",
+      commentResolve: "标为已解决",
+      commentDelete: "删除",
+      commentResolved: "已解决",
+      commentEmpty: "还没有评论",
+      activity: "操作记录",
+      activityEmpty: "还没有操作记录",
+      activityMore: "更早的记录",
+      mentions: "提到你",
+      markRead: "标为已读",
+    },
   };
 
   const en = {
@@ -613,6 +630,23 @@ export const I18N = (() => {
       asset: "Asset",
       empty: "No shots",
       visual: "Visual",
+    },
+    collab: {
+      presence: "Online",
+      editing: "{{name}} is editing",
+      comments: "Comments",
+      commentHint: "Write a comment. @Name mentions someone in the workspace",
+      commentPath: "File",
+      commentSend: "Send",
+      commentResolve: "Resolve",
+      commentDelete: "Delete",
+      commentResolved: "Resolved",
+      commentEmpty: "No comments yet",
+      activity: "Activity",
+      activityEmpty: "No activity yet",
+      activityMore: "Earlier",
+      mentions: "Mentions",
+      markRead: "Mark read",
     },
   };
 

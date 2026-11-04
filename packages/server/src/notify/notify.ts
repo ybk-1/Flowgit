@@ -16,7 +16,7 @@ const PUSH_HOSTS = [/^fcm\.googleapis\.com$/, /^updates\.push\.services\.mozilla
 
 export const MAX_SUBSCRIPTIONS_PER_USER = 20;
 
-export type NotificationKind = "run.waiting" | "run.computer" | "run.done" | "run.failed";
+export type NotificationKind = "run.waiting" | "run.computer" | "run.done" | "run.failed" | "comment.mention";
 
 export interface NewNotification {
   userId: string;

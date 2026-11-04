@@ -262,3 +262,93 @@ Files over 4 MB (video, audio, big pictures) stay out of memory: the content is 
 - Worker 的 secret（在 Cloudflare 后台 Workers & Pages → Worker → Settings → Variables and Secrets 填，不进仓库）：`GITHUB_CLIENT_ID`、`GITHUB_CLIENT_SECRET`、`GOOGLE_CLIENT_ID`、`GOOGLE_CLIENT_SECRET`；`VAULT_MASTER_KEY`（`openssl rand -base64 32`，设好以后不要换，换了旧 key 就解不开）；`VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`（`npx web-push generate-vapid-keys`）和 `VAPID_SUBJECT`（例如 `mailto:你的邮箱`）。没有 `VAULT_MASTER_KEY` 时存 key 返回 503；没有 VAPID 时只有站内通知。/ Worker secrets, set in the Cloudflare dashboard and never committed. `VAULT_MASTER_KEY` must not change once set (old keys would no longer decrypt). Without it, storing a key answers 503; without VAPID there are in-app notifications only.
 - OAuth 回调地址 / OAuth callback URLs：`https://<host>/api/auth/github/callback`、`https://<host>/api/auth/google/callback`（`<host>` 是 `flowgit.dev` 或 `staging.flowgit.dev`）。
 - 测试在 Cloudflare 官方的本机模拟环境里跑（`@cloudflare/vitest-plugin`），不连真的 Cloudflare：`pnpm --filter @flowgit/server test`。/ Tests run in Cloudflare's official local emulator (`@cloudflare/vitest-plugin`) and never reach the real Cloudflare.
+
+## 实时协作 / Live collaboration
+
+多人同时打开一个云端流程（#173）。连接还是 `GET /api/flows/:flow/events` 的 WebSocket（viewer 就行）。房间用 [WebSocket 休眠](https://developers.cloudflare.com/durable-objects/best-practices/websockets/)：`acceptWebSocket(server, [userId])`，标签用 `getTags` 读回来。在线、正在看的阶段和锁都写在那条连接的 `serializeAttachment()` 上，休眠醒来从 `getWebSockets()` 重建，不用 `alarm()`。名字和头像从 D1 的 `users` 读 `id`、`name`、`avatar_url`，**绝不发送 `email`**。角色每次都从 D1 查（`flows` → 工作区 → `members`），不信客户端。
+
+Several people can have one cloud flow open (#173). The connection is still the WebSocket at `GET /api/flows/:flow/events` (viewer is enough). The room uses [WebSocket hibernation](https://developers.cloudflare.com/durable-objects/best-practices/websockets/): `acceptWebSocket(server, [userId])`, and the tag is read back with `getTags`. Presence, the stage being looked at, and locks live on that socket's `serializeAttachment()` and are rebuilt from `getWebSockets()` after hibernation. Nothing uses `alarm()`. Names and avatars come from D1 `users` (`id`, `name`, `avatar_url`) and **`email` is never sent**. The role is read from D1 on every check (`flows` → workspace → `members`); the client is not trusted.
+
+客户端发 JSON，一条最大 4096 字节。更大、或看不懂的消息，回一帧 `error`，不断开：
+
+The client sends JSON, at most 4096 bytes. A bigger frame, or one the server doesn't understand, gets an `error` frame and the socket stays open:
+
+| 客户端 `type` / Client `type` | 作用 / Effect |
+| --- | --- |
+| `{ "type": "presence", "stage": "<阶段 id 或 null>" }` | 告诉别人你在看哪个阶段。viewer 也可以。/ Which stage you're looking at. Viewers may send it. |
+| `{ "type": "lock", "stage": "<阶段 id 或 *>"}` | 锁住一个阶段。`*` 是整份流程。只有 editor 和 owner。/ Lock a stage. `*` is the whole flow. Editors and owners only. |
+| `{ "type": "unlock", "stage" }` | 放开自己的锁。/ Drop your own lock. |
+| `{ "type": "heartbeat" }` | 编辑时每 30 秒发一次，把锁再续 2 分钟。/ Every 30 seconds while editing; extends the lock by 2 minutes. |
+
+`ping` 仍然回纯文本 `pong`。服务器广播的帧和原来一样是 `{ "id", "event", "data" }`：
+
+`ping` still answers with the text `pong`. Broadcast frames stay `{ "id", "event", "data" }`:
+
+| `event` | `data` |
+| --- | --- |
+| `presence:update` | `{ "people": [{ "id", "name", "avatar_url", "stage" }] }` |
+| `lock:update` | `{ "locks": [{ "stage", "expiresAt", "user": { "id", "name", "avatar_url" } }] }` |
+| `comment:added` | `{ "comment" }` |
+| `comment:updated` | `{ "comment" }`。删掉时 `comment` 是 `{ "id", "path", "deleted": true }`。/ When deleted, `comment` is `{ "id", "path", "deleted": true }`. |
+| `mention` | 只发给被 @ 的那个人：`{ "commentId", "flowId", "path", "by" }`，没有评论文字。/ Only to the person who was @: `{ "commentId", "flowId", "path", "by" }`, with no comment text. |
+| `error` | `{ "error", "code" }`。`code` 是 `bad_message`、`too_large`、`forbidden` 或 `locked`。/ `code` is `bad_message`, `too_large`, `forbidden` or `locked`. |
+
+这些帧和 `flow:changed`、运行事件（`run:start`、`stage:*`、`run:end`、`run:continue`）走同一条连接，不取代它们。
+
+These frames share the socket with `flow:changed` and the run events (`run:start`, `stage:*`, `run:end`, `run:continue`) and do not replace them.
+
+### 锁 / Locks
+
+一把锁在拿着它的那条连接上，连接一关就没了。大约 2 分钟没心跳也会过期，过期是下次读写时才看的，不靠定时器。一个人同时只拿一把。
+
+A lock sits on the connection that holds it and disappears when that connection closes. It also expires about 2 minutes after the last heartbeat; expiry is checked on the next read or write, not by a timer. One person holds one lock.
+
+写操作如果碰到别人的锁，返回 409，`code` 是 `locked`（运行中的 409 没有这个 `code`）：
+
+A write that hits someone else's lock answers 409 with `code: "locked"` (a 409 from a run in progress has no such `code`):
+
+```json
+{ "error": "这一阶段正在被别人编辑 / someone else is editing this stage", "code": "locked", "lock": { "stage": "notes", "user": { "id": "…", "name": "…" } } }
+```
+
+写的人是请求头 `X-Flowgit-User`，不是正文里的字段。对照：
+
+The writer is the `X-Flowgit-User` header, not a field in the body. What each write locks:
+
+| 请求 / Request | 锁 / Lock |
+| --- | --- |
+| `PUT …/board/file?path=`、`PUT`/`DELETE …/raw?path=` | 这个路径属于哪个阶段的产物或提示词。`flow.json`、`flow.md`、`flowgit.local.json` 是整份流程（`*`）。对不上阶段的路径不锁。/ The stage that owns that output or prompt path. `flow.json`, `flow.md` and `flowgit.local.json` are the whole flow (`*`). A path no stage owns is not locked. |
+| `POST …/board/upload?stage=` | 查询里的阶段。/ The stage in the query. |
+| `PUT …/board/stage` | 正文里的 `id`。/ `id` in the body. |
+| `DELETE …/board/stage?id=` | 查询里的阶段。/ The stage in the query. |
+| `POST …/board/restore` | 正文里的 `stage`。/ `stage` in the body. |
+| `PUT …/board/flow`、`PUT …/board/inputs`、`POST …/board/stage` | 整份流程 `*`。/ The whole flow, `*`. |
+
+别人拿着 `*` 时，阶段上的写也会 409；别人拿着任一阶段时，整份流程的写也会 409。自己拿着锁时可以写。没人拿锁时也可以写。
+
+A stage write is also 409 when someone else holds `*`, and a whole-flow write is 409 when someone else holds any stage. The person who holds the lock can write. So can anyone when nobody holds it.
+
+### 评论 / Comments
+
+评论只在 D1（迁移 `0021_comments.sql`，`flow_id` 外键 `ON DELETE CASCADE`）。不进流程目录，不进 zip，操作记录里也只有路径、没有正文。锚点是 `{ path, start?, end?, quote? }`。
+
+Comments live only in D1 (migration `0021_comments.sql`, `flow_id` foreign key `ON DELETE CASCADE`). They never enter the flow directory, a zip, or the audit detail — the audit line is who, and which file, never the text. The anchor is `{ path, start?, end?, quote? }`.
+
+| 方法 / Method | 路径 / Path | 谁 / Who |
+| --- | --- | --- |
+| GET | `/api/flows/:flow/comments` | viewer。`{ comments }`，每人最多最近 500 条。/ viewer. `{ comments }`, the latest 500. |
+| POST | `/api/flows/:flow/comments` | editor。正文 `{ path, body, start?, end?, quote? }` → 201 `{ comment }`。经房间广播 `comment:added`。/ editor. Body `{ path, body, start?, end?, quote? }` → 201 `{ comment }`. The room broadcasts `comment:added`. |
+| PATCH | `/api/flows/:flow/comments/:comment` | editor。`{ "resolved": true }`。/ editor. `{ "resolved": true }`. |
+| DELETE | `/api/flows/:flow/comments/:comment` | 作者或 owner。/ The author or an owner. |
+
+只看的人能不能评论，先按角色表：viewer 不能写（不能 POST、不能标为已解决）。作者即使后来变成 viewer，仍可以删自己的评论。@ 用成员的名字（精确、长的优先）或用户 id。被提到的人得到一条通知，`kind` 是 `comment.mention`（标题和正文只有是谁、哪个文件，没有评论文字），看板用原来的 `GET /api/notifications` 和 `POST /api/notifications/read`。这个人当时在线，还会收到上面的 `mention` 帧。
+
+Whether viewers may comment is left open; until then the role table applies and viewers do not write (no POST, no resolve). An author can still delete their own comment after being demoted to viewer. `@` is a member's exact name (longest first) or their user id. The person mentioned gets a notification with `kind: "comment.mention"` (the title and body name who and which file, never the comment text). The board uses the existing `GET /api/notifications` and `POST /api/notifications/read`. If they are connected, they also get the `mention` frame above.
+
+操作记录还是 `GET /api/workspaces/:ws/audit?before=<ms>`，每页 100 条，只有 owner。看板按 `flow_id` 滤到当前流程，不是 owner 就不显示入口。
+
+The audit log is still `GET /api/workspaces/:ws/audit?before=<ms>`, 100 per page, owners only. The board filters it to the current `flow_id` and does not show the entry to anyone else.
+
+看板只通过 `api.js` 末尾的 `cloudInfo()`、`sendLive()`、`onLive()` 读 `transport.cloud`。没有云端传输、是分享页（`share`）或 `me` 为空时，在线、锁、评论和操作记录四个模块什么都不做，也不改页面。
+
+The board reads the cloud only through `cloudInfo()`, `sendLive()` and `onLive()` at the end of `api.js`, which read `transport.cloud`. With no cloud transport, on a share page (`share`), or when `me` is null, the presence, lock, comment and activity modules do nothing and do not change the page.
