@@ -427,6 +427,32 @@ The full spec is in [docs/spec.md](docs/spec.md); the JSON Schema is [packages/c
 
 To build your own flow from scratch, follow [docs/guide.md](docs/guide.md) (about 15 minutes, no API key needed); the finished flow is the bundled `weekly-report` template: `flowgit init ~/my-report -t weekly-report`.
 
+## 桌面版 / Desktop
+
+Windows 桌面版（`packages/desktop`，不发布到 npm）不用先装 Node，也不用开命令行。双击打开之后，首页可以打开一个流程文件夹，或者从和 `flowgit init` 相同的模板新建。看板还是本机的 `startBoard`，只听 127.0.0.1。
+
+The Windows desktop app (`packages/desktop`, not published to npm) needs neither Node nor a terminal. After you open it, the home page opens a flow folder or creates one from the same templates as `flowgit init`. The board is the local `startBoard`, bound to 127.0.0.1 only.
+
+- 脚本阶段要的 `node`：如果电脑上已经装了 Node，还是用那个（agent 自带的原生模块可能只能在 Node 上跑）。找不到 `node` 时，用这次启动的 Electron 自己充当，垫片放在 PATH 的**最后面**。`ELECTRON_RUN_AS_NODE` 只写在垫片里。 / The `node` a script stage runs: if Node is already installed, that one is used (an agent CLI's native modules may load only in Node). When `node` is missing, this launch of Electron is Node, and the shim is at the **end** of PATH. `ELECTRON_RUN_AS_NODE` is set only inside the shim.
+- 这一版**没有签名**。安装时 Windows 会显示“未知发行者 / Unknown publisher”。标签是 `desktop-v*`（`v*` 仍然是命令行的 npm 发布）。有新的桌面版时会打开下载页，不会自己安装。 / This build is **unsigned**. Windows shows "Unknown publisher" during install. Tags are `desktop-v*` (`v*` stays the CLI's npm release). A newer desktop release opens its download page; it does not install itself.
+- Electron 的 `RunAsNode` fuse 保持打开，否则没有 Node 的电脑跑不了脚本。代价是：别人可以用这个安装档的程序，加上 `ELECTRON_RUN_AS_NODE=1`，把它当成 Node 来用。`--inspect` 也保持打开，因为打包后的端到端测试要用 Playwright 的 Electron 驱动连上它（它会加 `--inspect=0`，见 [Playwright Electron](https://playwright.dev/docs/api/class-electron)）。`NODE_OPTIONS` 和 `file://` 的额外权限是关掉的。说明见 [Electron fuses](https://www.electronjs.org/docs/latest/tutorial/fuses)。 / Electron's `RunAsNode` fuse stays on, or a computer without Node could not run scripts. The trade-off: someone can launch the installed program with `ELECTRON_RUN_AS_NODE=1` and use it as Node. `--inspect` stays on too, because the packaged end-to-end test attaches with Playwright's Electron driver, which passes `--inspect=0` ([Playwright Electron](https://playwright.dev/docs/api/class-electron)). `NODE_OPTIONS` and the extra `file://` privileges are off. See [Electron fuses](https://www.electronjs.org/docs/latest/tutorial/fuses).
+- FFmpeg 和 agent 命令行不打包进去。缺了的话，首页列出 `flowgit doctor` 的结果和安装方法。 / FFmpeg and the agent CLIs are not bundled. When one is missing, the home page lists the `flowgit doctor` result and how to install it.
+
+从源码跑（pnpm 10 不会在 `pnpm install` 时下载 Electron 的二进制）：
+
+From source (pnpm 10 does not download the Electron binary during `pnpm install`):
+
+```bash
+pnpm install
+pnpm build
+node packages/desktop/scripts/download-electron.mjs
+pnpm --filter @flowgit/desktop start
+```
+
+安装档由 `.github/workflows/desktop.yml` 在 Windows 上打出。推 `desktop-v*` 标签时，安装档进一个草稿 Release。
+
+The installer is built on Windows by `.github/workflows/desktop.yml`. A `desktop-v*` tag uploads it to a draft Release.
+
 ## 网页版 / Web app
 
 `packages/app` 是不用安装、在浏览器里用 Flowgit 的静态网站，以后放在 flowgit.dev/app。现在可以这样在本机试：
@@ -461,6 +487,7 @@ packages/
   cli/    flowgit        命令行工具和模板 / CLI and templates
     templates/             自带模板：short-video（短视频）、weekly-report（周报入门）、article（图文）、support-sop（客服 SOP）、job-application（求职材料）、research-report（调研报告）、ecommerce-listing（电商上架）、slides（演示稿）、live-selling（直播带货）、short-drama（短剧）、lesson-plan（备课）、novel-serial（网文连载）、business-plan（商业计划书）、event-plan（活动策划）、hiring（招聘）、travel-guide（旅行攻略）、online-course（知识付费课程）、landing-page（落地页）、social-posts（社媒帖子）、data-report（数据报告）、meeting-notes（会议纪要）、podcast（播客单集）、picture-book（绘本 / 漫画）、product-launch（新品发布物料包）、micro-course（知识付费微课视频）/ bundled templates: short-video, weekly-report (starter), article, support-sop, job-application, research-report, ecommerce-listing, slides, live-selling, short-drama, lesson-plan, novel-serial, business-plan, event-plan, hiring, travel-guide, online-course, landing-page, social-posts, data-report, meeting-notes, podcast, picture-book, product-launch, micro-course
   app/    @flowgit/app   网页版：在浏览器里用的静态网站（不发布到 npm）/ web app: a static site for the browser (not published to npm)
+  desktop/ @flowgit/desktop  Windows 桌面版（不发布到 npm）/ Windows desktop app (not published to npm)
   web/    @flowgit/web   本机网页看板：查看、修改、运行、新增和删除阶段、填写输入、看历史、对比和回退、流程图、预演和 token 用量 / local web board: view, edit, run, add and remove stages, fill in inputs, browse history, compare, restore, a flow graph, preview, and token usage
   vscode/ flowgit-vscode VS Code 和 Cursor 插件（不发布到 npm）/ VS Code and Cursor extension (not published to npm)
 docs/

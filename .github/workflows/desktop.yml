@@ -1,0 +1,58 @@
+name: Desktop
+
+# Windows desktop app. PRs build and test here. A desktop-v* tag also uploads
+# a draft release. CLI releases stay on v* (release.yml); this file never
+# publishes those.
+# https://www.electron.build/configuration/publish
+
+on:
+  pull_request:
+  push:
+    tags:
+      - "desktop-v*"
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    if: github.event_name == 'pull_request' || startsWith(github.ref, 'refs/tags/desktop-v')
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm typecheck
+      - run: pnpm test
+        env:
+          FLOWGIT_FONT: C:\Windows\Fonts\arial.ttf
+      # pnpm 10 does not run Electron's install script. Download the binary on purpose.
+      # https://www.electronjs.org/docs/latest/tutorial/installation
+      - run: node packages/desktop/scripts/download-electron.mjs
+      - name: 打包 Windows 安装档 / Package the Windows installer
+        run: node packages/desktop/scripts/package.mjs --win
+      - name: 对打包结果做端到端测试 / End-to-end test against win-unpacked
+        run: pnpm --filter @flowgit/desktop test:e2e
+      - uses: actions/upload-artifact@v4
+        with:
+          name: flowgit-desktop-windows
+          path: packages/desktop/release/*.exe
+          if-no-files-found: error
+      - name: 草稿 Release / Draft release
+        if: startsWith(github.ref, 'refs/tags/desktop-v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
+        run: |
+          $notes = @"
+          Windows 桌面版安装档（未签名）。Windows 会显示“未知发行者”。
+
+          Unsigned Windows desktop installer. Windows shows "Unknown publisher".
+          "@
+          $exe = (Get-ChildItem packages/desktop/release/*.exe | Select-Object -First 1).FullName
+          gh release create $env:GITHUB_REF_NAME --repo $env:GITHUB_REPOSITORY --draft --title $env:GITHUB_REF_NAME --notes $notes $exe

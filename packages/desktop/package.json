@@ -1,0 +1,79 @@
+{
+  "name": "@flowgit/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Flowgit desktop app: open the local board without installing Node. 桌面版：不用安装 Node 就能打开本机看板。",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "dist/main.js",
+  "author": "Flowgit",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "download-electron": "node scripts/download-electron.mjs",
+    "package": "node scripts/package.mjs",
+    "test:e2e": "playwright test",
+    "start": "electron ."
+  },
+  "dependencies": {
+    "@flowgit/core": "workspace:*",
+    "@flowgit/web": "workspace:*",
+    "electron-updater": "6.8.11",
+    "flowgit": "workspace:*"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.1",
+    "electron": "45.2.2",
+    "electron-builder": "26.18.0"
+  },
+  "build": {
+    "appId": "dev.flowgit.desktop",
+    "productName": "Flowgit",
+    "asar": false,
+    "npmRebuild": false,
+    "electronVersion": "45.2.2",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "preload/**/*",
+      "renderer/**/*",
+      "package.json"
+    ],
+    "publish": {
+      "provider": "github",
+      "owner": "cgold9820-dotcom",
+      "repo": "Flowgit",
+      "releaseType": "release",
+      "tagNamePrefix": "desktop-v"
+    },
+    "electronFuses": {
+      "runAsNode": true,
+      "enableCookieEncryption": true,
+      "enableNodeOptionsEnvironmentVariable": false,
+      "enableNodeCliInspectArguments": true,
+      "enableEmbeddedAsarIntegrityValidation": false,
+      "onlyLoadAppFromAsar": false,
+      "loadBrowserProcessSpecificV8Snapshot": false,
+      "grantFileProtocolExtraPrivileges": false
+    },
+    "win": {
+      "target": ["nsis"],
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "linux": {
+      "target": ["dir"],
+      "executableName": "flowgit"
+    }
+  }
+}

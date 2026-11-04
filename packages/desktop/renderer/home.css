@@ -1,0 +1,183 @@
+/*
+ * Home page for the desktop app. Colors follow the board's tokens in
+ * packages/web/public/style.css so the two windows feel like one app.
+ * The theme follows the system setting.
+ */
+:root {
+  color-scheme: light;
+  --bg: #f3f4f6;
+  --surface: #ffffff;
+  --ink: #0a0a0b;
+  --muted: #5d6169;
+  --rule: #0a0a0b;
+  --hair: #c6c9d0;
+  --accent: #2233ee;
+  --accent-ink: #ffffff;
+  --ok: #127a4a;
+  --warn: #b25e00;
+  --error: #c22a1f;
+  --font: "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+  --mono: ui-monospace, "Cascadia Code", "SF Mono", Menlo, Consolas, monospace;
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--ink);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --bg: #0d1015;
+    --surface: #141922;
+    --ink: #e7ebf2;
+    --muted: #8b94a5;
+    --rule: #252c38;
+    --hair: #252c38;
+    --accent: #5b8cff;
+    --accent-ink: #0b1020;
+    --ok: #3ccf91;
+    --warn: #ff8a4c;
+    --error: #ff6b6b;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body { margin: 0; min-height: 100vh; }
+
+.top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  border-bottom: 2px solid var(--rule);
+}
+
+.brand-block { padding: 28px 32px 22px; }
+
+.brand {
+  margin: 0 0 8px;
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+h1 {
+  margin: 0;
+  font-size: clamp(32px, 5vw, 56px);
+  line-height: 1;
+  letter-spacing: -0.03em;
+}
+
+.tagline { margin: 12px 0 0; color: var(--muted); max-width: 42rem; }
+
+.top-side {
+  display: flex;
+  align-items: flex-start;
+  padding: 28px 32px;
+  border-left: 2px solid var(--rule);
+}
+
+.lang-switch { display: flex; border: 2px solid var(--ink); }
+
+.lang-switch button, button {
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+}
+
+.lang-switch button { padding: 8px 14px; min-height: 44px; }
+
+.lang-switch button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+
+main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  gap: 0;
+}
+
+.panel-block {
+  padding: 24px 32px 32px;
+  border-bottom: 1px solid var(--hair);
+}
+
+.panel-block:nth-child(1) { grid-column: 1; grid-row: 1 / span 2; border-right: 1px solid var(--hair); }
+.panel-block:nth-child(2) { grid-column: 2; }
+.panel-block:nth-child(3) { grid-column: 2; }
+
+.section-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 14px; }
+
+.num {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--muted);
+}
+
+h2 { margin: 0; font-size: 22px; }
+
+.empty, .status { color: var(--muted); }
+
+.status {
+  margin: 0;
+  padding: 12px 32px;
+  color: var(--error);
+  border-bottom: 1px solid var(--hair);
+}
+
+.list, .templates, .doctor { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+
+.list button, .templates button, #open {
+  text-align: left;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 14px;
+  border: 1px solid var(--hair);
+  background: var(--surface);
+  color: var(--ink);
+}
+
+#open, .templates button { margin-top: 8px; }
+
+#open {
+  width: auto;
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: var(--accent);
+  padding: 10px 18px;
+}
+
+.list button small, .templates button small {
+  display: block;
+  font-weight: 500;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.templates button small { color: inherit; opacity: 0.75; }
+
+.doctor li {
+  padding: 10px 12px;
+  background: var(--surface);
+  border-left: 3px solid var(--hair);
+}
+
+.doctor li.ok { border-left-color: var(--ok); }
+.doctor li.warn { border-left-color: var(--warn); }
+.doctor li.error { border-left-color: var(--error); }
+
+.doctor p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+button:disabled { opacity: 0.6; cursor: default; }
+
+@media (max-width: 800px) {
+  .top, main { grid-template-columns: 1fr; }
+  .top-side { border-left: 0; border-top: 2px solid var(--rule); }
+  .panel-block:nth-child(1),
+  .panel-block:nth-child(2),
+  .panel-block:nth-child(3) { grid-column: 1; grid-row: auto; border-right: 0; }
+}

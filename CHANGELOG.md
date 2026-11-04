@@ -6,6 +6,10 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 
 ## [未发布 / Unreleased]
 
+### 桌面版 / Desktop
+
+- Windows 桌面版（`packages/desktop`，不发布到 npm）：不用装 Node，双击打开看板。首页可以打开文件夹或从模板新建；脚本阶段找不到 `node` 时用 Electron 自己充当，垫片在 PATH 的最后。没有签名，Windows 会显示“未知发行者”。FFmpeg 和 agent 命令行不打包进去，缺了会显示 `flowgit doctor` 的结果。 / A Windows desktop app (`packages/desktop`, not published to npm): no Node install, double-click to open the board. The home page opens a folder or creates a flow from a template; when a script stage can't find `node`, Electron itself is Node, and the shim is at the end of PATH. It is unsigned, so Windows shows "Unknown publisher". FFmpeg and agent CLIs are not bundled; if they're missing, the `flowgit doctor` results say how to install them.
+
 ### 编辑器 / Editor
 
 - VS Code 和 Cursor 插件（`packages/vscode`，不发布到 npm）：侧边栏按依赖顺序列出阶段和状态（与 `flowgit status --json` 一致），CodeLens 可运行阶段，命令通过编辑器任务执行，不读取、不保存密钥。说明见 [docs/vscode.md](docs/vscode.md)。 / A VS Code and Cursor extension (`packages/vscode`, not published to npm): the sidebar lists stages in dependency order with the same states as `flowgit status --json`, CodeLens can run a stage, and commands run as editor tasks. It never reads or stores a key. See [docs/vscode.md](docs/vscode.md).

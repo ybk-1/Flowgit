@@ -311,6 +311,20 @@ export const I18N = (() => {
       empty: "没有镜头",
       visual: "画面",
     },
+    desktop: {
+      title: "不用命令行的 Flowgit",
+      tagline: "打开文件夹，或从模板新建一个流程。",
+      recent: "最近打开",
+      recentEmpty: "还没有打开过流程。",
+      open: "打开文件夹",
+      create: "从模板新建",
+      doctor: "这台电脑",
+      doctorEmpty: "正在检查…",
+      opening: "正在打开…",
+      creating: "正在创建…",
+      failed: "没有完成",
+      lang: "语言",
+    },
   };
 
   const en = {
@@ -613,6 +627,20 @@ export const I18N = (() => {
       asset: "Asset",
       empty: "No shots",
       visual: "Visual",
+    },
+    desktop: {
+      title: "Flowgit without the command line",
+      tagline: "Open a folder, or start a flow from a template.",
+      recent: "Recent",
+      recentEmpty: "No flows opened yet.",
+      open: "Open a folder",
+      create: "New from a template",
+      doctor: "This computer",
+      doctorEmpty: "Checking…",
+      opening: "Opening…",
+      creating: "Creating…",
+      failed: "That didn't finish",
+      lang: "Language",
     },
   };
 

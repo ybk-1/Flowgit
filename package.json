@@ -4,6 +4,9 @@
   "description": "Flowgit: turn anything into a visual, staged, forkable flow. 万物皆可流程化。",
   "license": "Apache-2.0",
   "packageManager": "pnpm@10.28.0",
+  "pnpm": {
+    "ignoredBuiltDependencies": ["electron"]
+  },
   "engines": {
     "node": ">=22"
   },

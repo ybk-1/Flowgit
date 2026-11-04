@@ -34,3 +34,6 @@ packages/*/LICENSE
 gallery-dist/
 # Website (`flowgit site build`). Deployed by .github/workflows/site.yml, not committed.
 site-dist/
+# Desktop installer output and the pnpm deploy folder used to package it.
+packages/desktop/release/
+packages/desktop/.deploy/
