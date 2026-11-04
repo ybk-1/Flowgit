@@ -6,6 +6,10 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 
 ## [未发布 / Unreleased]
 
+### 手机 / Phone
+
+- 网页版可以加到主屏幕：manifest、图标，以及缓存外壳的 service worker，离线也能打开已经存在浏览器里的流程；断网时按运行会提示“需要网络”。窄屏时卡片排成一栏，上传按钮至少 44px，流程图可以用手指拖动和缩放，侧栏变成从底部拉起的面板。 / The web app can be added to the home screen: a manifest, icons, and a service worker that caches the shell, so a flow already stored in the browser still opens offline. Run says "Needs a network" when offline. On a narrow screen the cards are one column, upload buttons are at least 44px, the graph pans and zooms by touch, and the side panel becomes a bottom sheet.
+
 ### 编辑器 / Editor
 
 - VS Code 和 Cursor 插件（`packages/vscode`，不发布到 npm）：侧边栏按依赖顺序列出阶段和状态（与 `flowgit status --json` 一致），CodeLens 可运行阶段，命令通过编辑器任务执行，不读取、不保存密钥。说明见 [docs/vscode.md](docs/vscode.md)。 / A VS Code and Cursor extension (`packages/vscode`, not published to npm): the sidebar lists stages in dependency order with the same states as `flowgit status --json`, CodeLens can run a stage, and commands run as editor tasks. It never reads or stores a key. See [docs/vscode.md](docs/vscode.md).

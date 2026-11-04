@@ -295,3 +295,12 @@
 }
 :root[data-theme="dark"] .tile:not(.accent) { border-top: 1px solid var(--hair); }
 :root[data-theme="dark"] .section-num { -webkit-text-stroke-color: var(--muted); }
+
+/* Phone (#177). Appended only — the rules above are unchanged. */
+@media (max-width: 720px) {
+  .tile-grid { grid-template-columns: minmax(0, 1fr); }
+  .btn,
+  .file-button {
+    min-height: 44px;
+  }
+}

@@ -311,6 +311,7 @@ export const I18N = (() => {
       empty: "没有镜头",
       visual: "画面",
     },
+    offline: { needsNetwork: "需要网络" },
   };
 
   const en = {
@@ -614,6 +615,7 @@ export const I18N = (() => {
       empty: "No shots",
       visual: "Visual",
     },
+    offline: { needsNetwork: "Needs a network" },
   };
 
   /** Storage can throw in private mode; the choice then lasts for this visit only. */

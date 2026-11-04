@@ -4,6 +4,7 @@
 // - templates/<id>.json: the bundled templates from packages/cli/templates.
 // Every path in the pages is relative, so the site works under any folder (flowgit.dev/app/).
 import { build } from "esbuild";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
@@ -24,6 +25,11 @@ export const LOCAL_BOARD_HOSTS = ["http://127.0.0.1:*", "http://localhost:*"];
 const CSP = [
   "default-src 'none'",
   "script-src 'self'",
+  // A service worker would otherwise fall back to script-src. Name it.
+  // https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Security-Policy/worker-src
+  "worker-src 'self'",
+  // https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Security-Policy/manifest-src
+  "manifest-src 'self'",
   "style-src 'self'",
   "img-src 'self' blob: data:",
   "media-src 'self' blob:",
@@ -114,4 +120,55 @@ await build({
   legalComments: "linked",
   logLevel: "warning",
 });
+// Phone shell: manifest link and service worker registration. Paths stay relative.
+// start_url and scope are filled here, never hard-coded in the source manifest.
+const pwaHead = [
+  `<link rel="manifest" href="./manifest.webmanifest" />`,
+  `<meta name="theme-color" media="(prefers-color-scheme: light)" content="#f3f4f6" />`,
+  `<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0d1015" />`,
+].join("\n  ");
+const pwaScript = `<script src="./sw-register.js"></script>`;
+for (const name of ["index.html", "board.html"]) {
+  const file = path.join(out, name);
+  let html = fs.readFileSync(file, "utf8");
+  if (!html.includes("manifest.webmanifest")) html = html.replace("</head>", `  ${pwaHead}\n</head>`);
+  if (!html.includes("sw-register.js")) html = html.replace("</body>", `  ${pwaScript}\n</body>`);
+  fs.writeFileSync(file, html);
+}
+fs.copyFileSync(path.join(root, "static", "sw-register.js"), path.join(out, "sw-register.js"));
+for (const icon of ["icon-192.png", "icon-512.png", "icon-maskable-192.png", "icon-maskable-512.png"]) {
+  fs.copyFileSync(path.join(root, "static", icon), path.join(out, icon));
+}
+const manifest = JSON.parse(fs.readFileSync(path.join(root, "static", "manifest.webmanifest"), "utf8"));
+manifest.start_url = "./";
+manifest.scope = "./";
+fs.writeFileSync(path.join(out, "manifest.webmanifest"), `${JSON.stringify(manifest, null, 2)}\n`);
+
+const shell = [];
+const walk = (dir, prefix) => {
+  for (const name of fs.readdirSync(dir)) {
+    const abs = path.join(dir, name);
+    const rel = prefix ? `${prefix}/${name}` : name;
+    if (fs.statSync(abs).isDirectory()) {
+      walk(abs, rel);
+      continue;
+    }
+    if (rel === "sw.js" || rel.endsWith(".map")) continue;
+    const shellFile = rel === "templates/index.json" || /\.(html|css|js|webmanifest|png)$/.test(rel);
+    const templateJson = rel.startsWith("templates/") && rel !== "templates/index.json";
+    if (shellFile && !templateJson) shell.push(rel);
+  }
+};
+walk(out, "");
+shell.sort();
+const hash = crypto.createHash("sha256");
+for (const rel of shell) {
+  hash.update(rel);
+  hash.update(fs.readFileSync(path.join(out, rel)));
+}
+const sw = fs
+  .readFileSync(path.join(root, "static", "sw.js"), "utf8")
+  .replaceAll("__FLOWGIT_BUILD__", hash.digest("hex").slice(0, 16))
+  .replaceAll("__FLOWGIT_SHELL__", JSON.stringify(shell));
+fs.writeFileSync(path.join(out, "sw.js"), sw);
 console.log(`网页版已构建到 / web app built in ${path.relative(process.cwd(), out) || "."}`);

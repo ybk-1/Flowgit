@@ -1695,3 +1695,51 @@ body {
 .more:focus-visible {
   border-color: var(--accent);
 }
+
+/* Phone (#177). Appended only — the rules above are unchanged.
+   Narrow screens: one column, 44px upload targets, a touch-scrollable graph,
+   and the side panel as a bottom sheet. */
+@media (max-width: 720px) {
+  .board {
+    flex-direction: column;
+    overflow-x: hidden;
+  }
+  .card {
+    flex: 1 1 auto;
+    max-width: none;
+    width: 100%;
+  }
+  .upload-label,
+  .upload input[type="file"] {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+  }
+  .run,
+  #run-all,
+  #inputs-save,
+  .save {
+    min-height: 44px;
+  }
+  .graph-scroll {
+    overflow: auto;
+    touch-action: pan-x pan-y pinch-zoom;
+    -webkit-overflow-scrolling: touch;
+  }
+  .panel {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    height: min(78vh, 640px);
+    border-left: 0;
+    border-top: var(--rule-w) solid var(--rule);
+    border-radius: 16px 16px 0 0;
+    box-shadow: 0 -16px 40px rgba(0, 0, 0, 0.28);
+  }
+  body.panel-open .board {
+    padding-right: 0;
+    padding-bottom: min(78vh, 640px);
+  }
+}
