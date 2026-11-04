@@ -28,7 +28,7 @@ import { decideNext } from "../runs/next.js";
 import { sandboxExec } from "../runs/sandbox.js";
 import { addUsage, requireQuota, usageOf } from "../runs/usage.js";
 import { CONTINUE_EVENT, type StepAnswer } from "../runs/workflow.js";
-import { decryptKeys, recordKeyUses, watchedEnv } from "../vault/vault.js";
+import { decryptKeys, guardKeys, type OpenKey, recordKeyUses } from "../vault/vault.js";
 import { createMemoryHost, withFlowHost } from "../storage/context-host.js";
 import {
   blobKey,
@@ -481,12 +481,13 @@ export class FlowRoom extends DurableObject<Env> {
     const base: Record<string, string> = {};
     // Canned replies for the local emulator and the tests only.
     if (this.env.ENVIRONMENT === "local" && this.env.FLOWGIT_TEST_LLM_MOCK_DIR) base.FLOWGIT_LLM_MOCK_DIR = `${FLOW_DIR}/${this.env.FLOWGIT_TEST_LLM_MOCK_DIR}`;
-    const watched = watchedEnv(base, keys);
-    const runHost = this.runHost(host, watched.env);
+    const fetcher = runTransport.fetch ?? ((input: RequestInfo | URL, init?: RequestInit) => fetch(input, init));
+    const guard = guardKeys(fetcher, keys);
+    const runHost = this.runHost(host, base, keys, guard.fetch);
     board.running = true;
     let answer: StepAnswer;
     try {
-      answer = await withFlowHost(runHost, () => this.advance(active!, watched.take));
+      answer = await withFlowHost(runHost, () => this.advance(active!, guard.take));
     } finally {
       board.running = false;
       // Every file the stage wrote is in R2 before the Workflow takes the next step.
@@ -495,17 +496,28 @@ export class FlowRoom extends DurableObject<Env> {
     return answer;
   }
 
-  /** The room's host with the run's environment (its keys), the network and the sandbox. */
-  private runHost(host: MemoryHost, env: Record<string, string>): Host {
-    const fetcher = runTransport.fetch ?? ((input: RequestInfo | URL, init?: RequestInit) => fetch(input, init));
+  /**
+   * The room's host for a run step: the run's environment (its keys, under their own names), a
+   * fetch that lets each key out only to its own hosts, and the sandbox for commands. Commands
+   * get no keys: the sandbox's environment has every vault name taken out.
+   */
+  private runHost(host: MemoryHost, base: Record<string, string>, keys: Record<string, OpenKey>, guarded: typeof fetch): Host {
+    const env: Record<string, string> = { ...base };
+    for (const [name, key] of Object.entries(keys)) env[name] = key.value;
     const sandbox = this.env.SANDBOX;
+    const run = sandbox
+      ? sandboxExec(sandbox, host, FLOW_DIR, {
+          flowId: this.flowId!,
+          blobOf: (data) => readStub(data),
+          stubFor: (ref) => makeStub(ref),
+          withheld: Object.keys(keys),
+        })
+      : undefined;
     return {
       ...host,
       env,
-      fetch: (input, init) => fetcher(input as RequestInfo, init),
-      exec: sandbox
-        ? sandboxExec(sandbox, host, FLOW_DIR, { blobOf: (data) => readStub(data) })
-        : async () => Promise.reject(needsComputerError()),
+      fetch: (input, init) => guarded(input as RequestInfo, init),
+      exec: run ?? (async () => Promise.reject(needsComputerError())),
     } as Host;
   }
 

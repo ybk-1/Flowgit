@@ -1,3 +1,4 @@
+import { IMAGE_PRESETS, PROVIDER_PRESETS } from "@flowgit/core";
 import { audit } from "../audit.js";
 import type { Env } from "../env.js";
 import { HttpError, notFound } from "../http.js";
@@ -9,6 +10,12 @@ import { HttpError, notFound } from "../http.js";
  * cloud run's environment under its own name (the name a flow's `apiKeyEnv` points at). The API
  * shows the name and the last four characters, never the value. The workspace id and the name are
  * the additional data, so a ciphertext can't be moved to another workspace or name.
+ *
+ * Each key also names the hosts it may be sent to (by default the official host of the built-in
+ * preset that reads it, e.g. api.deepseek.com for DEEPSEEK_API_KEY). A run's fetch refuses any
+ * request that carries a key anywhere else (`guardKeys`), so a service stage's header, a
+ * flowgit.local.json pointing a provider elsewhere, or any other route can't send a write-only
+ * key to a server an editor controls. Command stages in the sandbox get no keys at all.
  */
 
 /** Like an environment variable: DEEPSEEK_API_KEY. */
@@ -16,6 +23,43 @@ const NAME = /^[A-Z][A-Z0-9_]{1,63}$/;
 /** Names a key may not take: they change how a run behaves rather than authenticate it. */
 const RESERVED = /^(FLOWGIT_|PATH$|HOME$|NODE_|HTTP_PROXY$|HTTPS_PROXY$|NO_PROXY$|ALL_PROXY$)/;
 export const MAX_KEY_LENGTH = 8192;
+export const MAX_KEY_HOSTS = 10;
+const HOSTNAME = /^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
+
+/**
+ * Official hosts of the built-in presets, by the key they read. anthropic and openai have no
+ * baseUrl in their presets: their SDKs' defaults are https://api.anthropic.com and
+ * https://api.openai.com.
+ */
+export function defaultKeyHosts(): Record<string, string[]> {
+  const hosts: Record<string, Set<string>> = {};
+  const add = (name: string | undefined, url: string | undefined) => {
+    if (!name || !url) return;
+    (hosts[name] ??= new Set()).add(new URL(url).hostname);
+  };
+  for (const [id, preset] of Object.entries(PROVIDER_PRESETS)) {
+    add(preset.apiKeyEnv, preset.baseUrl ?? (id === "anthropic" ? "https://api.anthropic.com" : id === "openai" ? "https://api.openai.com" : undefined));
+  }
+  for (const preset of Object.values(IMAGE_PRESETS)) add(preset.apiKeyEnv, preset.baseUrl);
+  return Object.fromEntries(Object.entries(hosts).map(([name, set]) => [name, [...set].sort()]));
+}
+
+/** The hosts a key may go to, from the request or the preset default. */
+export function keyHosts(name: string, raw: unknown): string[] {
+  if (raw === undefined || raw === null) {
+    const preset = defaultKeyHosts()[name];
+    if (preset) return preset;
+    throw new HttpError(400, `${name} 不是自带预设的 key，请用 hosts 写明它可以发到哪些域名，例如 ["api.example.com"] / ${name} is not a built-in preset's key; list the hostnames it may be sent to in hosts, e.g. ["api.example.com"]`);
+  }
+  if (!Array.isArray(raw) || !raw.length || raw.length > MAX_KEY_HOSTS) throw new HttpError(400, `hosts 要是 1 到 ${MAX_KEY_HOSTS} 个域名 / hosts must list 1 to ${MAX_KEY_HOSTS} hostnames`);
+  const out = new Set<string>();
+  for (const item of raw) {
+    const host = typeof item === "string" ? item.trim().toLowerCase() : "";
+    if (!HOSTNAME.test(host)) throw new HttpError(400, `不是域名 / not a hostname: ${String(item)}`);
+    out.add(host);
+  }
+  return [...out].sort();
+}
 export const MAX_KEYS_PER_WORKSPACE = 50;
 
 const encoder = new TextEncoder();
@@ -71,6 +115,7 @@ export function lastFour(value: string): string {
 export interface KeyInfo {
   name: string;
   last4: string;
+  hosts: string[];
   created_by: string;
   created_at: number;
   updated_at: number;
@@ -80,20 +125,21 @@ export interface KeyInfo {
 
 export async function listKeys(env: Env, workspaceId: string): Promise<KeyInfo[]> {
   const { results } = await env.DB.prepare(
-    `SELECT k.name, k.last4, k.created_by, k.created_at, k.updated_at,
+    `SELECT k.name, k.last4, k.hosts, k.created_by, k.created_at, k.updated_at,
        (SELECT COUNT(*) FROM key_uses u WHERE u.workspace_id = k.workspace_id AND u.name = k.name) AS uses,
        (SELECT MAX(u.created_at) FROM key_uses u WHERE u.workspace_id = k.workspace_id AND u.name = k.name) AS last_used_at
      FROM vault_keys k WHERE k.workspace_id = ? ORDER BY k.name`,
   )
     .bind(workspaceId)
-    .all<KeyInfo>();
-  return results;
+    .all<KeyInfo & { hosts: string }>();
+  return results.map((row) => ({ ...row, hosts: JSON.parse(row.hosts || "[]") as string[] }));
 }
 
 /** Store (or replace) a key. Answers with what the API may show. */
-export async function putKey(env: Env, userId: string, workspaceId: string, name: string, value: unknown): Promise<{ name: string; last4: string }> {
+export async function putKey(env: Env, userId: string, workspaceId: string, name: string, value: unknown, rawHosts?: unknown): Promise<{ name: string; last4: string; hosts: string[] }> {
   const problem = keyNameProblem(name);
   if (problem) throw new HttpError(400, problem);
+  const hosts = keyHosts(name, rawHosts);
   if (typeof value !== "string" || !value.trim()) throw new HttpError(400, "缺少 value / missing value");
   if (value.length > MAX_KEY_LENGTH) throw new HttpError(413, `key 最长 ${MAX_KEY_LENGTH} 个字符 / a key is at most ${MAX_KEY_LENGTH} characters`);
   if (/[\r\n\0]/.test(value)) throw new HttpError(400, "key 里不能有换行 / a key can't contain line breaks");
@@ -109,13 +155,13 @@ export async function putKey(env: Env, userId: string, workspaceId: string, name
   const now = Date.now();
   const last4 = lastFour(value);
   await env.DB.prepare(
-    `INSERT INTO vault_keys (workspace_id, name, ciphertext, iv, last4, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-     ON CONFLICT (workspace_id, name) DO UPDATE SET ciphertext = excluded.ciphertext, iv = excluded.iv, last4 = excluded.last4, created_by = excluded.created_by, updated_at = excluded.updated_at`,
+    `INSERT INTO vault_keys (workspace_id, name, ciphertext, iv, last4, hosts, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT (workspace_id, name) DO UPDATE SET ciphertext = excluded.ciphertext, iv = excluded.iv, last4 = excluded.last4, hosts = excluded.hosts, created_by = excluded.created_by, updated_at = excluded.updated_at`,
   )
-    .bind(workspaceId, name, b64(sealed), b64(iv), last4, userId, now, now)
+    .bind(workspaceId, name, b64(sealed), b64(iv), last4, JSON.stringify(hosts), userId, now, now)
     .run();
-  await audit(env, { userId, workspaceId, action: existing ? "key.replace" : "key.add", detail: { name } });
-  return { name, last4 };
+  await audit(env, { userId, workspaceId, action: existing ? "key.replace" : "key.add", detail: { name, hosts } });
+  return { name, last4, hosts };
 }
 
 export async function deleteKey(env: Env, userId: string, workspaceId: string, name: string): Promise<void> {
@@ -124,18 +170,23 @@ export async function deleteKey(env: Env, userId: string, workspaceId: string, n
   await audit(env, { userId, workspaceId, action: "key.delete", detail: { name } });
 }
 
+export interface OpenKey {
+  value: string;
+  hosts: string[];
+}
+
 /** Every key of the workspace, decrypted. Only for a run's environment; never answer with it. */
-export async function decryptKeys(env: Env, workspaceId: string): Promise<Record<string, string>> {
-  const { results } = await env.DB.prepare("SELECT name, ciphertext, iv FROM vault_keys WHERE workspace_id = ?")
+export async function decryptKeys(env: Env, workspaceId: string): Promise<Record<string, OpenKey>> {
+  const { results } = await env.DB.prepare("SELECT name, ciphertext, iv, hosts FROM vault_keys WHERE workspace_id = ?")
     .bind(workspaceId)
-    .all<{ name: string; ciphertext: string; iv: string }>();
+    .all<{ name: string; ciphertext: string; iv: string; hosts: string }>();
   if (!results.length) return {};
   const key = await masterKey(env);
-  const out: Record<string, string> = {};
+  const out: Record<string, OpenKey> = {};
   for (const row of results) {
     try {
       const plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv: unb64(row.iv), additionalData: additionalData(workspaceId, row.name) }, key, unb64(row.ciphertext));
-      out[row.name] = decoder.decode(plain);
+      out[row.name] = { value: decoder.decode(plain), hosts: JSON.parse(row.hosts || "[]") as string[] };
     } catch {
       // A key sealed under another master key (or tampered with) is left out; the stage then
       // reports the missing variable by name.
@@ -176,29 +227,65 @@ export async function listKeyUses(env: Env, workspaceId: string, before?: number
   return results;
 }
 
+/** Where a request goes and what it carries, as text to look for keys in. */
+async function requestTexts(input: RequestInfo | URL, init?: RequestInit): Promise<{ url: URL; texts: string[] }> {
+  const request = input instanceof Request ? input : undefined;
+  const url = new URL(request ? request.url : String(input));
+  const texts = [url.href, decodeURIComponentSafe(url.href)];
+  const headers = new Headers(init?.headers ?? request?.headers);
+  headers.forEach((value) => texts.push(value));
+  const body = init?.body;
+  if (typeof body === "string") texts.push(body);
+  else if (body instanceof Uint8Array || body instanceof ArrayBuffer) texts.push(decoder.decode(body));
+  else if (body instanceof URLSearchParams) texts.push(body.toString(), decodeURIComponentSafe(body.toString()));
+  else if (body !== undefined && body !== null) texts.push("\u0000opaque-body");
+  return { url, texts };
+}
+
+function decodeURIComponentSafe(text: string): string {
+  try {
+    return decodeURIComponent(text);
+  } catch {
+    return text;
+  }
+}
+
 /**
- * An environment for one run: the decrypted keys, plus a record of which ones a stage read.
- * `take()` returns the names read since the last call.
+ * A fetch for one run that lets a key out only to its own hosts, over https, and records which
+ * keys went out (`take()` returns the names sent since the last call). A request whose body it
+ * can't read (a stream) is refused when the run has any keys, since it could carry one.
  */
-export function watchedEnv(base: Record<string, string>, keys: Record<string, string>): { env: Record<string, string>; take: () => string[] } {
-  const read = new Set<string>();
-  const values = { ...base, ...keys };
-  const env = new Proxy(values, {
-    get(target, prop, receiver) {
-      if (typeof prop === "string" && Object.hasOwn(keys, prop)) read.add(prop);
-      return Reflect.get(target, prop, receiver);
-    },
-    // Writes from a run stay in this run.
-    set(target, prop, value) {
-      return Reflect.set(target, prop, value);
-    },
-  });
+export function guardKeys(fetcher: typeof fetch, keys: Record<string, OpenKey>): { fetch: typeof fetch; take: () => string[] } {
+  const sent = new Set<string>();
+  const names = Object.keys(keys).filter((name) => keys[name]!.value.length >= 4);
+  const guarded = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (names.length) {
+      const { url, texts } = await requestTexts(input, init);
+      if (texts.includes("\u0000opaque-body")) {
+        throw new Error(`云端运行时不能发送读不出内容的请求体 / a cloud run can't send a request body it can't inspect: ${url.origin}`);
+      }
+      for (const name of names) {
+        const { value, hosts } = keys[name]!;
+        if (!texts.some((text) => text.includes(value))) continue;
+        if (url.protocol !== "https:" || !hosts.includes(url.hostname)) {
+          throw Object.assign(
+            new Error(
+              `key ${name} 只能发到 ${hosts.join(", ") || "（没有设置）"}，这个请求要发到 ${url.host}，已拦下。要发到这里，请工作区拥有者在 key 的 hosts 里加上它 / key ${name} may only go to ${hosts.join(", ") || "(none set)"}; this request was going to ${url.host} and was stopped. A workspace owner can add that host to the key's hosts`,
+            ),
+            { retryable: false },
+          );
+        }
+        sent.add(name);
+      }
+    }
+    return fetcher(input, init);
+  }) as typeof fetch;
   return {
-    env,
+    fetch: guarded,
     take() {
-      const names = [...read].sort();
-      read.clear();
-      return names;
+      const out = [...sent].sort();
+      sent.clear();
+      return out;
     },
   };
 }

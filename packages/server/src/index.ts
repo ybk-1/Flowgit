@@ -400,7 +400,7 @@ on("PUT", "/api/workspaces/:ws/keys/:name", async (ctx) => {
   const auth = user(ctx);
   await requireRole(ctx.env, ctx.params.ws!, auth.user.id, "owner");
   const body = await readJson(ctx.request, 16 * 1024);
-  return json(200, { ok: true, key: await putKey(ctx.env, auth.user.id, ctx.params.ws!, ctx.params.name!, body.value) });
+  return json(200, { ok: true, key: await putKey(ctx.env, auth.user.id, ctx.params.ws!, ctx.params.name!, body.value, body.hosts) });
 });
 on("DELETE", "/api/workspaces/:ws/keys/:name", async (ctx) => {
   const auth = user(ctx);

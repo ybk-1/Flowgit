@@ -150,12 +150,16 @@ async function keys(wsId, role) {
   const { keys: list } = await call("GET", `/api/workspaces/${wsId}/keys`);
   const name = el("input", { placeholder: "DEEPSEEK_API_KEY", autocomplete: "off" });
   const value = el("input", { type: "password", placeholder: "key", autocomplete: "off" });
-  const save = () =>
-    call("PUT", `/api/workspaces/${wsId}/keys/${encodeURIComponent(name.value.trim())}`, { value: value.value })
+  // Where the key may be sent; empty means the preset's own host (DeepSeek, Anthropic, ...).
+  const hosts = el("input", { placeholder: "api.example.com（可留空 / optional for presets）", autocomplete: "off" });
+  const save = () => {
+    const list = hosts.value.split(/[\s,]+/).filter(Boolean);
+    return call("PUT", `/api/workspaces/${wsId}/keys/${encodeURIComponent(name.value.trim())}`, { value: value.value, ...(list.length ? { hosts: list } : {}) })
       .then(() => {
         value.value = "";
         render();
       }, fail);
+  };
   return el(
     "div",
     {},
@@ -169,12 +173,13 @@ async function keys(wsId, role) {
           {},
           el("td", {}, el("code", {}, k.name)),
           el("td", { class: "muted" }, k.last4 ? `…${k.last4}` : "…"),
+          el("td", { class: "muted" }, `只发到 / only to ${(k.hosts ?? []).join(", ")}`),
           el("td", { class: "muted" }, `用过 / used ${k.uses} 次`),
           el("td", {}, role === "owner" ? el("button", { onclick: () => call("DELETE", `/api/workspaces/${wsId}/keys/${k.name}`).then(render, fail) }, "删除 / Delete") : ""),
         ),
       ),
     ),
-    role === "owner" ? el("p", {}, name, value, el("button", { onclick: save }, "保存 / Save")) : "",
+    role === "owner" ? el("p", {}, name, value, hosts, el("button", { onclick: save }, "保存 / Save")) : "",
   );
 }
 
