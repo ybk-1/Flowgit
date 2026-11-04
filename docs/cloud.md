@@ -115,7 +115,7 @@ Paths are posix paths relative to the flow folder; absolute paths, `..`, `\`, `.
 `/api/flows/:flow/board/<route>` is exactly the local board's `/api/<route>` (same parameters, statuses and bodies; see `packages/web` in `CLAUDE.md`). The cloud reuses the web app's `BrowserBoard` (`packages/app/src/router.ts`), so the web app only has to send the board's requests to `/api/flows/<id>/board/<route>` instead of `/api/<route>`. Reads need viewer; everything else needs editor.
 
 - 可以用 / Available: `GET flow`、`GET graph`、`GET usage`、`GET plan`、`GET`/`PUT inputs`、`GET`/`PUT file`、`POST upload`、`GET thumb`、`GET runs`、`GET diff`、`POST restore`、`POST`/`PUT`/`DELETE stage`、`PUT flow`。版本、对比和回退就是 core 的 `listRuns`、`diffRuns`、`restoreStage`。/ Versions, diffs and restores are core's `listRuns`, `diffRuns` and `restoreStage`.
-- 还不能用 / Not yet: `POST run` 和 `POST trust` 返回 501，等云端运行（#170）。现在请在电脑上运行，再用命令行推上来。/ `POST run` and `POST trust` answer 501 until cloud runs (#170). For now, run on a computer and push with the CLI.
+- 运行 / Runs: `POST run` 和 `POST trust` 在云端运行，见下面的“云端运行”。/ `POST run` and `POST trust` run in the cloud; see "Cloud runs" below.
 
 ### 实时通知 / Live events
 
@@ -129,7 +129,66 @@ Paths are posix paths relative to the flow folder; absolute paths, `..`, `\`, `.
 
 - 连上时先收到 `hello`（`data.flow` 是流程 id）。/ `hello` comes first on connect (`data.flow` is the flow id).
 - 任何人改了这个流程的文件，所有打开它的人都会收到 `flow:changed`，看板收到后重新读取（本机看板本来就这样处理）。/ When anyone changes the flow's files, everyone with it open gets `flow:changed`, and the board reloads, as it already does locally.
-- 发 `ping` 回 `pong`。#173 会在这里加在线、锁和评论，#170 加运行日志。/ Send `ping` to get `pong`. #173 adds presence, locks and comments here, and #170 the run log.
+- 运行日志也走这里，事件名和数据跟本机看板的 SSE 一样：`run:start`、`stage:start`、`stage:log`、`stage:skip`、`stage:done`、`stage:error`、`run:end`（等待时带 `waiting`），以及 `run:continue`。晚连上的人先收到这次运行到目前为止的日志。/ The run log comes here too, with the local board's SSE event names and data: `run:start`, `stage:start`, `stage:log`, `stage:skip`, `stage:done`, `stage:error`, `run:end` (with `waiting` when it waits), and `run:continue`. A late socket first gets the current run's log so far.
+- 发 `ping` 回 `pong`。#173 会在这里加在线、锁和评论。/ Send `ping` to get `pong`. #173 adds presence, locks and comments here.
+
+## 云端运行 / Cloud runs
+
+每次运行是一个 Cloudflare Workflows 实例（`packages/server/src/runs/workflow.ts`），id 就是运行的 id。每一步让流程的房间做下一个阶段（`runs/next.ts`：按 `run all` 的规则从当前文件算出来），所以重启、重试、有人上传或电脑跑完之后，都从停下的地方接着跑。阶段自己的 `retries` 照常生效；房间中途重启时，Workflows 会把这一步重做。
+
+Each run is a Cloudflare Workflows instance (`packages/server/src/runs/workflow.ts`) whose id is the run's id. Each step asks the flow's room to do the next stage (`runs/next.ts`, worked out from the current files by `run all`'s rules), so after a restart, a retry, a person's upload or a computer's run, the run picks up where it stopped. A stage's own `retries` work as usual; if the room restarts mid-stage, Workflows does that step again.
+
+- **一个流程同时只有一次运行 / One run per flow**：运行锁在房间里，忙时 `POST run` 返回 409 和 `run`。运行中写文件返回 409（和本机看板一样）；等待时可以写。/ The run lock lives in the room: while busy, `POST run` answers 409 with `run`. Writes during a step answer 409 (like the local board); writes while waiting are fine.
+- **人工阶段 / Human stages**：运行停在 `step.waitForEvent`，最多等 30 天，不占资源。谁写完了它等的所有文件（看板保存、上传，或命令行推送），运行自己接着跑；也可以 `POST …/continue`。30 天没人继续，运行记为 `expired`。/ The run waits in `step.waitForEvent` for up to 30 days without holding anything. Once anyone writes every file it waits for (a board save, an upload or a CLI push), it goes on by itself; `POST …/continue` also works. After 30 days with nobody, the run ends as `expired`.
+- **要电脑的阶段 / Stages that need a computer**：script、agent、mcp、plugin 和 ComfyUI 的 workflow（规则和网页版交给本机看板的一样，`packages/app/src/handoff.ts`）。运行停下，`waiting.kind` 是 `"computer"`；桌面应用或命令行在电脑上跑这一步、把文件推上来，再 `POST …/continue`。没跑就继续，会在这一步再等。#175 的沙箱接上之后，script 阶段在云端跑（接口在 `runs/sandbox.ts`）。/ script, agent, mcp, plugin and ComfyUI workflows (the same rule as the web app's handoff to the local board). The run stops with `waiting.kind` `"computer"`; the desktop app or the CLI runs that stage on the computer, pushes the files, then `POST …/continue`. Continuing without running it waits there again. Once the sandbox (#175) is bound, script stages run in the cloud (interface in `runs/sandbox.ts`).
+- **复制来的流程 / Copied flows**：有 `forkedFrom` 且会做事的流程，确认前 `POST run` 返回 409 和 `trust`，什么都不运行；`POST trust` 确认后记在 D1（`trust` 表），房间重启也记得。/ Until confirmed, `POST run` on a flow with `forkedFrom` that does things answers 409 with `trust` and runs nothing; `POST trust` stores the confirmation in D1 (the `trust` table), which survives a room restart.
+- **手动修改 / Hand edits**：重跑前照常存成 `manual` 版本（core 本来就这样）。/ saved as a `manual` version before a re-run, as core always does.
+
+| 方法 / Method | 路径 / Path | 说明 / Notes |
+| --- | --- | --- |
+| POST | `/api/flows/:flow/board/run` | `{ stage, model?, detach? }`（`stage` 是阶段 id 或 `"all"`）。editor。不带 `detach` 时等运行停下再回答，形状和本机看板一样：`{ ok: true }`、`{ ok: true, waiting: { stage, name, kind, missing, instructions? } }`、`{ ok: true, budget }`，失败是 500 和 `error`；都带 `run`。`detach: true` 立刻返回 202 和 `run`。运行在等这个阶段时，同样的请求就是继续。/ editor. Without `detach` it answers when the run stops, shaped like the local board (all with `run`); with `detach: true` it answers 202 with `run` at once. While a run waits on that stage, the same request continues it. |
+| POST | `/api/flows/:flow/runs` | 同上 / same as above |
+| GET | `/api/flows/:flow/run` | 当前运行或 `null` / the current run or `null`：`{ run: { id, stage, model, state, waiting, tokens, startedAt, userId } }` |
+| GET | `/api/flows/:flow/runs` | 最近 50 次 / the last 50：`{ runs: [{ id, stage, model, state, waiting, error, tokens, user_id, created_at, updated_at, finished_at }] }`，`?before=` 翻页 / pages |
+| GET | `/api/flows/:flow/runs/:run` | 一次运行 / one run |
+| POST | `/api/flows/:flow/runs/:run/continue` | editor；继续一个在等的运行 / continue a waiting run（不在等时 409）|
+| POST | `/api/flows/:flow/runs/:run/cancel` | editor；取消。正在跑的阶段会跑完，但不再往下 / cancel; a stage already running finishes, nothing after it starts |
+
+`state`：`running`、`waiting`、`done`、`failed`、`budget`、`cancelled`、`expired`。开始、继续、取消都记进操作记录。/ Starting, continuing and cancelling are in the audit log.
+
+### Key 保管 / The key vault
+
+工作区的 key 只能写、不能读：用 Worker secret `VAULT_MASTER_KEY` 里的主密钥做 AES-256-GCM 加密后存进 D1（工作区 id 和名字是附加数据，密文挪不到别处）。接口只显示名字和最后 4 个字符。运行时才解密，放进这次运行的环境变量，名字就是 key 的名字，也就是流程里 `apiKeyEnv` 指的那个（例如 `DEEPSEEK_API_KEY`）。key 永远不写进流程文件、日志、`run.json`、操作记录，也不发回浏览器。删除立刻生效：下一个阶段就读不到了。每个阶段读了哪些 key 都记下来（流程、运行、阶段、token）。
+
+Workspace keys are write-only: they are encrypted with AES-256-GCM under the master key in the `VAULT_MASTER_KEY` Worker secret and stored in D1 (the workspace id and the name are additional data, so a ciphertext can't be moved). The API shows only the name and the last 4 characters. A key is decrypted only for a run, into that run's environment under its own name, which is the name a flow's `apiKeyEnv` points at (e.g. `DEEPSEEK_API_KEY`). Keys never go into flow files, logs, `run.json` or the audit log, and never back to the browser. Deleting one takes effect at once: the next stage can't read it. Every stage's use of a key is recorded (flow, run, stage, tokens).
+
+| 方法 / Method | 路径 / Path | 说明 / Notes |
+| --- | --- | --- |
+| GET | `/api/workspaces/:ws/keys` | editor：`{ keys: [{ name, last4, created_by, created_at, updated_at, uses, last_used_at }] }` |
+| PUT | `/api/workspaces/:ws/keys/:name` | owner：`{ "value": "…" }` → `{ ok, key: { name, last4 } }`。名字像环境变量（`A-Z`、`0-9`、`_`），`FLOWGIT_*`、`PATH`、`HOME`、`NODE_*` 和代理变量不行；最长 8192 字符，每个工作区最多 50 个 / names look like env vars; `FLOWGIT_*`, `PATH`, `HOME`, `NODE_*` and proxy variables are refused; up to 8192 characters, 50 per workspace |
+| DELETE | `/api/workspaces/:ws/keys/:name` | owner |
+| GET | `/api/workspaces/:ws/key-uses` | owner：`{ uses: [{ name, flow_id, flow_name, run_id, stage, tokens, created_at }] }`，`?before=` |
+| GET | `/api/workspaces/:ws/usage` | viewer：`{ usage: { month, tokens, runs, tokenQuota, runQuota } }` |
+
+### 用量 / Usage
+
+每个阶段 `run.json` 里的 token 按工作区、按月（UTC）加起来。测试版每个工作区每月 200 万 token、1000 次运行：用完后新的运行返回 429，正在跑的运行在下一个调用模型的阶段前停下，记为 `budget`。
+
+The tokens in each stage's `run.json` add up per workspace per month (UTC). The beta allows 2,000,000 tokens and 1000 runs per workspace per month: after that a new run answers 429, and a running one stops before its next stage that calls a model, as `budget`.
+
+### 通知 / Notifications
+
+运行在等人、要电脑、跑完或失败时，通知开始这次运行的人：站内一条，加上 Web Push（RFC 8291 加密、RFC 8292 VAPID 签名，只用 WebCrypto，`src/notify/`）。推送只发到浏览器自己的推送服务（FCM、Mozilla、Apple、Windows），推送内容只有标题、一句话和链接。
+
+When a run waits for a person, needs a computer, finishes or fails, the person who started it gets an in-app notification plus a Web Push message (RFC 8291 encryption and RFC 8292 VAPID, WebCrypto only, `src/notify/`). Pushes go only to the browsers' own push services (FCM, Mozilla, Apple, Windows) and carry only a title, a line and a link.
+
+| 方法 / Method | 路径 / Path | 说明 / Notes |
+| --- | --- | --- |
+| GET | `/api/notifications` | `{ notifications: [{ id, workspace_id, flow_id, run_id, kind, title, body, url, created_at, read_at }], unread }`，`?before=`；`kind` 是 `run.waiting`、`run.computer`、`run.done`、`run.failed` |
+| POST | `/api/notifications/read` | `{ ids? }`，不带 `ids` 就全部标为已读 / without `ids`, marks all read |
+| GET | `/api/push/key` | `{ publicKey }`：给 `pushManager.subscribe({ applicationServerKey })` 用，没设置时是 `null` / for `pushManager.subscribe`, `null` when not set |
+| POST | `/api/push/subscriptions` | 浏览器 `PushSubscription.toJSON()`（`endpoint`、`keys.p256dh`、`keys.auth`）；每人最多 20 个 / at most 20 per person |
+| DELETE | `/api/push/subscriptions` | `{ endpoint }` |
 
 ## 限制 / Limits
 
@@ -148,20 +207,20 @@ Files over 4 MB (video, audio, big pictures) stay out of memory: the content is 
 
 ## 怎么存 / How it is stored
 
-- **D1**：用户、登录方式、会话（只存令牌的哈希）、工作区、成员、邀请码（只存哈希）、流程清单、设备码、操作记录。迁移文件在 `packages/server/migrations/`。/ users, sign-in identities, sessions (token hashes only), workspaces, members, invite codes (hashes only), the flow list, device codes and the audit log. Migrations are in `packages/server/migrations/`.
+- **D1**：用户、登录方式、会话（只存令牌的哈希）、工作区、成员、邀请码（只存哈希）、流程清单、设备码、操作记录；运行、加密的 key 和它们的使用记录、复制流程的确认、通知、推送订阅、每月用量。迁移文件在 `packages/server/migrations/`。/ users, sign-in identities, sessions (token hashes only), workspaces, members, invite codes (hashes only), the flow list, device codes and the audit log; runs, encrypted keys and their uses, confirmations of copied flows, notifications, push subscriptions and monthly usage. Migrations are in `packages/server/migrations/`.
 - **R2**：每个文件一个对象，`flows/<流程 id>/<路径>`；空文件夹是结尾带 `/` 的空对象；大文件在 `flows/<流程 id>/.flowgit-blobs/<sha256>`。/ one object per file at `flows/<flow id>/<path>`; empty folders are empty objects whose key ends in `/`; large files live at `flows/<flow id>/.flowgit-blobs/<sha256>`.
 - **房间 / Rooms**：每个流程一个 Durable Object（`FlowRoom`），把流程载进 core 的内存 Host，按顺序把改动写回 R2，写完才回答请求，再通知打开这个流程的人。core 的当前 Host 用 `AsyncLocalStorage` 按请求区分，同时处理的请求不会串。/ one Durable Object (`FlowRoom`) per flow loads the flow into core's memory host, writes changes back to R2 in order, answers only once they are stored, then tells everyone with the flow open. Core's current host is kept per request with `AsyncLocalStorage`, so concurrent requests never mix.
 - **操作记录 / Audit log**：登录、注册、建删流程、写文件、上传、回退、改阶段、邀请和成员变动都会记下是谁、什么时候、哪个文件，不记文件内容和密钥。/ sign-ins, sign-ups, creating and deleting flows, file writes, uploads, restores, stage edits, invites and member changes are recorded with who, when and which file, never file contents or secrets.
 
 ## 测试控制台 / Test console
 
-`/api/console/` 是一个很小的网页（`packages/server/static/console/`），在网页版接上云端（#172）之前用来手动检查 staging：登录、建工作区、邀请、放模板或上传电脑上的流程文件夹（连同 `runs/`）、看版本和对比。
+`/api/console/` 是一个很小的网页（`packages/server/static/console/`），在网页版接上云端（#172）之前用来手动检查 staging：登录、建工作区、邀请、存 key、放模板或上传电脑上的流程文件夹（连同 `runs/`）、填流程输入和人工阶段的文件、在云端运行并看日志、看版本和对比。
 
-`/api/console/` is a small page (`packages/server/static/console/`) for checking staging by hand until the web app is connected (#172): sign in, create a workspace, invite people, add a template or upload a flow folder from the computer (with its `runs/`), and look at versions and diffs.
+`/api/console/` is a small page (`packages/server/static/console/`) for checking staging by hand until the web app is connected (#172): sign in, create a workspace, invite people, store keys, add a template or upload a flow folder from the computer (with its `runs/`), fill in flow inputs and a human stage's files, run in the cloud and watch the log, and look at versions and diffs.
 
 ## 部署和设置 / Deploying and setup
 
 - `.github/workflows/server.yml`：推到 `main` 部署 staging；正式环境手动运行。仓库没有 `CLOUDFLARE_API_TOKEN` 和 `CLOUDFLARE_ACCOUNT_ID` 时跳过，不算失败。`packages/server/scripts/deploy.mjs` 第一次会建 D1 数据库（`flowgit-staging` / `flowgit-production`）和 R2 桶（`flowgit-files-staging` / `flowgit-files-production`），然后执行迁移再部署。/ deploys staging on every push to `main` and production by hand; it skips without failing when the repository has no `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`. The first time, `packages/server/scripts/deploy.mjs` creates the D1 database and the R2 bucket, then applies migrations and deploys.
-- Worker 的 secret（在 Cloudflare 后台 Workers & Pages → Worker → Settings → Variables and Secrets 填，不进仓库）：`GITHUB_CLIENT_ID`、`GITHUB_CLIENT_SECRET`、`GOOGLE_CLIENT_ID`、`GOOGLE_CLIENT_SECRET`。/ Worker secrets, set in the Cloudflare dashboard and never committed.
+- Worker 的 secret（在 Cloudflare 后台 Workers & Pages → Worker → Settings → Variables and Secrets 填，不进仓库）：`GITHUB_CLIENT_ID`、`GITHUB_CLIENT_SECRET`、`GOOGLE_CLIENT_ID`、`GOOGLE_CLIENT_SECRET`；`VAULT_MASTER_KEY`（`openssl rand -base64 32`，设好以后不要换，换了旧 key 就解不开）；`VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`（`npx web-push generate-vapid-keys`）和 `VAPID_SUBJECT`（例如 `mailto:你的邮箱`）。没有 `VAULT_MASTER_KEY` 时存 key 返回 503；没有 VAPID 时只有站内通知。/ Worker secrets, set in the Cloudflare dashboard and never committed. `VAULT_MASTER_KEY` must not change once set (old keys would no longer decrypt). Without it, storing a key answers 503; without VAPID there are in-app notifications only.
 - OAuth 回调地址 / OAuth callback URLs：`https://<host>/api/auth/github/callback`、`https://<host>/api/auth/google/callback`（`<host>` 是 `flowgit.dev` 或 `staging.flowgit.dev`）。
 - 测试在 Cloudflare 官方的本机模拟环境里跑（`@cloudflare/vitest-plugin`），不连真的 Cloudflare：`pnpm --filter @flowgit/server test`。/ Tests run in Cloudflare's official local emulator (`@cloudflare/vitest-plugin`) and never reach the real Cloudflare.

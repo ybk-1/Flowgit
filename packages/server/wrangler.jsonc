@@ -4,7 +4,7 @@
 // `env.staging` and `env.production` are deployed by .github/workflows/server.yml through
 // scripts/deploy.mjs, which looks up (or creates) the D1 database and R2 bucket by name and fills
 // in their ids, so no account-specific id is kept here. Secrets (GITHUB_CLIENT_ID, ...) are set
-// in the Cloudflare dashboard and never committed.
+// in the Cloudflare dashboard and never committed (VAULT_MASTER_KEY, VAPID_* for runs and push).
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "flowgit-api-local",
@@ -23,6 +23,8 @@
   // One room per flow: https://developers.cloudflare.com/durable-objects/
   "durable_objects": { "bindings": [{ "name": "ROOMS", "class_name": "FlowRoom" }] },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["FlowRoom"] }],
+  // One Workflows instance per cloud run: https://developers.cloudflare.com/workflows/build/configuration/
+  "workflows": [{ "name": "flowgit-runs-local", "binding": "RUNS", "class_name": "FlowRun" }],
   // https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/
   "ratelimits": [
     { "name": "API_LIMITER", "namespace_id": "1001", "simple": { "limit": 600, "period": 60 } },
@@ -40,6 +42,7 @@
       "d1_databases": [{ "binding": "DB", "database_name": "flowgit-staging", "database_id": "FILLED_BY_DEPLOY", "migrations_dir": "migrations" }],
       "r2_buckets": [{ "binding": "FILES", "bucket_name": "flowgit-files-staging" }],
       "durable_objects": { "bindings": [{ "name": "ROOMS", "class_name": "FlowRoom" }] },
+      "workflows": [{ "name": "flowgit-runs-staging", "binding": "RUNS", "class_name": "FlowRun" }],
       "ratelimits": [
         { "name": "API_LIMITER", "namespace_id": "2001", "simple": { "limit": 600, "period": 60 } },
         { "name": "AUTH_LIMITER", "namespace_id": "2002", "simple": { "limit": 20, "period": 60 } }
@@ -54,6 +57,7 @@
       "d1_databases": [{ "binding": "DB", "database_name": "flowgit-production", "database_id": "FILLED_BY_DEPLOY", "migrations_dir": "migrations" }],
       "r2_buckets": [{ "binding": "FILES", "bucket_name": "flowgit-files-production" }],
       "durable_objects": { "bindings": [{ "name": "ROOMS", "class_name": "FlowRoom" }] },
+      "workflows": [{ "name": "flowgit-runs", "binding": "RUNS", "class_name": "FlowRun" }],
       "ratelimits": [
         { "name": "API_LIMITER", "namespace_id": "3001", "simple": { "limit": 600, "period": 60 } },
         { "name": "AUTH_LIMITER", "namespace_id": "3002", "simple": { "limit": 20, "period": 60 } }

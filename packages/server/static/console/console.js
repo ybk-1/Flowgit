@@ -103,11 +103,12 @@ async function workspaces() {
 }
 
 async function workspace(id) {
-  const [{ workspace: ws, role, storage }, { members }, { flows }, { templates }] = await Promise.all([
+  const [{ workspace: ws, role, storage }, { members }, { flows }, { templates }, { usage }] = await Promise.all([
     call("GET", `/api/workspaces/${id}`),
     call("GET", `/api/workspaces/${id}/members`),
     call("GET", `/api/workspaces/${id}/flows`),
     call("GET", "/api/templates"),
+    call("GET", `/api/workspaces/${id}/usage`),
   ]);
   const roleSel = el("select", {}, ["editor", "viewer", "owner"].map((r) => el("option", { value: r }, r)));
   const tplSel = el("select", {}, templates.map((t) => el("option", { value: t.id }, `${t.id} · ${t.name}`)));
@@ -115,6 +116,8 @@ async function workspace(id) {
   return section(
     `工作区 / Workspace: ${ws.name}`,
     el("p", { class: "muted" }, `你的角色 / your role: ${role} · 已用 / used ${(storage.used / 1048576).toFixed(1)} MB / ${(storage.quota / 1073741824).toFixed(0)} GB`),
+    el("p", { class: "muted" }, `${usage.month}：${usage.tokens} / ${usage.tokenQuota} token · ${usage.runs} / ${usage.runQuota} 次运行 / runs`),
+    role !== "viewer" ? await keys(id, role) : "",
     el("h2", {}, "成员 / Members"),
     el("table", {}, members.map((m) => el("tr", {}, el("td", {}, m.name), el("td", {}, m.role), el("td", { class: "muted" }, m.logins ?? "")))),
     role === "owner"
@@ -142,6 +145,39 @@ async function workspace(id) {
   );
 }
 
+/** The workspace's keys: names and last four characters only. Owners add and delete. */
+async function keys(wsId, role) {
+  const { keys: list } = await call("GET", `/api/workspaces/${wsId}/keys`);
+  const name = el("input", { placeholder: "DEEPSEEK_API_KEY", autocomplete: "off" });
+  const value = el("input", { type: "password", placeholder: "key", autocomplete: "off" });
+  const save = () =>
+    call("PUT", `/api/workspaces/${wsId}/keys/${encodeURIComponent(name.value.trim())}`, { value: value.value })
+      .then(() => {
+        value.value = "";
+        render();
+      }, fail);
+  return el(
+    "div",
+    {},
+    el("h2", {}, "Key（只写不读）/ Keys (write-only)"),
+    el(
+      "table",
+      {},
+      list.map((k) =>
+        el(
+          "tr",
+          {},
+          el("td", {}, el("code", {}, k.name)),
+          el("td", { class: "muted" }, k.last4 ? `…${k.last4}` : "…"),
+          el("td", { class: "muted" }, `用过 / used ${k.uses} 次`),
+          el("td", {}, role === "owner" ? el("button", { onclick: () => call("DELETE", `/api/workspaces/${wsId}/keys/${k.name}`).then(render, fail) }, "删除 / Delete") : ""),
+        ),
+      ),
+    ),
+    role === "owner" ? el("p", {}, name, value, el("button", { onclick: save }, "保存 / Save")) : "",
+  );
+}
+
 /** Upload a flow folder from this computer (with its runs/ history), e.g. after `flowgit run`. */
 function uploadFolder(wsId) {
   const input = el("input", { type: "file", webkitdirectory: "", multiple: "" });
@@ -166,12 +202,91 @@ function uploadFolder(wsId) {
 }
 
 async function flow(id) {
-  const board = await call("GET", `/api/flows/${id}/board/flow`);
+  const [board, { inputs }, { run }] = await Promise.all([call("GET", `/api/flows/${id}/board/flow`), call("GET", `/api/flows/${id}/board/inputs`), call("GET", `/api/flows/${id}/run`)]);
   const out = el("div", {});
   const rows = board.stages.map((stage) =>
-    el("tr", {}, el("td", {}, stage.name ?? stage.id), el("td", { class: "muted" }, stage.state ?? ""), el("td", {}, el("button", { onclick: () => versions(id, stage.id, out) }, "版本 / Versions"))),
+    el(
+      "tr",
+      {},
+      el("td", {}, stage.name ?? stage.id),
+      el("td", { class: "muted" }, `${stage.executor ?? ""} · ${stage.state ?? ""}`),
+      el("td", {}, el("button", { onclick: () => versions(id, stage.id, out) }, "版本 / Versions")),
+      el("td", {}, stage.executor === "human" ? el("button", { onclick: () => humanFiles(id, stage, out) }, "填写 / Fill in") : ""),
+    ),
   );
-  return section(`流程 / Flow: ${board.name ?? id}`, el("table", {}, rows), out);
+  return section(`流程 / Flow: ${board.name ?? id}`, el("table", {}, rows), flowInputs(id, inputs), runPanel(id, run), out);
+}
+
+/** The flow's inputs, saved with PUT board/inputs. */
+function flowInputs(flowId, inputs) {
+  if (!inputs.length) return "";
+  const fields = inputs.map((input) => ({ input, box: el("input", { value: input.value ?? input.default ?? "", placeholder: input.description ?? "" }) }));
+  const save = () => call("PUT", `/api/flows/${flowId}/board/inputs`, Object.fromEntries(fields.map((f) => [f.input.name, f.box.value]))).then(render, fail);
+  return el("div", {}, el("h2", {}, "流程输入 / Inputs"), el("table", {}, fields.map((f) => el("tr", {}, el("td", {}, el("code", {}, f.input.name), f.input.required ? " *" : ""), el("td", {}, f.box)))), el("button", { onclick: save }, "保存输入 / Save inputs"));
+}
+
+/** A human stage's text outputs, saved with PUT board/file (which resumes a run waiting for them). */
+async function humanFiles(flowId, stage, out) {
+  const boxes = [];
+  for (const output of stage.outputs.filter((o) => o.text)) {
+    const res = await fetch(`/api/flows/${flowId}/board/file?path=${encodeURIComponent(output.path)}`);
+    const text = res.ok ? await res.text() : "";
+    boxes.push({ output, box: el("textarea", { rows: "8", cols: "80" }, text) });
+  }
+  const save = async () => {
+    for (const { output, box } of boxes) {
+      const res = await fetch(`/api/flows/${flowId}/board/file?path=${encodeURIComponent(output.path)}`, { method: "PUT", body: box.value });
+      if (!res.ok) throw new Error((await res.json()).error ?? `${res.status}`);
+    }
+    render();
+  };
+  out.replaceChildren(el("h2", {}, stage.name ?? stage.id), stage.instructions ? el("p", { class: "muted" }, stage.instructions) : "", ...boxes.flatMap((b) => [el("p", {}, el("code", {}, b.output.path)), b.box]), el("p", {}, el("button", { onclick: () => save().catch(fail) }, "保存 / Save")));
+}
+
+let socket;
+
+/** Run the flow in the cloud, see where it stands, continue or cancel it, and watch the log. */
+function runPanel(flowId, run) {
+  const model = el("input", { placeholder: "deepseek/deepseek-chat", value: localStorage.getItem("flowgit.console.model") ?? "" });
+  const log = el("pre", { class: "log" });
+  const status = el("p", { class: "muted" }, run ? describe(run) : "没有在运行 / not running");
+  const start = () => {
+    localStorage.setItem("flowgit.console.model", model.value.trim());
+    call("POST", `/api/flows/${flowId}/board/run`, { stage: "all", detach: true, ...(model.value.trim() ? { model: model.value.trim() } : {}) }).then(refresh, fail);
+  };
+  // Ask for the current state rather than trust the order answers and frames arrive in.
+  const refresh = () =>
+    call("GET", `/api/flows/${flowId}/run`).then((r) => {
+      run = r.run;
+      status.textContent = describe(run);
+    }, fail);
+  const act = (what) => () => run && call("POST", `/api/flows/${flowId}/runs/${run.id}/${what}`).then(render, fail);
+  socket?.close();
+  socket = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/flows/${flowId}/events`);
+  socket.addEventListener("message", (event) => {
+    if (typeof event.data !== "string" || !event.data.startsWith("{")) return;
+    const frame = JSON.parse(event.data);
+    if (frame.event === "hello") return;
+    const d = frame.data ?? {};
+    const line = d.line ?? d.error ?? d.reason ?? (d.waiting ? `等待 / waiting: ${d.waiting.stage} ${d.waiting.missing?.join(", ") ?? ""}` : "");
+    log.append(`${frame.event} ${d.stage ?? ""} ${line}`.trim(), "\n");
+    if (frame.event.startsWith("run:")) refresh();
+  });
+  setInterval(() => socket.readyState === 1 && socket.send("ping"), 30000);
+  return el(
+    "div",
+    {},
+    el("h2", {}, "云端运行 / Cloud run"),
+    status,
+    el("p", {}, "模型 / model ", model, el("button", { onclick: start }, "全部运行 / Run all"), el("button", { onclick: act("continue") }, "继续 / Continue"), el("button", { onclick: act("cancel") }, "取消 / Cancel")),
+    log,
+  );
+}
+
+function describe(run) {
+  if (!run) return "没有在运行 / not running";
+  const waiting = run.waiting ? ` · ${run.waiting.kind === "computer" ? "要电脑 / needs a computer" : "等你 / waiting for you"}: ${run.waiting.stage}` : "";
+  return `${run.id} · ${run.state}${waiting} · ${run.tokens} token`;
 }
 
 async function versions(flowId, stage, out) {

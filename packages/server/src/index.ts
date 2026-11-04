@@ -18,11 +18,15 @@ import type { Env, RateLimit } from "./env.js";
 import { checkFiles, createFlow, deleteFlow, flowAccess, listFlows, renameFlow, requireSpace, room, roomRequest, templateFiles } from "./flows.js";
 import { errorResponse, escapeHtml, HttpError, json, readJson, str, unauthorized } from "./http.js";
 import { acceptInvite, createInvite, isAdmin, listInvites, revokeInvite } from "./invites.js";
+import { listNotifications, markRead, subscribe, unsubscribe, vapidKeys } from "./notify/notify.js";
 import { page } from "./page.js";
+import { usageOf } from "./runs/usage.js";
+import { deleteKey, listKeys, listKeyUses, putKey } from "./vault/vault.js";
 import { MAX_FILE_BYTES, WORKSPACE_QUOTA_BYTES } from "./storage/flow-store.js";
 import { createWorkspace, isRole, listMembers, listWorkspaces, removeMember, renameWorkspace, requireRole, setMemberRole } from "./workspaces.js";
 
 export { FlowRoom } from "./rooms/room.js";
+export { FlowRun } from "./runs/workflow.js";
 
 type Handler = (ctx: Ctx) => Promise<Response>;
 interface Ctx {
@@ -345,10 +349,93 @@ const BOARD_AUDIT: Record<string, string> = {
   "PUT stage": "stage.edit",
   "DELETE stage": "stage.remove",
   "PUT flow": "flow.edit",
+  "POST run": "run.start",
+  "POST trust": "flow.trust",
 };
 for (const method of ["GET", "PUT", "POST", "DELETE"]) {
   on(method, "/api/flows/:flow/board/:route", (ctx) => toRoom(ctx, `/board/${ctx.params.route}`, BOARD_AUDIT[`${method} ${ctx.params.route}`] ?? `board.${ctx.params.route}`));
 }
+
+// ---- cloud runs ----
+
+on("GET", "/api/flows/:flow/runs", async (ctx) => {
+  const { flow } = await flowAccess(ctx.env, ctx.params.flow!, user(ctx).user.id, "viewer");
+  const before = Number(ctx.url.searchParams.get("before") ?? "") || Number.MAX_SAFE_INTEGER;
+  const { results } = await ctx.env.DB.prepare(
+    "SELECT id, stage, model, state, waiting, error, tokens, user_id, created_at, updated_at, finished_at FROM runs WHERE flow_id = ? AND created_at < ? ORDER BY created_at DESC LIMIT 50",
+  )
+    .bind(flow.id, before)
+    .all<{ waiting: string | null }>();
+  return json(200, { runs: results.map((row) => ({ ...row, waiting: row.waiting ? JSON.parse(row.waiting) : null })) });
+});
+on("POST", "/api/flows/:flow/runs", (ctx) => toRoom(ctx, "/board/run", "run.start"));
+on("GET", "/api/flows/:flow/run", (ctx) => toRoom(ctx, "/run"));
+on("GET", "/api/flows/:flow/runs/:run", async (ctx) => {
+  const { flow } = await flowAccess(ctx.env, ctx.params.flow!, user(ctx).user.id, "viewer");
+  const row = await ctx.env.DB.prepare("SELECT id, stage, model, state, waiting, error, tokens, user_id, created_at, updated_at, finished_at FROM runs WHERE id = ? AND flow_id = ?")
+    .bind(ctx.params.run!, flow.id)
+    .first<{ waiting: string | null }>();
+  if (!row) throw new HttpError(404, "没有这个运行 / run not found");
+  return json(200, { run: { ...row, waiting: row.waiting ? JSON.parse(row.waiting) : null } });
+});
+for (const action of ["continue", "cancel"]) {
+  on("POST", `/api/flows/:flow/runs/:run/${action}`, async (ctx) => {
+    const auth = user(ctx);
+    const { flow } = await flowAccess(ctx.env, ctx.params.flow!, auth.user.id, "editor");
+    const res = await room(ctx.env, flow.id).fetch(
+      roomRequest(flow.id, auth.user.id, `/run/${action}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ runId: ctx.params.run }) }),
+    );
+    if (res.ok) await audit(ctx.env, { userId: auth.user.id, workspaceId: flow.workspace_id, flowId: flow.id, action: `run.${action}`, detail: { run: ctx.params.run } });
+    return res;
+  });
+}
+
+// ---- the key vault and usage ----
+
+on("GET", "/api/workspaces/:ws/keys", async (ctx) => {
+  await requireRole(ctx.env, ctx.params.ws!, user(ctx).user.id, "editor");
+  return json(200, { keys: await listKeys(ctx.env, ctx.params.ws!) });
+});
+on("PUT", "/api/workspaces/:ws/keys/:name", async (ctx) => {
+  const auth = user(ctx);
+  await requireRole(ctx.env, ctx.params.ws!, auth.user.id, "owner");
+  const body = await readJson(ctx.request, 16 * 1024);
+  return json(200, { ok: true, key: await putKey(ctx.env, auth.user.id, ctx.params.ws!, ctx.params.name!, body.value) });
+});
+on("DELETE", "/api/workspaces/:ws/keys/:name", async (ctx) => {
+  const auth = user(ctx);
+  await requireRole(ctx.env, ctx.params.ws!, auth.user.id, "owner");
+  await deleteKey(ctx.env, auth.user.id, ctx.params.ws!, ctx.params.name!);
+  return json(200, { ok: true });
+});
+on("GET", "/api/workspaces/:ws/key-uses", async (ctx) => {
+  await requireRole(ctx.env, ctx.params.ws!, user(ctx).user.id, "owner");
+  const before = Number(ctx.url.searchParams.get("before") ?? "") || undefined;
+  return json(200, { uses: await listKeyUses(ctx.env, ctx.params.ws!, before) });
+});
+on("GET", "/api/workspaces/:ws/usage", async (ctx) => {
+  await requireRole(ctx.env, ctx.params.ws!, user(ctx).user.id, "viewer");
+  return json(200, { usage: await usageOf(ctx.env, ctx.params.ws!) });
+});
+
+// ---- notifications ----
+
+on("GET", "/api/notifications", async (ctx) => {
+  const before = Number(ctx.url.searchParams.get("before") ?? "") || undefined;
+  return json(200, await listNotifications(ctx.env, user(ctx).user.id, before));
+});
+on("POST", "/api/notifications/read", async (ctx) => {
+  const body = await readJson(ctx.request, 64 * 1024);
+  const ids = Array.isArray(body.ids) ? body.ids.map(String) : undefined;
+  await markRead(ctx.env, user(ctx).user.id, ids);
+  return json(200, { ok: true });
+});
+on("GET", "/api/push/key", async ({ env }) => json(200, { publicKey: vapidKeys(env)?.publicKey ?? null }), { auth: false });
+on("POST", "/api/push/subscriptions", async (ctx) => json(200, { ok: true, ...(await subscribe(ctx.env, user(ctx).user.id, await readJson(ctx.request, 16 * 1024))) }));
+on("DELETE", "/api/push/subscriptions", async (ctx) => {
+  await unsubscribe(ctx.env, user(ctx).user.id, (await readJson(ctx.request, 16 * 1024)).endpoint);
+  return json(200, { ok: true });
+});
 
 // ---- the test console (static files in public/console/) ----
 

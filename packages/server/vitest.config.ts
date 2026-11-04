@@ -20,11 +20,20 @@ export default defineConfig({
           GITHUB_CLIENT_SECRET: "test-github-secret",
           GOOGLE_CLIENT_ID: "test-google-id",
           GOOGLE_CLIENT_SECRET: "test-google-secret",
+          FLOWGIT_TEST_LLM_MOCK_DIR: "demo-replies",
+          // Test-only keys, made for these tests and used nowhere else.
+          VAULT_MASTER_KEY: "bznE5Tb5wkrGu82so15hdMTCoMpsvDnNA8l3mpSHb2k=",
+          VAPID_PUBLIC_KEY: "BF_kYEvR8_TQn6FEomOt0pwNhLTKIPOhqgJ_7V7BWu_kdERmMaNEr54cDr89s-8ojUcJFKDdGfIUJWLwKJWV38I",
+          VAPID_PRIVATE_KEY: "k7BVArWLpqRoAlPfBsTso9QlLmuvXVslcjAB0fvIi-I",
+          VAPID_SUBJECT: "mailto:test@flowgit.dev",
         },
       },
     })),
   ],
   test: {
     setupFiles: ["./test/apply-migrations.ts"],
+    // Cloud-run tests drive real Workflows instances through several steps; slower CI runners
+    // (Windows) need more than vitest's default 5 s for one of them.
+    testTimeout: 30_000,
   },
 });

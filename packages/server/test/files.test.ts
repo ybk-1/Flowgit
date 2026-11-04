@@ -98,15 +98,13 @@ describe("flows in the cloud", () => {
     expect(files.find((f) => f.path === "media/clip.bin")!.size).toBe(big.length);
   });
 
-  it("refuses bad paths, oversized uploads and cloud runs (for now)", async () => {
+  it("refuses bad paths and oversized uploads", async () => {
     const { editor, flow } = await setup();
     for (const path of ["../x", "/etc/passwd", ".flowgit-blobs/x", ".git/config", "a\\b", "C:/x"]) {
       expect((await api(editor, "PUT", `/api/flows/${flow}/raw?path=${encodeURIComponent(path)}`, "x")).status, path).toBe(400);
     }
     const huge = new Uint8Array(50 * 1024 * 1024 + 1);
     expect((await api(editor, "PUT", `/api/flows/${flow}/raw?path=huge.bin`, huge)).status).toBe(413);
-    expect((await api(editor, "POST", `/api/flows/${flow}/board/run`, { stage: "notes" })).status).toBe(501);
-    expect((await api(editor, "POST", `/api/flows/${flow}/board/trust`, { fingerprint: "x" })).status).toBe(501);
   });
 
   it("tells everyone who has the flow open when a file changes", async () => {

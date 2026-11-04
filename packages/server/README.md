@@ -1,8 +1,8 @@
 # @flowgit/server
 
-Flowgit 云端，跑在 Cloudflare Workers（D1、R2、Durable Objects）。接口见 [`docs/cloud.md`](../../docs/cloud.md)。不发布到 npm。
+Flowgit 云端，跑在 Cloudflare Workers（D1、R2、Durable Objects、Workflows）。接口见 [`docs/cloud.md`](../../docs/cloud.md)。不发布到 npm。
 
-Flowgit Cloud on Cloudflare Workers (D1, R2, Durable Objects). The API is in [`docs/cloud.md`](../../docs/cloud.md). Not published to npm.
+Flowgit Cloud on Cloudflare Workers (D1, R2, Durable Objects, Workflows). The API is in [`docs/cloud.md`](../../docs/cloud.md). Not published to npm.
 
 ```bash
 pnpm --filter @flowgit/server test    # 本机模拟环境里的测试 / tests in the local emulator
