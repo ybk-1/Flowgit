@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flowgit.dev/schema/flow-test/0.1.json",
+  "title": "Flowgit flow test case",
+  "description": "One case in tests/<name>.json. This is a file convention next to a flow, not part of flow.schema.json. src/flowtest.ts checks it by hand so nothing calls new Function at run time (the web app's Content-Security-Policy forbids that).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["expect"],
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Optional label shown next to the pass or fail mark."
+    },
+    "inputs": {
+      "type": "object",
+      "description": "Flow inputs for this case, checked with the same rules as loadFlowInputs, including enum."
+    },
+    "replies": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Directory of canned llm replies (<stageId>.md|txt|json), relative to the flow directory. Defaults to demo-replies/ when omitted."
+    },
+    "images": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Directory of canned pictures in the FLOWGIT_IMAGE_MOCK_DIR layout, relative to the flow directory."
+    },
+    "files": {
+      "type": "object",
+      "additionalProperties": { "type": "string", "minLength": 1 },
+      "description": "Maps an output path to a file or directory inside the flow. Copied into place before the run."
+    },
+    "skip": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true,
+      "description": "Stage ids that are not executed. files must supply every output; those outputs are recorded as a manual run."
+    },
+    "expect": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": { "$ref": "#/$defs/check" }
+      },
+      "description": "Checks per stage id, run against the temporary copy after the case runs."
+    }
+  },
+  "$defs": {
+    "check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file"],
+      "properties": {
+        "file": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Path relative to the flow directory."
+        },
+        "exists": { "type": "boolean" },
+        "contains": {
+          "oneOf": [
+            { "type": "string" },
+            { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+          ]
+        },
+        "notContains": {
+          "oneOf": [
+            { "type": "string" },
+            { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+          ]
+        },
+        "matches": { "type": "string", "minLength": 1 },
+        "minChars": { "type": "integer", "minimum": 0 },
+        "maxChars": { "type": "integer", "minimum": 0 },
+        "json": { "const": true },
+        "jsonPath": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Dotted path. A segment named length reads the length of an array or string. No JSONPath library."
+        },
+        "equals": { "description": "Compared to the value at jsonPath." },
+        "min": { "type": "number" },
+        "max": { "type": "number" },
+        "length": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}

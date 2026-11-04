@@ -17,6 +17,8 @@ my-flow/
 ├── flow.json              # 流程定义（必需，或者写成 flow.md）/ the flow definition (required; or flow.md)
 ├── prompts/               # llm 阶段的提示词 / prompts for llm stages
 ├── scripts/               # script 阶段的脚本 / scripts for script stages
+├── tests/                 # flowgit test 的用例，一个文件一个用例 / one case per file for flowgit test
+│   └── sample.json
 ├── script.md              # 各阶段的当前产物 / current artifacts of each stage
 ├── storyboard.json
 ├── assets/
@@ -555,6 +557,49 @@ For each output the stage declares:
 - Directory: lists of added, removed and changed files (paths relative to that directory).
 
 `@flowgit/core` exports `diffRuns(dir, flow, stageId, a, b?)` from the package entry, the same way it exports `listRuns` and `restoreStage`. The board's history calls these three functions directly: `GET /api/runs?stage=` is `listRuns`, `GET /api/diff?stage=&a=&b=` is `diffRuns`, and `POST /api/restore` with JSON `{ "stage", "n" }` is `restoreStage` (keeps a hand edit, then calls `restoreRun`; 409 during a run). Omit `b` to compare with the current files. Those routes require the `X-Flowgit-Token` header, like every other `/api/*` route. When `b` is omitted, the result's `b` is `null`, meaning the current files.
+
+## 测试 / Tests
+
+`tests/<名字>.json` 是一个测试用例，跟 `flow.json` 放在同一个流程目录里。这是新的文件约定，不改 [`flow.schema.json`](../packages/core/schema/flow.schema.json)。机器可读的格式是 [`packages/core/schema/flow-test.schema.json`](../packages/core/schema/flow-test.schema.json)。运行时按这个文件手写校验，不在运行时编译 schema（网页版的内容安全策略不允许 `new Function`）。
+
+`tests/<name>.json` is one test case, next to `flow.json` in the flow directory. This is a new file convention; [`flow.schema.json`](../packages/core/schema/flow.schema.json) does not change. The machine-readable format is [`packages/core/schema/flow-test.schema.json`](../packages/core/schema/flow-test.schema.json). The check is written by hand from that file, so nothing compiles a schema at run time (the web app's Content-Security-Policy forbids `new Function`).
+
+| 字段 / Field | 说明 | Description |
+| --- | --- | --- |
+| `name` | 可选，显示用 | Optional label |
+| `inputs` | 这次的流程输入，规则和 `loadFlowInputs` 一样，包括 `enum` | Flow inputs for this case, same rules as `loadFlowInputs`, including `enum` |
+| `replies` | llm 固定回复的目录（`<阶段 id>.md`、`.txt` 或 `.json`），相对流程目录。不写就用 `demo-replies/` | Directory of canned llm replies (`<stage id>.md`, `.txt` or `.json`), relative to the flow. Defaults to `demo-replies/` |
+| `images` | 可选，生图的固定图片目录，格式同 `FLOWGIT_IMAGE_MOCK_DIR` | Optional directory of canned pictures, same layout as `FLOWGIT_IMAGE_MOCK_DIR` |
+| `files` | `{ "<产物路径>": "<流程里的文件或文件夹>" }`，运行前复制到位 | `{ "<output path>": "<file or folder in the flow>" }`, copied into place before the run |
+| `skip` | 不运行的阶段 id。它们的每个产物都要在 `files` 里，并记成一次 `manual` 运行，这样 agent、service、mcp 也能测 | Stage ids that do not run. Every output must be in `files` and is recorded as a `manual` run, so agent, service and mcp stages can be tested |
+| `expect` | `{ "<阶段 id>": [检查, ...] }` | `{ "<stage id>": [check, ...] }` |
+
+一条检查必须有 `file`（相对流程目录），并至少再写一项：
+
+A check needs `file` (relative to the flow directory) and at least one of:
+
+- `exists`：`true` 或 `false`。 / `true` or `false`.
+- `contains`、`notContains`：字符串，或字符串数组（要全部包含，或全部不包含）。 / a string, or an array of strings (all must be present, or all must be absent).
+- `matches`：正则字符串。 / a regular expression string.
+- `minChars`、`maxChars`：字符数（按 Unicode 码位计）。 / character counts (Unicode code points).
+- `json`：`true` 时产物必须是 JSON；这个产物声明了 `schema` 时再按 schema 检查。 / when `true`, the output must be JSON, and is checked against its `schema` when the output declares one.
+- `jsonPath` 加 `equals`、`min`、`max` 或 `length`：点号路径，例如 `items.length`。`length` 这一段读的是数组或字符串的长度。不用 JSONPath 库。 / a dotted path such as `items.length`, with `equals`, `min`, `max` or `length`. A `length` segment reads the length of an array or string. No JSONPath library.
+
+`flowgit test [用例名...] [--live] [--model <provider/model>] [--json] [--keep]` 把流程复制到临时目录再跑，**不写原来的目录**。复制时不带 `runs/`、`node_modules/`、`.git/`、`.flowgit/` 和 `flowgit.local.json`。每个用例一行 ✓ 或 ✗；失败时列出阶段、文件、期望，以及实际内容的前 200 个字符。有失败时退出码是 1。`--json` 打印 `{ ok, cases: [{ id, name, file, ok, checks, error?, dir? }], modelCalls? }`。`--keep` 保留临时目录并打印路径。
+
+`flowgit test [names...] [--live] [--model <provider/model>] [--json] [--keep]` copies the flow to a temporary directory and runs it there. **It never writes the original directory.** The copy leaves out `runs/`, `node_modules/`, `.git/`, `.flowgit/` and `flowgit.local.json`. Each case is one ✓ or ✗ line; a failure lists the stage, the file, what was expected, and the first 200 characters of the actual content. The exit code is 1 when a case fails. `--json` prints `{ ok, cases: [{ id, name, file, ok, checks, error?, dir? }], modelCalls? }`. `--keep` leaves the temporary directory and prints its path.
+
+默认不调用模型。llm 阶段没有固定回复时，这个用例失败，并写明缺哪个文件（`<阶段 id>.md`、`.txt` 或 `.json`）。没有 `images` 时，生图阶段也不会去调接口。`--live` 才真的调用模型（检查照样跑），开头先说明这次最多调用几次（`planRunAll` 的 `modelCalls`，`skip` 的阶段不算）。
+
+By default no model is called. An llm stage with no canned reply fails that case and names the missing file (`<stage id>.md`, `.txt` or `.json`). Without `images`, an image stage does not call an API either. `--live` calls real models (the checks still run) and first says how many model calls the run may make at most (`planRunAll`'s `modelCalls`, not counting `skip`).
+
+安全：`files`、`replies`、`images` 和检查的 `file` 必须留在流程目录里（`staysInside`，也会跟着符号链接）。带 `forkedFrom` 的流程，确认查的是**原来的目录**（和 `flowgit run` 一样）；通过之后，副本去掉 `forkedFrom` 再跑，这样不会因为副本在另一个目录而再问一次。
+
+Safety: `files`, `replies`, `images` and a check's `file` must stay inside the flow directory (`staysInside`, which follows symbolic links). For a flow with `forkedFrom`, the confirmation is the **original directory's**, the same as `flowgit run`; after it passes, the copy is written without `forkedFrom` so the run does not ask again just because the copy is a different directory.
+
+`@flowgit/core` 导出 `runFlowTests(dir, opts)`，返回上面的结构，供以后的看板使用。
+
+`@flowgit/core` exports `runFlowTests(dir, opts)` and returns that structure, for a future board.
 
 ## 导出为 Skill / Export as a Skill
 

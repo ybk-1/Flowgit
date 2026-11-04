@@ -1,0 +1,18 @@
+{
+  "name": "示例周报",
+  "inputs": { "name": "小林", "language": "zh" },
+  "files": { "notes.md": "sample-notes.md" },
+  "expect": {
+    "draft": [
+      { "file": "report.md", "exists": true },
+      { "file": "report.md", "contains": ["小林", "本周完成", "下周计划", "需要帮助"] },
+      { "file": "report.md", "notContains": "TODO" },
+      { "file": "report.md", "minChars": 40, "maxChars": 4000 }
+    ],
+    "check": [
+      { "file": "check.json", "json": true },
+      { "file": "check.json", "jsonPath": "ok", "equals": true },
+      { "file": "check.json", "jsonPath": "checks.length", "equals": 6 }
+    ]
+  }
+}

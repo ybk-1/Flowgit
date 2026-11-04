@@ -67,3 +67,10 @@ export {
 } from "./proxy.js";
 export { setProxySupportProbe } from "./proxy-env.js";
 export { hashPath, listFiles, isTextType, wantsJson, isDirOutput, outputRel, isSafeRelative, findOnPath, staysInside, readFlowText } from "./util.js";
+export {
+  runFlowTests,
+  type FlowTestCaseResult,
+  type FlowTestCheckResult,
+  type FlowTestOptions,
+  type FlowTestReport,
+} from "./flowtest.js";

@@ -89,6 +89,7 @@ import { runBatch } from "./batch.js";
 import { registerNew } from "./commands/new.js";
 import { registerServeMcp } from "./commands/serve-mcp.js";
 import { registerPublish } from "./commands/publish.js";
+import { registerTest } from "./commands/test.js";
 import { registerSite } from "./commands/site.js";
 import { buildGallery } from "./gallery.js";
 import { bilingualCliError, c, colorizeUnifiedDiff, nextHint, statusBoard, table, width } from "./format.js";
@@ -293,9 +294,9 @@ program
   .version(VERSION, "-V, --version", "显示版本号 / show the version number")
   .option("-C, --dir <dir>", "流程目录（含 flow.json 或 flow.md）/ flow directory (contains flow.json or flow.md)", ".");
 
-// run, batch, board and serve call models and services: send those through the user's proxy, if there is one.
+// run, batch, board, serve and test (--live) call models and services: send those through the user's proxy, if there is one.
 program.hook("preAction", async (_program, action) => {
-  if (!["run", "batch", "board", "serve"].includes(action.name())) return;
+  if (!["run", "batch", "board", "serve", "test"].includes(action.name())) return;
   const code = await routeThroughProxy();
   if (code !== undefined) process.exit(code);
 });
@@ -1711,5 +1712,6 @@ registerNew(program, fail);
 registerServeMcp(program, { version: VERSION, dirOf, fail });
 registerSite(program, fail);
 registerPublish(program, fail);
+registerTest(program, dirOf, fail);
 
 program.parseAsync(process.argv).catch(fail);

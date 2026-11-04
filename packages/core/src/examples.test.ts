@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { findFlowFile, loadFlow, mockCompleteFromDir, runAll, runStage, validateFlow } from "./index.js";
+import { runFlowTests } from "./flowtest.js";
 
 const repoDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const examplesDir = path.join(repoDir, "examples");
@@ -49,6 +50,28 @@ if (stage === "outline") {
   fs.writeFileSync("index.html", '<!doctype html><html lang="zh-CN"><head><title>猫和纸箱</title><style>body{max-width:720px}</style>' + external + "</head><body><h1>猫和纸箱</h1></body></html>");
 }
 `;
+
+describe("bundled flow tests", () => {
+  const dirs = [examplesDir, templatesDir].flatMap((root) =>
+    fs
+      .readdirSync(root)
+      .filter((name) => fs.existsSync(path.join(root, name, "tests")))
+      .map((name) => path.join(root, name)),
+  );
+
+  it("covers the weekly-report template and a script example", () => {
+    const bases = dirs.map((dir) => path.basename(dir));
+    expect(bases).toContain("weekly-report");
+    expect(bases).toContain("subflow");
+  });
+
+  for (const dir of dirs) {
+    it(`runs ${path.basename(dir)}`, async () => {
+      const result = await runFlowTests(dir);
+      expect(result.ok, JSON.stringify(result, null, 2)).toBe(true);
+    });
+  }
+});
 
 describe("examples/agent-page end to end (fake Claude Code)", () => {
   let dir: string;

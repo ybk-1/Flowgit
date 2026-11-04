@@ -1,0 +1,16 @@
+{
+  "name": "简报",
+  "inputs": { "topic": "纸箱" },
+  "replies": "subflows/brief/demo-replies",
+  "files": { "topic.md": "subflows/brief/prompts/draft.md" },
+  "expect": {
+    "make": [
+      { "file": "brief.md", "contains": "纸箱" }
+    ],
+    "summary": [
+      { "file": "summary.md", "exists": true },
+      { "file": "summary.md", "contains": ["摘要", "纸箱"] },
+      { "file": "summary.md", "matches": "^# " }
+    ]
+  }
+}
