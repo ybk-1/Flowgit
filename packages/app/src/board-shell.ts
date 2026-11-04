@@ -8,7 +8,7 @@ import { BrowserBoard } from "./router.js";
 import { flowDir, openWorkspace, validFlowId, type Workspace } from "./workspace.js";
 import { canOpenFolders, folderAccess, folderStore, watchFolder } from "./folder.js";
 import { addFolder, getFolder, isFolderId } from "./folders.js";
-import { COMPUTER_EXECUTORS, handOff, LocalBoard, NOT_IN_FOLDER, otherFlowMessage, parseBoardLink, sameFlow, type RemoteFlow } from "./handoff.js";
+import { handOff, LocalBoard, needsComputer, NOT_IN_FOLDER, otherFlowMessage, parseBoardLink, sameFlow, type RemoteFlow } from "./handoff.js";
 import { type Files, zipFlow } from "./import.js";
 import { flowBoard } from "../../web/src/routes/flow.js";
 
@@ -125,7 +125,7 @@ function paintNote(ws: Workspace): void {
   }
   if (!ws.persistent) parts.push(["这个浏览器不能保存文件，关掉页面就没了", "This browser can't keep files; they are gone when the page closes"]);
   try {
-    const computer = loadFlow(dir).flow.stages.filter((stage) => COMPUTER_EXECUTORS.includes(stage.executor.type));
+    const computer = loadFlow(dir).flow.stages.filter((stage) => needsComputer(stage.executor));
     if (computer.length && local) {
       parts.push([
         `交给本机看板运行：${computer.map((stage) => i18n.pick(stage.name)).join("、")}`,
@@ -237,7 +237,7 @@ function setUpLocalBoard(ws: Workspace): void {
   if (!open || !dialog || !form || !input || !status) return;
   let computer = false;
   try {
-    computer = loadFlow(dir).flow.stages.some((stage) => COMPUTER_EXECUTORS.includes(stage.executor.type));
+    computer = loadFlow(dir).flow.stages.some((stage) => needsComputer(stage.executor));
   } catch {
     // the board shows flow errors itself
   }

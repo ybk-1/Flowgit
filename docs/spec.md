@@ -122,7 +122,7 @@ Stages must not form a cycle. Run order follows `inputs`; ties keep the order in
 | `llm` | 能 / yes | `prompt`, `system?`, `model?`, `effort?`, `maxTokens?`, `retries?` | 读取 `prompt` 指向的 Markdown，替换 `{{inputs.*}}`，把上游产物附在后面，调用模型，把回复写进唯一的产物。产物是 JSON 时自动从回复里提取 JSON。`model` 可写 `<provider>/<model>`（见下面的"模型供应商"），不写前缀就是 Claude。默认模型 `claude-opus-5-5`，优先级：`--model` > `model` > `FLOWGIT_MODEL` > 默认。`retries` 见下面 | Reads the Markdown file named by `prompt`, fills in `{{inputs.*}}`, appends the upstream artifacts, calls the model and writes the reply to the stage's single output. JSON outputs have the JSON extracted from the reply. `model` may be `<provider>/<model>` (see "Model providers" below); no prefix means Claude. Default model `claude-opus-5-5`; precedence: `--model` > `model` > `FLOWGIT_MODEL` > default. See below for `retries` |
 | `script` | 能 / yes | `run`, `requires?`, `cwd?`, `env?`, `timeoutSec?` | 在流程目录执行一条 shell 命令。命令自己负责写出产物。`requires` 列出命令还要用到的程序（例如 `["ffmpeg"]`），运行前和 `flowgit doctor` 都会检查它们在不在 PATH 上。`timeoutSec` 见下面 | Runs a shell command in the flow directory. The command writes the outputs itself. `requires` lists other programs the command needs (e.g. `["ffmpeg"]`); they are checked on PATH before the run and by `flowgit doctor`. See below for `timeoutSec` |
 | `agent` | 能 / yes | `agent`, `prompt`, `command?`, `args?`, `timeoutSec?` | 在流程目录里以无界面模式启动一个 agent CLI（Claude Code、Codex、Cursor、Gemini，或自定义命令），把渲染好的提示词交给它，由它自己写出产物。见下面的"agent 执行器" | Starts an agent CLI headless in the flow directory (Claude Code, Codex, Cursor, Gemini, or a custom command), hands it the rendered prompt, and lets it write the outputs itself. See "The agent executor" below |
-| `workflow` | `engine` 为 `flowgit` 时能 / yes when `engine` is `flowgit` | `engine`, `file`, `params?` | 运行另一个流程。`flowgit` 跑一条 Flowgit 子流程；ComfyUI、n8n 等其他引擎仍是预留。见下面的「子流程」 | Runs another flow. `flowgit` runs a Flowgit sub-flow; other engines such as ComfyUI and n8n stay reserved. See "Sub-flows" below |
+| `workflow` | `engine` 为 `flowgit` 或 `comfyui` 时能 / yes when `engine` is `flowgit` or `comfyui` | `engine`, `file`, `params?` | 运行另一个流程。`flowgit` 跑一条 Flowgit 子流程；`comfyui` 在本机 ComfyUI 上出图。n8n 等其他引擎仍是预留。见「子流程」和「ComfyUI」 | Runs another flow. `flowgit` runs a Flowgit sub-flow; `comfyui` makes pictures on a local ComfyUI. Other engines such as n8n stay reserved. See "Sub-flows" and "ComfyUI" |
 | `service` | 能 / yes | `url`, `method?`, `headers?`, `timeoutSec?`, `retries?` | 调用 HTTP 服务。只允许 `http` 和 `https`。`POST` 发送 `{ inputs, upstream }`（只带 1 MB 以内的文本产物），`GET` 把流程输入放进查询参数。`headers` 的值可以写 `{{env.变量名}}`，运行时从环境变量读取，这是传密钥的唯一方式，密钥不写进文件。`timeoutSec` 默认 60。跳转只跟同一个源（最多 5 次）；要跳到别的源时直接失败，免得请求头里的密钥被带过去。非 2xx、返回的 JSON 不合法、或引用的环境变量没设置，都记为失败。`url`、`method` 和 `headers` 的写法（不是取到的值）算进配置哈希。`retries` 见下面 | Calls an HTTP service. Only `http` and `https`. `POST` sends `{ inputs, upstream }` (text outputs up to 1 MB), `GET` puts flow inputs in the query string. Header values may contain `{{env.NAME}}`, read from the environment at run time; this is the only way to pass a key, and keys are never written to a file. `timeoutSec` defaults to 60. Redirects are followed within the same origin only (up to 5); a redirect to another origin fails the run so a key in the headers is never sent there. A non-2xx response, invalid JSON, or an unset env var fails the run. `url`, `method` and the `headers` as written (not the resolved values) count in the config hash. See below for `retries` |
 | `mcp` | 能 / yes | `server`, `tool`, `args?`, `timeoutSec?` | 调用 `mcpServers` 里的一个工具，把结果写进唯一的产物。见下面的「MCP 执行器」 | Calls one tool on a server named in `mcpServers` and writes the result to the stage's single output. See "The MCP executor" below |
 | `plugin` | 能 / yes | `plugin`, `config?`, `timeoutSec?` | 加载流程目录里的一个插件，由它写出产物。包名只从该目录的 `node_modules` 解析；`./` 路径必须留在流程目录内。见下面的「插件执行器」 | Loads a plugin from the flow directory and lets it write the outputs. A package name resolves only from that directory's `node_modules`; a `./` path must stay inside the flow directory. See "The plugin executor" below |
@@ -247,9 +247,9 @@ An `image` stage calls an image model and writes pictures into that stage's one 
 
 ### 子流程 / Sub-flows
 
-`engine` 为 `"flowgit"` 时，`workflow` 阶段运行另一份 `flow.json`。其他引擎只保留字段，还不能运行。
+`engine` 为 `"flowgit"` 时，`workflow` 阶段运行另一份 `flow.json`。`comfyui` 见下面的「ComfyUI」。n8n 等其他引擎仍是预留。
 
-When `engine` is `"flowgit"`, a `workflow` stage runs another `flow.json`. Other engines keep the fields and cannot run yet.
+When `engine` is `"flowgit"`, a `workflow` stage runs another `flow.json`. `comfyui` is in "ComfyUI" below. Other engines such as n8n stay reserved.
 
 ```json
 {
@@ -283,9 +283,46 @@ When `engine` is `"flowgit"`, a `workflow` stage runs another `flow.json`. Other
 - `run all --dry-run`, `doctor`, `graph` and `export-skill` understand it. `export-skill` writes "运行子流程 `<file>` / run the sub-flow `<file>`". `graph` labels the stage `sub-flow`.
 - Example: [`examples/subflow`](../examples/subflow), topic (person) → sub-flow (model and script) → summary (script).
 
-`params` 只有在 `engine` 为 `flowgit` 时才是上面这个形状（`inputs` 和 `copy`）。其他引擎的 `params` 仍是任意对象。
+`params` 在 `engine` 为 `flowgit` 时是上面这个形状（`inputs` 和 `copy`）。`engine` 为 `comfyui` 时见下一节。其他引擎的 `params` 仍是任意对象。
 
-Only when `engine` is `flowgit` is `params` the shape above (`inputs` and `copy`). For every other engine, `params` stays an arbitrary object.
+When `engine` is `flowgit`, `params` is the shape above (`inputs` and `copy`). When `engine` is `comfyui`, see the next section. For every other engine, `params` stays an arbitrary object.
+
+### ComfyUI
+
+`engine` 为 `"comfyui"` 时，`file` 是 ComfyUI 里 **File → Export Workflow (API)** 导出的 JSON（不是界面上 Save 的那份）。阶段把这份工作流提交到本机的 ComfyUI，把产出的图片、gif 或视频下载下来。网页版不直接连 ComfyUI，这种阶段和 script 一样交给本机看板。说明见 [docs/comfyui.md](comfyui.md)。
+
+When `engine` is `"comfyui"`, `file` is the JSON from ComfyUI's **File → Export Workflow (API)** (not the file Save writes). The stage submits that workflow to ComfyUI on this computer and downloads the pictures, gifs or videos it produces. The web app never talks to ComfyUI; like a script stage, this one is handed to the local board. See [docs/comfyui.md](comfyui.md).
+
+```json
+{
+  "type": "workflow",
+  "engine": "comfyui",
+  "file": "comfy/picture.json",
+  "params": { "set": { "6.inputs.text": "{{inputs.scene}}" } }
+}
+```
+
+- `server`：ComfyUI 的地址。不写就是 `http://127.0.0.1:8188`。环境变量 `FLOWGIT_COMFYUI_URL` 也能改，但 `params.server` 优先。只允许 `http` 和 `https`。
+- `set`：`{ "<节点 id>.inputs.<字段>": 值 }`，提交前写进工作流。字符串可以用 `{{inputs.名称}}` 和 `{{upstream.<阶段 id>.content}}`（和别处同一个 `renderTemplate`，再加上游文本）。数字（比如 seed）原样送出。
+- `each`（可选）：`from`、`path`、`field` 和 image 阶段的 `each` 一样，另加 `target`（`<节点 id>.inputs.<字段>`）。对上游 JSON 数组的每一项跑一次，把那一项的 `field` 填进 `target`。
+- 提交用 `POST /prompt`（带 `client_id`），再轮询 `GET /history/<prompt_id>`，完成后用 `GET /view` 下载。目录产物按顺序存成 `001.png`、`002.gif`……单个文件产物就写那一个文件。`node_errors` 和执行失败会变成双语错误，带上节点 id。
+- `timeoutSec` 默认 600，含这一次提交、轮询和下载。`retries` 和 service 一样：只重试网络错误、429 和 5xx。节点报错和执行失败不重试。
+- 是否需要重跑：`file` 的内容，以及 `params` 里写下来的原文（不是替换之后的值），算进配置哈希。
+- `flowgit doctor` 在流程里有 comfyui 阶段时请求 `GET /system_stats`。连不上是提醒，不是错误。
+- 从 Git 地址复制来的流程会把 `ComfyUI <地址>` 列进确认清单；确认之前不会提交。
+- 接口只按 ComfyUI 官方文档写：[服务器路由](https://docs.comfy.org/development/comfyui-server/comms_routes)、[API 示例](https://docs.comfy.org/development/comfyui-server/api-examples)、[API 格式](https://docs.comfy.org/development/api-development/workflow-api-format)。
+- 示例：[`examples/comfyui-picture`](../examples/comfyui-picture)。不自动安装 ComfyUI，也不上传图片做图生图。
+
+- `server`: ComfyUI's address. Unset means `http://127.0.0.1:8188`. `FLOWGIT_COMFYUI_URL` also changes it, and `params.server` wins. Only `http` and `https`.
+- `set`: `{ "<node id>.inputs.<field>": value }`, written into the workflow before it is submitted. Strings may use `{{inputs.name}}` and `{{upstream.<stage id>.content}}` (the same `renderTemplate` as elsewhere, then the upstream text). A number, such as a seed, is sent as it is.
+- `each` (optional): `from`, `path` and `field` as in an image stage's `each`, plus `target` (`<node id>.inputs.<field>`). The workflow runs once per item of the upstream JSON array, and that item's `field` is written into `target`.
+- Submit with `POST /prompt` (it sends a `client_id`), poll `GET /history/<prompt_id>`, then download with `GET /view`. A directory output is saved in order as `001.png`, `002.gif`, and so on. A single file output is that one file. `node_errors` and an execution failure become a bilingual error that includes the node id.
+- `timeoutSec` defaults to 600 and covers that one submission, the poll and the downloads. `retries` follows a service stage: only a network error, 429 or 5xx is retried. A node error or an execution failure is not.
+- Staleness: the contents of `file`, and `params` as written (not the rendered values), count in the config hash.
+- When the flow has a comfyui stage, `flowgit doctor` requests `GET /system_stats`. If the server does not answer, that is a hint, not an error.
+- A flow copied from a Git URL lists `ComfyUI <server>` in the confirmation; nothing is submitted until you confirm.
+- The calls follow ComfyUI's official docs: [server routes](https://docs.comfy.org/development/comfyui-server/comms_routes), [API examples](https://docs.comfy.org/development/comfyui-server/api-examples), [API format](https://docs.comfy.org/development/api-development/workflow-api-format).
+- Example: [`examples/comfyui-picture`](../examples/comfyui-picture). Flowgit does not install ComfyUI, and it does not upload pictures for image-to-image.
 
 ### 模型供应商 / Model providers
 
@@ -532,9 +569,9 @@ Main `run.json` fields: `stage`, `n`, `status`, `executor`, `startedAt`, `finish
 | `edited` | 产物被手动改过：和任何一个成功的版本都不一样（回退到旧版本不算） | Outputs were edited by hand: they match no successful run (restoring an older version does not count) |
 | `error` | 最新一次运行失败 | The latest run failed |
 
-`inputHash` 是"上游产物的 sha256 + 流程输入 + 执行器配置"的指纹。执行器配置包括执行器定义本身、llm 的提示词文件，以及 script 命令里出现的、存在于流程目录中的文件（比如 `node scripts/render.mjs` 里的 `scripts/render.mjs`）。`workflow` 且 `engine` 为 `flowgit` 时，还包含子流程的 `flow.json`，以及那份子流程里同样算法算出来的提示词和脚本文件。`mcp` 阶段还包含 `mcpServers` 里对应服务器的配置（不含 `env` 的值）、`tool` 和 `args`。`plugin` 阶段还包含 `config`，以及包的 `package.json` 版本（文件夹插件则是其中文件的哈希）。所以改一句提示词、改了子流程、改了 MCP 工具的参数，或者改了插件的 `config` 或文件，这个阶段和它下游的阶段都会变成 `stale`。
+`inputHash` 是"上游产物的 sha256 + 流程输入 + 执行器配置"的指纹。执行器配置包括执行器定义本身、llm 的提示词文件，以及 script 命令里出现的、存在于流程目录中的文件（比如 `node scripts/render.mjs` 里的 `scripts/render.mjs`）。`workflow` 且 `engine` 为 `flowgit` 时，还包含子流程的 `flow.json`，以及那份子流程里同样算法算出来的提示词和脚本文件。`engine` 为 `comfyui` 时，还包含那份 API 工作流文件的内容；`params` 按写下来的原文算，不算替换之后的值。`mcp` 阶段还包含 `mcpServers` 里对应服务器的配置（不含 `env` 的值）、`tool` 和 `args`。`plugin` 阶段还包含 `config`，以及包的 `package.json` 版本（文件夹插件则是其中文件的哈希）。所以改一句提示词、改了子流程、改了 MCP 工具的参数，或者改了插件的 `config` 或文件，这个阶段和它下游的阶段都会变成 `stale`。
 
-`inputHash` fingerprints the upstream artifacts' sha256, the flow inputs, and the executor config. The executor config covers the executor definition itself, an llm stage's prompt file, and any file in the flow directory named in a script command (e.g. `scripts/render.mjs` in `node scripts/render.mjs`). A `workflow` with `engine: "flowgit"` also includes the sub-flow's `flow.json` and, by the same hash, the prompt and script files that sub-flow names. An `mcp` stage also includes that server's `mcpServers` entry with the env values removed, plus `tool` and `args`. A `plugin` stage also includes `config` and the package's `package.json` version (a hash of its files, for a folder plugin). So changing one line of a prompt, changing the sub-flow, changing an MCP tool's arguments, or changing a plugin's `config` or files marks that stage and everything downstream as `stale`.
+`inputHash` fingerprints the upstream artifacts' sha256, the flow inputs, and the executor config. The executor config covers the executor definition itself, an llm stage's prompt file, and any file in the flow directory named in a script command (e.g. `scripts/render.mjs` in `node scripts/render.mjs`). A `workflow` with `engine: "flowgit"` also includes the sub-flow's `flow.json` and, by the same hash, the prompt and script files that sub-flow names. With `engine: "comfyui"` it includes the contents of the API workflow file; `params` count as written, not the rendered values. An `mcp` stage also includes that server's `mcpServers` entry with the env values removed, plus `tool` and `args`. A `plugin` stage also includes `config` and the package's `package.json` version (a hash of its files, for a folder plugin). So changing one line of a prompt, changing the sub-flow, changing an MCP tool's arguments, or changing a plugin's `config` or files marks that stage and everything downstream as `stale`.
 
 ### 对比版本 / Diffing versions
 
@@ -609,8 +646,8 @@ Safety: `files`, `replies`, `images` and a check's `file` must stay inside the f
 
 ## 以后的版本 / Planned
 
-- v0.2：剪辑阶段输出 OpenTimelineIO（`.otio`）；`flowgit pack` 打包分享。`workflow` 的其他引擎（ComfyUI、n8n）仍是预留。
+- v0.2：剪辑阶段输出 OpenTimelineIO（`.otio`）；`flowgit pack` 打包分享。`workflow` 的 n8n 等其他引擎仍是预留。
 - 之后：把整条流程暴露成 MCP 服务供别人调用。
 
-- v0.2: the edit stage emits OpenTimelineIO (`.otio`); `flowgit pack` for sharing. Other `workflow` engines (ComfyUI, n8n) stay reserved.
+- v0.2: the edit stage emits OpenTimelineIO (`.otio`); `flowgit pack` for sharing. Other `workflow` engines such as n8n stay reserved.
 - Later: exposing a whole flow as an MCP service others can call.

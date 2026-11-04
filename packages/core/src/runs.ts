@@ -133,6 +133,8 @@ export function commandFiles(dir: string, command: string): string[] {
  * the command that is a file in the flow directory, e.g. "node scripts/render.mjs").
  * A flowgit sub-flow also includes that flow.json and the same fingerprint of
  * every stage inside it, so editing its prompt or script marks this stage stale.
+ * A comfyui workflow includes the API-format file's contents. `params` count as
+ * written on the stage (the templates, not the rendered values).
  * An mcp stage also includes `mcpServers[server]` with env values removed, so
  * changing the command, URL, tool or args marks it stale and rotating a secret does not.
  * A plugin stage also includes `config` and, for a package, its package.json
@@ -147,10 +149,10 @@ export function stageConfigHash(dir: string, stage: Stage, seen: Set<string> = n
   if (ex.type === "script") files.push(...commandFiles(dir, ex.run));
   if (ex.type === "agent" && ex.agent === "custom" && ex.command) files.push(...commandFiles(dir, ex.command));
   let nested: string[] | undefined;
-  if (ex.type === "workflow" && ex.engine === "flowgit" && isSafeRelative(ex.file)) {
+  if (ex.type === "workflow" && (ex.engine === "flowgit" || ex.engine === "comfyui") && isSafeRelative(ex.file)) {
     const abs = path.resolve(dir, ex.file);
     files.push(ex.file);
-    if (!seen.has(abs) && seen.size < MAX_SUBFLOW_DEPTH) {
+    if (ex.engine === "flowgit" && !seen.has(abs) && seen.size < MAX_SUBFLOW_DEPTH) {
       const next = new Set(seen);
       next.add(abs);
       if (host().exists(abs) && host().stat(abs).isFile()) {

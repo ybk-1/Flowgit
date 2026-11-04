@@ -80,8 +80,7 @@ export interface ExecutorAgent {
 }
 
 /**
- * Params when `engine` is `"flowgit"`. Other engines keep an arbitrary object:
- * they are reserved and Flowgit does not read these fields.
+ * Params when `engine` is `"flowgit"`.
  */
 export interface FlowgitWorkflowParams {
   /** Passed to the sub-flow as its inputs. Strings may contain {{inputs.key}} from the parent. */
@@ -90,14 +89,40 @@ export interface FlowgitWorkflowParams {
   copy?: Record<string, string>;
 }
 
+/** One picture per item of an array, written into one workflow input before that run. */
+export interface ComfyuiEach {
+  /** Relative path of an upstream JSON output. */
+  from: string;
+  /** Dotted path to the array inside that JSON, e.g. "scenes". */
+  path: string;
+  /** Field on each item. Its text is written into `target`. */
+  field: string;
+  /** `<node id>.inputs.<field>` in the API-format workflow. */
+  target: string;
+}
+
+/** Params when `engine` is `"comfyui"`. The workflow file is ComfyUI's API export. */
+export interface ComfyuiWorkflowParams {
+  /** ComfyUI address. Defaults to http://127.0.0.1:8188. FLOWGIT_COMFYUI_URL is used when this is unset; this wins. */
+  server?: string;
+  /** `<node id>.inputs.<field>` → value, applied before the run. Strings may use {{inputs.name}} and {{upstream.<id>.content}}. */
+  set?: Record<string, unknown>;
+  /** Run once per item of an upstream JSON array. */
+  each?: ComfyuiEach;
+  /** Whole submission, including polling and downloads. Default 600. */
+  timeoutSec?: number;
+  /** Extra attempts after a network error, HTTP 429 or 5xx. Default 0. Same rules as service. */
+  retries?: number;
+}
+
 export interface ExecutorWorkflow {
   type: "workflow";
-  /** `"flowgit"` runs a Flowgit sub-flow. Any other engine is reserved. */
+  /** `"flowgit"` runs a Flowgit sub-flow. `"comfyui"` runs a local ComfyUI. Any other engine is reserved. */
   engine: string;
-  /** Sub-flow `flow.json`, relative to this flow's directory and inside it. */
+  /** `flow.json` for flowgit, or an API-format workflow JSON for comfyui. Relative to this flow's directory and inside it. */
   file: string;
-  /** For engine `"flowgit"`, `{ inputs?, copy? }`. Other engines: any object. */
-  params?: FlowgitWorkflowParams | Record<string, unknown>;
+  /** Shape depends on `engine`. Other engines: any object. */
+  params?: FlowgitWorkflowParams | ComfyuiWorkflowParams | Record<string, unknown>;
 }
 
 export interface ExecutorService {

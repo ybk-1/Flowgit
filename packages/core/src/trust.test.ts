@@ -184,14 +184,14 @@ describe("confirming a copied flow before its first run", () => {
     expect(trustState(loadFlow(dir)).needed).toBe(false);
   });
 
-  it("doctor warns until the copied flow is confirmed", () => {
+  it("doctor warns until the copied flow is confirmed", async () => {
     const dir = tmp("flowgit-trust-");
     write(dir, "flow.json", scriptFlow("node make.cjs"));
     const env = { ...process.env, FLOWGIT_HOME: home };
-    const before = doctor(loadFlow(dir), { env }).find((check) => check.message.includes(FORKED.source));
+    const before = (await doctor(loadFlow(dir), { env })).find((check) => check.message.includes(FORKED.source));
     expect(before).toMatchObject({ level: "warn", hint: expect.stringContaining("flowgit trust") });
     trustFlow(loadFlow(dir), undefined, env);
-    const after = doctor(loadFlow(dir), { env }).find((check) => check.message.includes(FORKED.source));
+    const after = (await doctor(loadFlow(dir), { env })).find((check) => check.message.includes(FORKED.source));
     expect(after).toMatchObject({ level: "ok" });
   });
 

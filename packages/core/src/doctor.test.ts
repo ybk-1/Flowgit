@@ -62,7 +62,7 @@ describe("findOnPath", () => {
 });
 
 describe("doctor", () => {
-  it("checks keys, programs and agents without running anything", () => {
+  it("checks keys, programs and agents without running anything", async () => {
     fakeProgram("fg-tool");
     fakeProgram("node");
     const loaded = setup({
@@ -75,7 +75,7 @@ describe("doctor", () => {
         { id: "fix", name: "fix", inputs: ["page"], executor: { type: "agent", agent: "cursor", prompt: "prompt.md" }, outputs: [{ type: "text/html", path: "e.html" }] },
       ],
     });
-    const checks = doctor(loaded, { env: pathEnv() });
+    const checks = await doctor(loaded, { env: pathEnv() });
 
     expect(checks[0]).toMatchObject({ level: "ok", message: expect.stringMatching(/^Node\.js /) });
     expect(checks).toContainEqual(expect.objectContaining({ level: "warn", message: expect.stringContaining("flow inputs not set: topic"), hint: "flowgit inputs set topic=..." }));
@@ -98,20 +98,20 @@ describe("doctor", () => {
     expect(byStage(checks, "fix")[1].message).toContain("--force");
   });
 
-  it("is happy with a key, and with canned replies instead of a key", () => {
+  it("is happy with a key, and with canned replies instead of a key", async () => {
     const loaded = setup({
       stages: [{ id: "draft", name: "draft", executor: { type: "llm", prompt: "prompt.md", model: "deepseek/deepseek-flash" }, outputs: [{ type: "text/markdown", path: "a.md" }] }],
     });
-    expect(doctor(loaded, { env: { ...pathEnv(), DEEPSEEK_API_KEY: "sk-test" } }).every((c) => c.level === "ok")).toBe(true);
-    expect(doctor(loaded, { env: { ...pathEnv() }, model: "ollama/qwen3:8b" })).toContainEqual(
+    expect((await doctor(loaded, { env: { ...pathEnv(), DEEPSEEK_API_KEY: "sk-test" } })).every((c) => c.level === "ok")).toBe(true);
+    expect(await doctor(loaded, { env: { ...pathEnv() }, model: "ollama/qwen3:8b" })).toContainEqual(
       expect.objectContaining({ level: "ok", stage: "draft", message: expect.stringContaining("no key needed") }),
     );
 
     fs.mkdirSync(path.join(dir, "replies"));
-    const mock = doctor(loaded, { env: { ...pathEnv(), FLOWGIT_LLM_MOCK_DIR: path.join(dir, "replies") } });
+    const mock = await doctor(loaded, { env: { ...pathEnv(), FLOWGIT_LLM_MOCK_DIR: path.join(dir, "replies") } });
     expect(mock).toContainEqual(expect.objectContaining({ level: "error", stage: "draft", message: expect.stringContaining("no canned reply") }));
     fs.writeFileSync(path.join(dir, "replies", "draft.md"), "hi");
-    expect(doctor(loaded, { env: { ...pathEnv(), FLOWGIT_LLM_MOCK_DIR: path.join(dir, "replies") } })).toContainEqual(
+    expect(await doctor(loaded, { env: { ...pathEnv(), FLOWGIT_LLM_MOCK_DIR: path.join(dir, "replies") } })).toContainEqual(
       expect.objectContaining({ level: "ok", stage: "draft", message: `用固定回复 / canned reply ${path.join("replies", "draft.md")}` }),
     );
   });
@@ -122,7 +122,7 @@ describe("doctor", () => {
     });
     fs.writeFileSync(path.join(dir, "flowgit.local.json"), JSON.stringify({ providers: { deepseek: { baseUrl: "https://api.example.invalid" } } }));
     const none = () => undefined;
-    expect(doctor(loaded, { env: { ...pathEnv(), DEEPSEEK_API_KEY: "sk-test" }, systemProxy: none })).toContainEqual(
+    expect(await doctor(loaded, { env: { ...pathEnv(), DEEPSEEK_API_KEY: "sk-test" }, systemProxy: none })).toContainEqual(
       expect.objectContaining({
         level: "warn",
         stage: "draft",
@@ -140,10 +140,10 @@ describe("doctor", () => {
     expect(lines.join("\n")).toContain("sets the address for deepseek to https://api.example.invalid");
     // a provider that sends no key (a local server) is no reason to warn
     fs.writeFileSync(path.join(dir, "flowgit.local.json"), JSON.stringify({ providers: { ollama: { baseUrl: "http://127.0.0.1:11435/v1" } } }));
-    expect(doctor(loaded, { env: pathEnv(), model: "ollama/qwen3:8b", systemProxy: none }).some((c) => c.level === "warn")).toBe(false);
+    expect((await doctor(loaded, { env: pathEnv(), model: "ollama/qwen3:8b", systemProxy: none })).some((c) => c.level === "warn")).toBe(false);
   });
 
-  it("reports the proxy model requests will go through, only when a model is called", () => {
+  it("reports the proxy model requests will go through, only when a model is called", async () => {
     const loaded = setup({
       stages: [{ id: "draft", name: "draft", executor: { type: "llm", prompt: "prompt.md", model: "deepseek/deepseek-flash" }, outputs: [{ type: "text/markdown", path: "a.md" }] }],
     });
@@ -151,21 +151,21 @@ describe("doctor", () => {
     const none = () => undefined;
     const proxy = (checks: DoctorCheck[]) => checks.find((c) => /proxy|代理/.test(c.message));
     if (proxySupport() !== "none") {
-      expect(proxy(doctor(loaded, { env, systemProxy: none }))).toMatchObject({
+      expect(proxy(await doctor(loaded, { env, systemProxy: none }))).toMatchObject({
         level: "ok",
         message: "模型和服务请求走代理 http://127.0.0.1:7890（HTTPS_PROXY）/ model and service requests go through http://127.0.0.1:7890 (HTTPS_PROXY)",
       });
       const windows = { url: "http://127.0.0.1:7897", source: "windows" as const, usable: true };
-      expect(proxy(doctor(loaded, { env: { ...pathEnv(), DEEPSEEK_API_KEY: "sk-test" }, systemProxy: () => windows }))?.message).toContain("(the Windows system proxy)");
+      expect(proxy(await doctor(loaded, { env: { ...pathEnv(), DEEPSEEK_API_KEY: "sk-test" }, systemProxy: () => windows }))?.message).toContain("(the Windows system proxy)");
     }
-    expect(proxy(doctor(loaded, { env: { ...env, HTTPS_PROXY: "socks5://127.0.0.1:7891" }, systemProxy: none }))).toMatchObject({ level: "warn" });
-    expect(proxy(doctor(loaded, { env: { ...env, FLOWGIT_PROXY: "off" }, systemProxy: none }))?.message).toContain("FLOWGIT_PROXY=off");
-    expect(proxy(doctor(loaded, { env: { ...pathEnv(), DEEPSEEK_API_KEY: "sk-test" }, systemProxy: none }))).toBeUndefined();
+    expect(proxy(await doctor(loaded, { env: { ...env, HTTPS_PROXY: "socks5://127.0.0.1:7891" }, systemProxy: none }))).toMatchObject({ level: "warn" });
+    expect(proxy(await doctor(loaded, { env: { ...env, FLOWGIT_PROXY: "off" }, systemProxy: none }))?.message).toContain("FLOWGIT_PROXY=off");
+    expect(proxy(await doctor(loaded, { env: { ...pathEnv(), DEEPSEEK_API_KEY: "sk-test" }, systemProxy: none }))).toBeUndefined();
     fs.mkdirSync(path.join(dir, "replies"));
-    expect(proxy(doctor(loaded, { env: { ...env, FLOWGIT_LLM_MOCK_DIR: path.join(dir, "replies") }, systemProxy: none }))).toBeUndefined();
+    expect(proxy(await doctor(loaded, { env: { ...env, FLOWGIT_LLM_MOCK_DIR: path.join(dir, "replies") }, systemProxy: none }))).toBeUndefined();
   });
 
-  it("warns, and does not fail, when a short-video flow has no speech key", () => {
+  it("warns, and does not fail, when a short-video flow has no speech key", async () => {
     fakeProgram("node");
     const voice = setup({
       id: "short-video",
@@ -178,7 +178,7 @@ describe("doctor", () => {
         },
       ],
     });
-    const missing = doctor(voice, { env: pathEnv() });
+    const missing = await doctor(voice, { env: pathEnv() });
     expect(missing.some((c) => c.level === "error")).toBe(false);
     expect(missing).toContainEqual(
       expect.objectContaining({
@@ -188,30 +188,30 @@ describe("doctor", () => {
         hint: expect.stringContaining("assets/voice.mp3"),
       }),
     );
-    const set = doctor(voice, { env: { ...pathEnv(), FLOWGIT_TTS_API_KEY: "sk-test" } });
+    const set = await doctor(voice, { env: { ...pathEnv(), FLOWGIT_TTS_API_KEY: "sk-test" } });
     expect(set).toContainEqual(expect.objectContaining({ level: "ok", stage: "voice", message: expect.stringContaining("FLOWGIT_TTS_API_KEY is set") }));
     expect(set.some((c) => c.level === "warn")).toBe(false);
 
     const other = setup({
       stages: [{ id: "build", name: "build", executor: { type: "script", run: "node build.mjs" }, outputs: [{ type: "text/plain", path: "c.txt" }] }],
     });
-    expect(doctor(other, { env: pathEnv() }).some((c) => c.message.includes("FLOWGIT_TTS_API_KEY"))).toBe(false);
+    expect((await doctor(other, { env: pathEnv() })).some((c) => c.message.includes("FLOWGIT_TTS_API_KEY"))).toBe(false);
 
-    const preset = doctor(voice, { env: { ...pathEnv(), FLOWGIT_TTS: "azure/zh-CN-Xiaoxiao:DragonHDFlashLatestNeural", SPEECH_KEY: "speech-key", SPEECH_REGION: "eastus" } });
+    const preset = await doctor(voice, { env: { ...pathEnv(), FLOWGIT_TTS: "azure/zh-CN-Xiaoxiao:DragonHDFlashLatestNeural", SPEECH_KEY: "speech-key", SPEECH_REGION: "eastus" } });
     expect(preset).toContainEqual(expect.objectContaining({ level: "ok", stage: "voice", message: expect.stringContaining("SPEECH_KEY is set") }));
-    const presetMissing = doctor(voice, { env: { ...pathEnv(), FLOWGIT_TTS: "dashscope/cosyvoice-v3-flash" } });
+    const presetMissing = await doctor(voice, { env: { ...pathEnv(), FLOWGIT_TTS: "dashscope/cosyvoice-v3-flash" } });
     expect(presetMissing).toContainEqual(expect.objectContaining({ level: "error", stage: "voice", message: expect.stringContaining("DASHSCOPE_API_KEY") }));
-    const presetNoHost = doctor(voice, { env: { ...pathEnv(), FLOWGIT_TTS: "dashscope/cosyvoice-v3-flash", DASHSCOPE_API_KEY: "dash-key" } });
+    const presetNoHost = await doctor(voice, { env: { ...pathEnv(), FLOWGIT_TTS: "dashscope/cosyvoice-v3-flash", DASHSCOPE_API_KEY: "dash-key" } });
     expect(presetNoHost).toContainEqual(expect.objectContaining({ level: "error", message: expect.stringContaining("DASHSCOPE_WORKSPACE_ID") }));
   });
 
-  it("reports flow inputs outside their enum as errors", () => {
+  it("reports flow inputs outside their enum as errors", async () => {
     const loaded = setup({
       inputs: { language: { type: "string", enum: ["zh", "en"], default: "zh" } },
       stages: [{ id: "a", name: "a", executor: { type: "human" }, outputs: [{ type: "text/markdown", path: "a.md" }] }],
     });
-    expect(doctor(loaded, { env: pathEnv() }).filter((c) => c.level !== "ok")).toEqual([]);
-    expect(doctor(loaded, { env: pathEnv(), inputs: { language: "fr" } })).toContainEqual(
+    expect((await doctor(loaded, { env: pathEnv() })).filter((c) => c.level !== "ok")).toEqual([]);
+    expect(await doctor(loaded, { env: pathEnv(), inputs: { language: "fr" } })).toContainEqual(
       expect.objectContaining({ level: "error", message: expect.stringContaining('must be one of "zh", "en"') }),
     );
   });

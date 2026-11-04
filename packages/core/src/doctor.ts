@@ -3,6 +3,7 @@ import path from "node:path";
 import { AGENT_ADAPTERS } from "./executors/agent.js";
 import { headerEnvNames } from "./executors/service.js";
 import { DEFAULT_MODEL } from "./executors/llm.js";
+import { comfyuiParams, comfyuiServer, comfyuiSystemStats, reservedWorkflowMessage } from "./executors/comfyui.js";
 import { isRunnableExecutor } from "./executors/index.js";
 import { loadFlow } from "./load.js";
 import { isHttpServer, isStdioServer, mcpEnvNames } from "./mcp.js";
@@ -14,7 +15,7 @@ import { MissingInputsError, loadFlowInputs } from "./runs.js";
 import { flowFileId, flowgitParams, renderInputTree, resolveSubflowFile, subflowEnterProblem, subflowStack } from "./subflow.js";
 import type { ExecutorWorkflow, LoadedFlow, Stage } from "./types.js";
 import { trustState } from "./trust.js";
-import { findOnPath } from "./util.js";
+import { findOnPath, isSafeRelative } from "./util.js";
 
 export type DoctorLevel = "ok" | "warn" | "error";
 
@@ -364,7 +365,7 @@ function stageChecks(loaded: LoadedFlow, stage: Stage, opts: DoctorOptions, env:
       return [{
         level: "warn",
         stage: stage.id,
-        message: `workflow 引擎 "${ex.engine}" 还不能运行，目前只有 flowgit / workflow engine "${ex.engine}" cannot run yet; only "flowgit" can`,
+        message: reservedWorkflowMessage(ex.engine),
       }];
     }
     return [{ level: "warn", stage: stage.id, message: `${ex.type} 执行器在 v0.1 还不能运行 / the ${ex.type} executor is reserved and can't run in v0.1` }];
@@ -382,6 +383,7 @@ function stageChecks(loaded: LoadedFlow, stage: Stage, opts: DoctorOptions, env:
       return checks;
     }
     case "workflow":
+      if (ex.engine === "comfyui") return [];
       return workflowChecks(loaded, stage, opts, env, stack);
     case "service":
       return headerEnvNames(ex.headers).map((name) =>
@@ -422,13 +424,72 @@ function stageChecks(loaded: LoadedFlow, stage: Stage, opts: DoctorOptions, env:
   }
 }
 
+/** ComfyUI stages in this flow and in flowgit sub-flows. Unreachable is a warning, not an error. */
+async function comfyuiChecks(loaded: LoadedFlow, env: NodeJS.ProcessEnv, stack?: string[], prefix = ""): Promise<DoctorCheck[]> {
+  const checks: DoctorCheck[] = [];
+  const stackNow = subflowStack(loaded.file, stack);
+  for (const stage of loaded.flow.stages) {
+    const ex = stage.executor;
+    if (ex.type !== "workflow") continue;
+    const id = `${prefix}${stage.id}`;
+    if (ex.engine === "comfyui") {
+      checks.push(...(await comfyuiStageCheck(id, ex, loaded.dir, env)));
+      continue;
+    }
+    if (ex.engine !== "flowgit") continue;
+    const resolved = resolveSubflowFile(loaded.dir, ex.file);
+    if ("error" in resolved || subflowEnterProblem(stackNow, resolved.abs)) continue;
+    try {
+      const sub = loadFlow(path.dirname(resolved.abs));
+      checks.push(...(await comfyuiChecks(sub, env, [...stackNow, flowFileId(resolved.abs)], `${id}/`)));
+    } catch {
+      // workflowChecks reports a sub-flow that cannot be loaded
+    }
+  }
+  return checks;
+}
+
+async function comfyuiStageCheck(stageId: string, ex: ExecutorWorkflow, dir: string, env: NodeJS.ProcessEnv): Promise<DoctorCheck[]> {
+  const checks: DoctorCheck[] = [];
+  if (!isSafeRelative(ex.file)) {
+    checks.push({
+      level: "error",
+      stage: stageId,
+      message: `工作流路径必须留在流程目录内 / workflow path must stay inside the flow directory: "${ex.file}"`,
+    });
+  } else if (!fs.existsSync(path.join(dir, ex.file))) {
+    checks.push({ level: "error", stage: stageId, message: `找不到工作流 / workflow file not found: ${ex.file}` });
+  }
+  let server: URL;
+  try {
+    server = comfyuiServer(comfyuiParams(ex), env);
+  } catch (err) {
+    checks.push({ level: "error", stage: stageId, message: (err as Error).message });
+    return checks;
+  }
+  const label = server.href.replace(/\/$/, "");
+  const up = await comfyuiSystemStats(server);
+  checks.push(
+    up
+      ? { level: "ok", stage: stageId, message: `ComfyUI 已连接 ${label} / ComfyUI is up at ${label}` }
+      : {
+          level: "warn",
+          stage: stageId,
+          message: `连不上 ComfyUI（${label}）。确认它已经打开 / Can't reach ComfyUI (${label}). Check that it is running`,
+          hint: `默认地址是 http://127.0.0.1:8188，也可以设置 FLOWGIT_COMFYUI_URL，或在 params.server 里写地址 / the default is http://127.0.0.1:8188; set FLOWGIT_COMFYUI_URL, or put the address in params.server`,
+        },
+  );
+  return checks;
+}
+
 /**
  * Check whether this machine can run a flow: Node version, flow inputs, model keys
  * (or canned replies), proxy settings, the programs that script and agent
  * stages start, and whether each plugin resolves. A short-video voice stage with no FLOWGIT_TTS_API_KEY is a
- * warning, not an error. Makes no network calls and runs nothing.
+ * warning, not an error. The only network call is GET /system_stats for a comfyui stage;
+ * if that server does not answer, the line is a warning, not an error. Runs nothing.
  */
-export function doctor(loaded: LoadedFlow, opts: DoctorOptions = {}): DoctorCheck[] {
+export async function doctor(loaded: LoadedFlow, opts: DoctorOptions = {}): Promise<DoctorCheck[]> {
   const env = opts.env ?? process.env;
   const checks: DoctorCheck[] = [];
   const node = process.versions.node;
@@ -471,7 +532,11 @@ export function doctor(loaded: LoadedFlow, opts: DoctorOptions = {}): DoctorChec
 
   // Stages with the same result share one line, e.g. "edit, export: found node".
   const merged: DoctorCheck[] = [];
-  for (const ch of loaded.flow.stages.flatMap((s) => stageChecks(loaded, s, opts, env))) {
+  const stageLines = [
+    ...loaded.flow.stages.flatMap((s) => stageChecks(loaded, s, opts, env)),
+    ...(await comfyuiChecks(loaded, env)),
+  ];
+  for (const ch of stageLines) {
     const same = merged.find((m) => m.level === ch.level && m.message === ch.message && m.hint === ch.hint);
     if (same) same.stage = `${same.stage}, ${ch.stage}`;
     else merged.push(ch);

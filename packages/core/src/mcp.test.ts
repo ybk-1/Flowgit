@@ -82,7 +82,7 @@ function alive(pid: number): boolean {
 }
 
 describe("mcp validation", () => {
-  it("rejects a literal secret in env, an unknown server, and more than one output", () => {
+  it("rejects a literal secret in env, an unknown server, and more than one output", async () => {
     const dir = tempDir();
     const secret: Flow = {
       format: "flowgit",
@@ -128,7 +128,7 @@ describe("mcp validation", () => {
     };
     expect(validateFlow(http).filter((i) => i.level === "error")).toEqual([]);
     writeFlow(dir, http);
-    const checks = doctor(loadFlow(dir), { env: {} });
+    const checks = await doctor(loadFlow(dir), { env: {} });
     expect(checks.some((c) => c.stage === "echo" && c.level === "ok" && c.message.includes("https://example.com/mcp"))).toBe(true);
     expect(checks.some((c) => c.level === "error")).toBe(false);
   });
@@ -234,10 +234,10 @@ describe("mcp executor", () => {
     const loaded = loadFlow(dir);
     await expect(runStage(loaded, "echo", { inputs: { x: "hi" }, env: { PATH: env.PATH } })).rejects.toThrow(/ECHO_TOKEN/);
     expect(fs.existsSync(path.join(dir, "out.txt"))).toBe(false);
-    const missing = doctor(loaded, { inputs: { x: "hi" }, env: { PATH: "" } });
+    const missing = await doctor(loaded, { inputs: { x: "hi" }, env: { PATH: "" } });
     expect(missing).toContainEqual(expect.objectContaining({ level: "error", stage: "echo", message: expect.stringContaining("ECHO_TOKEN") }));
     expect(missing).toContainEqual(expect.objectContaining({ level: "error", stage: "echo", message: expect.stringContaining("node") }));
-    const ready = doctor(loaded, { inputs: { x: "hi" }, env: { PATH: path.dirname(process.execPath), ECHO_TOKEN: "x" } });
+    const ready = await doctor(loaded, { inputs: { x: "hi" }, env: { PATH: path.dirname(process.execPath), ECHO_TOKEN: "x" } });
     expect(ready.filter((c) => c.stage === "echo" && c.level === "error")).toEqual([]);
     const plan = planRunAll(loaded, { inputs: { x: "hi" }, env });
     expect(plan.map((s) => `${s.stage.id}:${s.action}`)).toEqual(["echo:run"]);

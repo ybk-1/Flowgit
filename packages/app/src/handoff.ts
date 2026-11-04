@@ -1,10 +1,20 @@
-// Hand a stage the browser can't run (script, agent, MCP, plugin) to the local board that
-// `flowgit board` started on this computer. The board only answers https://flowgit.dev (or an
-// origin passed with --allow-origin) and still wants its token, which the person pastes here.
+// Hand a stage the browser can't run (script, agent, MCP, plugin, or a comfyui workflow) to the
+// local board that `flowgit board` started on this computer. The board only answers
+// https://flowgit.dev (or an origin passed with --allow-origin) and still wants its token, which
+// the person pastes here. A flowgit sub-flow stays in the browser.
 import type { RemoteRunner } from "./router.js";
 
-/** Executors a browser can't run: they start programs on a computer. */
+/** Executors a browser can't run: they start programs on a computer. workflow is not in this list; see needsComputer. */
 export const COMPUTER_EXECUTORS = ["script", "agent", "mcp", "plugin"];
+
+/**
+ * True when this stage has to run on the local board. A comfyui workflow does (the page never
+ * talks to ComfyUI). A flowgit sub-flow does not.
+ */
+export function needsComputer(executor: { type: string; engine?: string }): boolean {
+  if (COMPUTER_EXECUTORS.includes(executor.type)) return true;
+  return executor.type === "workflow" && executor.engine === "comfyui";
+}
 
 export interface BoardLink {
   /** "http://127.0.0.1:4747" */

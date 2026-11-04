@@ -1,0 +1,59 @@
+{
+  "format": "flowgit",
+  "version": "0.1",
+  "id": "comfyui-picture",
+  "name": "ComfyUI 出四张图",
+  "description": "模型先写 4 句画面描述，本机 ComfyUI 每句出一张图。checkpoint 文件名是占位，要换成你自己的。 / An llm stage writes 4 scene lines, then a local ComfyUI makes one picture each. The checkpoint file name is a placeholder; replace it with your own.",
+  "inputs": {
+    "style": {
+      "type": "string",
+      "description": "写进每一句画面的风格 / Look applied to every scene line",
+      "default": "水彩，柔和的傍晚光"
+    }
+  },
+  "stages": [
+    {
+      "id": "scenes",
+      "name": "画面描述",
+      "description": "写出 4 句画面，JSON 的 scenes 数组里每项有 prompt。",
+      "executor": {
+        "type": "llm",
+        "prompt": "prompts/scenes.md"
+      },
+      "outputs": [
+        {
+          "type": "application/json",
+          "path": "scenes.json",
+          "description": "四句画面。scenes[].prompt 交给 ComfyUI。 / Four scenes. scenes[].prompt goes to ComfyUI."
+        }
+      ]
+    },
+    {
+      "id": "pictures",
+      "name": "出图",
+      "description": "每句画面一张图，写成 pictures/001.png 起。",
+      "inputs": ["scenes"],
+      "executor": {
+        "type": "workflow",
+        "engine": "comfyui",
+        "file": "comfy/picture.json",
+        "params": {
+          "set": { "3.inputs.seed": 1 },
+          "each": {
+            "from": "scenes.json",
+            "path": "scenes",
+            "field": "prompt",
+            "target": "6.inputs.text"
+          }
+        }
+      },
+      "outputs": [
+        {
+          "type": "dir",
+          "path": "pictures/",
+          "description": "每个画面一张图。 / One picture per scene."
+        }
+      ]
+    }
+  ]
+}

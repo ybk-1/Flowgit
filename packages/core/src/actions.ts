@@ -3,6 +3,7 @@ import { headerEnvNames } from "./executors/service.js";
 import { IMAGE_PRESETS } from "./image-providers.js";
 import { isStdioServer, mcpEnvNames, mcpLaunchDetail } from "./mcp.js";
 import { pluginActionDetail } from "./plugins.js";
+import { comfyuiParams, comfyuiServerText } from "./executors/comfyui.js";
 import { resolveSubflowFile } from "./subflow.js";
 import type { Flow } from "./types.js";
 
@@ -58,6 +59,8 @@ export function flowActions(flow: Flow, dir?: string): FlowAction[] {
           detail: ex.model,
           ...(preset ? { env: [preset.apiKeyEnv] } : {}),
         });
+      } else if (ex.type === "workflow" && ex.engine === "comfyui") {
+        actions.push({ stage: id, kind: "workflow", detail: `ComfyUI ${comfyuiServerText(comfyuiParams(ex))}` });
       } else if (ex.type === "workflow" && ex.engine === "flowgit") {
         actions.push({ stage: id, kind: "workflow", detail: `子流程 / sub-flow ${ex.file}` });
         if (!at) continue;

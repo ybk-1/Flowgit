@@ -1479,14 +1479,14 @@ program
 
 program
   .command("doctor")
-  .description("检查这台电脑能不能跑这个流程：Node、流程输入、密钥、要用的命令、agent 和插件 / check this machine can run the flow: Node, inputs, keys, programs, agents and plugins")
+  .description("检查这台电脑能不能跑这个流程：Node、流程输入、密钥、要用的命令、agent、插件和 ComfyUI / check this machine can run the flow: Node, inputs, keys, programs, agents, plugins and ComfyUI")
   .option("--input <key=value>", "临时覆盖流程输入，可重复 / flow input override (repeatable)", collect)
   .option("--model <model>", "按这个模型检查 llm 阶段，同 run --model / check llm stages against this model, as with run --model")
   .option("--json", "输出 JSON / machine-readable output")
-  .action((opts: { input?: string[]; model?: string; json?: boolean }) => {
+  .action(async (opts: { input?: string[]; model?: string; json?: boolean }) => {
     try {
       const loaded = loadFlow(dirOf());
-      const checks = doctor(loaded, { inputs: parseKv(opts.input), model: opts.model });
+      const checks = await doctor(loaded, { inputs: parseKv(opts.input), model: opts.model });
       const errors = checks.filter((ch) => ch.level === "error").length;
       const warnings = checks.filter((ch) => ch.level === "warn").length;
       if (opts.json) {

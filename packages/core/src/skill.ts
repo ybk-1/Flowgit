@@ -24,9 +24,9 @@ function executorLine(ex: Executor): string {
     case "agent":
       return `由 agent 执行 (${ex.agent})。提示词在 \`${ex.prompt}\`${ex.agent === "custom" && ex.command ? `，命令 \`${ex.command}\`` : ""}。`;
     case "workflow":
-      return ex.engine === "flowgit"
-        ? `运行子流程 \`${ex.file}\` / run the sub-flow \`${ex.file}\``
-        : `运行外部工作流 (${ex.engine})：\`${ex.file}\`（尚未实现 / not implemented yet）`;
+      if (ex.engine === "flowgit") return `运行子流程 \`${ex.file}\` / run the sub-flow \`${ex.file}\``;
+      if (ex.engine === "comfyui") return `在 ComfyUI 上运行 \`${ex.file}\` / run \`${ex.file}\` on ComfyUI`;
+      return `运行外部工作流 (${ex.engine})：\`${ex.file}\`（尚未实现 / not implemented yet）`;
     case "service":
       return `调用 HTTP 服务 (service)：\`${ex.method ?? "POST"} ${ex.url}\`${ex.headers ? "。请求头里的 {{env.名称}} 从环境变量读取，密钥不写进文件。" : ""}。`;
     case "mcp":

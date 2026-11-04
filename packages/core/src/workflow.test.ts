@@ -277,12 +277,12 @@ describe("workflow executor", () => {
     expect(issues.some((i) => i.level === "error" && i.message.includes("b.md"))).toBe(true);
   });
 
-  it("keeps other engines reserved and describes flowgit to plan, doctor, graph and export-skill", () => {
+  it("keeps other engines reserved and describes flowgit to plan, doctor, graph and export-skill", async () => {
     const reserved = flow([
       {
         id: "draw",
         name: "Draw",
-        executor: { type: "workflow", engine: "comfyui", file: "graph.json", params: { nodes: [{ id: 1 }], extra: true } },
+        executor: { type: "workflow", engine: "n8n", file: "n8n.json", params: { nodes: [{ id: 1 }], extra: true } },
         outputs: [{ type: "image/png", path: "out.png" }],
       },
     ]);
@@ -331,7 +331,7 @@ describe("workflow executor", () => {
     const mocked = planRunAll(loaded, { inputs: { topic: "cats" }, env: { FLOWGIT_LLM_MOCK_DIR: path.join(dir, "sub", "demo-replies") } });
     expect(mocked[0]?.callsModel).toBe(false);
 
-    const checks = doctor(loaded, { inputs: { topic: "cats" }, env: {} });
+    const checks = await doctor(loaded, { inputs: { topic: "cats" }, env: {} });
     expect(checks.some((c) => c.stage === "make" && /reserved/.test(c.message))).toBe(false);
     expect(checks.some((c) => /sub\/flow\.json/.test(c.message) && /sub-flow|子流程/.test(c.message))).toBe(true);
     expect(checks.some((c) => c.level === "error" && /DEEPSEEK_API_KEY/.test(c.message))).toBe(true);

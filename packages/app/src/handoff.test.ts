@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { LocalBoard, parseBoardLink, sameFlow, UNREACHABLE, type RemoteFlow } from "./handoff.js";
+import { LocalBoard, needsComputer, parseBoardLink, sameFlow, UNREACHABLE, type RemoteFlow } from "./handoff.js";
 
 describe("handing stages to the local board", () => {
+  it("hands a comfyui workflow to this computer, and keeps a flowgit sub-flow in the browser", () => {
+    expect(needsComputer({ type: "workflow", engine: "comfyui" })).toBe(true);
+    expect(needsComputer({ type: "workflow", engine: "flowgit" })).toBe(false);
+    expect(needsComputer({ type: "workflow", engine: "n8n" })).toBe(false);
+    expect(needsComputer({ type: "script" })).toBe(true);
+    expect(needsComputer({ type: "llm" })).toBe(false);
+  });
+
   it("takes only a flowgit board link on this computer, with its token", () => {
     expect(parseBoardLink(" http://127.0.0.1:4747/?token=abcdef0123456789abcdef \n")).toEqual({
       origin: "http://127.0.0.1:4747",

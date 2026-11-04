@@ -71,9 +71,9 @@ export function getExecutor(type: ExecutorType): StageExecutor {
   return ex;
 }
 
-/** True when this executor can run. `workflow` runs only for engine `"flowgit"`. */
+/** True when this executor can run. `workflow` runs for engines `"flowgit"` and `"comfyui"`. */
 export function isRunnableExecutor(executor: ExecutorType | { type: ExecutorType; engine?: string }): boolean {
   const type = typeof executor === "string" ? executor : executor.type;
-  if (type === "workflow") return typeof executor !== "string" && executor.engine === "flowgit";
+  if (type === "workflow") return typeof executor !== "string" && (executor.engine === "flowgit" || executor.engine === "comfyui");
   return type in registry;
 }
