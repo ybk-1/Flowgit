@@ -295,3 +295,56 @@
 }
 :root[data-theme="dark"] .tile:not(.accent) { border-top: 1px solid var(--hair); }
 :root[data-theme="dark"] .section-num { -webkit-text-stroke-color: var(--muted); }
+
+/* Cloud sign-in, workspaces, members and sharing (#172). */
+.cloud-root { margin-top: 12px; }
+.cloud-auth, .cloud-test, .cloud-invite, .tile-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.cloud-me { margin: 0; font-weight: 700; }
+.cloud-flows { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; }
+.cloud-flows li { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.cloud-dialog {
+  width: min(640px, calc(100vw - 32px));
+  max-height: min(860px, calc(100vh - 32px));
+  overflow: auto;
+  border: var(--rule-w) solid var(--rule);
+  border-radius: 16px;
+  background: var(--bg);
+  color: var(--ink);
+  padding: 22px;
+}
+.cloud-dialog::backdrop { background: rgb(0 0 0 / 0.45); }
+.cloud-dialog h2 { margin: 0 0 8px; }
+.member-list { list-style: none; margin: 12px 0; padding: 0; display: grid; gap: 8px; }
+.member-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--hair); }
+.member-name { margin: 0; font-weight: 700; }
+.cloud-badge { margin-left: 6px; font-size: 12px; font-weight: 700; }
+.cloud-dialog .field { display: grid; gap: 6px; margin: 10px 0; }
+.cloud-dialog input, .cloud-dialog select, .cloud-test input {
+  font: inherit;
+  padding: 8px 10px;
+  border: 1px solid var(--hair);
+  border-radius: 8px;
+  background: var(--surface, var(--bg));
+  color: inherit;
+}
+.hint.warn { color: var(--bad, #9a3412); }
+
+/* Read-only cloud flows and share links: hide run, add, edit, upload, save and restore. */
+html[data-flowgit-readonly] :is(
+  #run-all,
+  #add-stage,
+  #graph-edit,
+  #edit-flow,
+  #inputs-save,
+  #generate-go,
+  #generate-write,
+  #stage-save,
+  #remove-confirm,
+  #remove-force,
+  .run,
+  .save,
+  .restore,
+  .upload,
+  .menu-remove,
+  .generate-panel
+) { display: none !important; }

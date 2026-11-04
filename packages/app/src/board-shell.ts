@@ -3,19 +3,27 @@
 import { I18N } from "./i18n.js";
 import { loadFlow } from "@flowgit/core";
 import type { I18nApi } from "./dom.js";
-import { applyKeys, rememberedKeys, storeKeys, VENDORS, type KeySettings } from "./keys.js";
+import { applyKeys, fetchVaultKeys, rememberedKeys, removeVaultKey, saveVaultKey, storeKeys, VENDORS, type KeySettings } from "./keys.js";
 import { BrowserBoard } from "./router.js";
-import { flowDir, openWorkspace, validFlowId, type Workspace } from "./workspace.js";
+import { cloudFlowId, flowDir, isCloudFlowAddress, openWorkspace, validFlowId, type Workspace } from "./workspace.js";
+import { bindI18n, downloadCloudZip, i18n as cloudI18n, startCloudBoard, type CloudReady, type Dict } from "./cloud.js";
+import { bindShareCopy } from "./share.js";
 import { canOpenFolders, folderAccess, folderStore, watchFolder } from "./folder.js";
 import { addFolder, getFolder, isFolderId } from "./folders.js";
-import { handOff, LocalBoard, needsComputer, NOT_IN_FOLDER, otherFlowMessage, parseBoardLink, sameFlow, type RemoteFlow } from "./handoff.js";
+import { COMPUTER_EXECUTORS, handOff, LocalBoard, needsComputer, NOT_IN_FOLDER, otherFlowMessage, parseBoardLink, sameFlow, type RemoteFlow } from "./handoff.js";
 import { type Files, zipFlow } from "./import.js";
 import { flowBoard } from "../../web/src/routes/flow.js";
 
 const i18n = I18N as I18nApi;
+bindI18n(I18N as Dict);
 const params = new URLSearchParams(location.search);
-const flowId = params.get("flow");
-if (!validFlowId(flowId)) location.replace("./index.html");
+const shareToken = params.get("share");
+const flowAddress = params.get("flow");
+if (shareToken || isCloudFlowAddress(flowAddress)) bootCloud(shareToken, isCloudFlowAddress(flowAddress) ? flowAddress : null);
+else if (!validFlowId(flowAddress)) location.replace("./index.html");
+else bootLocal(flowAddress);
+
+function bootLocal(flowId: string): void {
 const dir = flowDir(validFlowId(flowId) ? flowId : "missing");
 /** The local board this page hands computer stages to; the link (with its token) stays in memory. */
 let local: LocalBoard | undefined;
@@ -331,3 +339,199 @@ void ready.then((ws) => {
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start, { once: true });
   else start();
 });
+}
+
+function bootCloud(share: string | null, address: string | null): void {
+  const flowId = address ? cloudFlowId(address) : null;
+  const cloud = startCloudBoard({ flowId, share });
+  // Set before the board's modules load. Browser and folder flows never take this branch, so they
+  // keep a transport with no `cloud` field.
+  (globalThis as { flowgitTransport?: unknown }).flowgitTransport = cloud.transport;
+  const start = () => {
+    void cloud.ready.then((info) => {
+      paintCloud(info, cloud);
+      setUpCloudExport(flowId, info);
+      setUpCloudKeys(info);
+      setUpShareCopy(share, info);
+      cloudI18n.onChange(() => paintCloud(info, cloud));
+    });
+  };
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start, { once: true });
+  else start();
+}
+
+function paintCloud(info: CloudReady, cloud: ReturnType<typeof startCloudBoard>): void {
+  const note = document.getElementById("app-note");
+  if (!note) return;
+  const write = (computer = note.dataset.computer === "1") => {
+    note.dataset.computer = computer ? "1" : "0";
+    const parts: string[] = [];
+    if (computer) parts.push(cloudI18n.t("cloud.computer"));
+    if (info.share || info.readonly) parts.push(cloudI18n.t("cloud.readonly"));
+    note.hidden = parts.length === 0;
+    note.textContent = parts.join(" · ");
+  };
+  write();
+  if (note.dataset.cloudBound === "1") return;
+  note.dataset.cloudBound = "1";
+  void cloud.run.then((run) => {
+    if (run?.waiting?.kind === "computer") write(true);
+  });
+  cloud.transport.cloud?.on("run:end", (data) => {
+    const waiting = (data as { waiting?: { kind?: string } } | null)?.waiting;
+    write(waiting?.kind === "computer" || note.dataset.computer === "1");
+  });
+  void cloud.transport.fetch("/api/flow").then(async (res) => {
+    if (!res.ok) return;
+    const body = (await res.json()) as { stages?: { executor?: string }[] };
+    if (body.stages?.some((stage) => COMPUTER_EXECUTORS.includes(stage.executor ?? ""))) write(true);
+  });
+}
+
+function setUpCloudExport(flowId: string | null, info: CloudReady): void {
+  const button = document.getElementById("app-export");
+  if (!button) return;
+  if (!flowId || info.share) {
+    button.hidden = true;
+    return;
+  }
+  button.addEventListener("click", () => {
+    void downloadCloudZip(flowId, `${info.name || flowId}.zip`).catch((err) => alert(err instanceof Error ? err.message : String(err)));
+  });
+}
+
+/** Workspace vault. The value is cleared as soon as it is submitted and is never written to localStorage. */
+function setUpCloudKeys(info: CloudReady): void {
+  const open = document.getElementById("app-keys");
+  if (!open || !info.workspaceId || info.role === "viewer" || info.share) {
+    if (open) open.hidden = true;
+    return;
+  }
+  const workspaceId = info.workspaceId;
+  const owner = info.role === "owner";
+  open.addEventListener("click", () => {
+    void showVault(workspaceId, owner);
+  });
+}
+
+function showVault(workspaceId: string, owner: boolean): void {
+  let dialog = document.getElementById("cloud-keys-dialog") as HTMLDialogElement | null;
+  if (!dialog) {
+    dialog = document.createElement("dialog");
+    dialog.id = "cloud-keys-dialog";
+    dialog.className = "keys-dialog";
+    dialog.innerHTML = `<form id="cloud-keys-form">
+      <h2></h2>
+      <p class="hint" id="cloud-keys-hint"></p>
+      <ul id="cloud-keys-list" class="member-list"></ul>
+      <p id="cloud-keys-note" class="hint" hidden></p>
+      <label class="field"><span id="cloud-keys-name-label"></span><input id="cloud-keys-name" autocomplete="off" spellcheck="false" placeholder="DEEPSEEK_API_KEY" /></label>
+      <label class="field"><span id="cloud-keys-value-label"></span><input id="cloud-keys-value" type="password" autocomplete="off" spellcheck="false" /></label>
+      <label class="field"><span id="cloud-keys-hosts-label"></span><input id="cloud-keys-hosts" autocomplete="off" spellcheck="false" placeholder="api.example.com" /></label>
+      <div class="dialog-actions">
+        <button id="cloud-keys-cancel" class="btn" type="button"></button>
+        <button id="cloud-keys-save" class="btn primary" type="submit"></button>
+      </div>
+    </form>`;
+    document.body.append(dialog);
+    cloudI18n.text(dialog.querySelector("h2")!, "cloud.keys");
+    cloudI18n.text(dialog.querySelector("#cloud-keys-hint")!, "cloud.keysHint");
+    cloudI18n.text(dialog.querySelector("#cloud-keys-name-label")!, "cloud.keyName");
+    cloudI18n.text(dialog.querySelector("#cloud-keys-value-label")!, "cloud.keyValue");
+    cloudI18n.text(dialog.querySelector("#cloud-keys-hosts-label")!, "cloud.keyHosts");
+    cloudI18n.text(dialog.querySelector("#cloud-keys-cancel")!, "cloud.close");
+    cloudI18n.text(dialog.querySelector("#cloud-keys-save")!, "cloud.keySave");
+    dialog.querySelector("#cloud-keys-cancel")!.addEventListener("click", () => dialog!.close());
+  }
+  const form = dialog.querySelector("#cloud-keys-form") as HTMLFormElement;
+  const name = dialog.querySelector("#cloud-keys-name") as HTMLInputElement;
+  const value = dialog.querySelector("#cloud-keys-value") as HTMLInputElement;
+  const hosts = dialog.querySelector("#cloud-keys-hosts") as HTMLInputElement;
+  const note = dialog.querySelector("#cloud-keys-note") as HTMLElement;
+  const list = dialog.querySelector("#cloud-keys-list") as HTMLElement;
+  for (const field of [name, value, hosts]) field.hidden = !owner;
+  (dialog.querySelector("#cloud-keys-save") as HTMLElement).hidden = !owner;
+  const say = (message: string) => {
+    note.hidden = false;
+    cloudI18n.raw(note, message);
+  };
+  const paint = async () => {
+    list.replaceChildren();
+    const result = await fetchVaultKeys(workspaceId);
+    if (result.status === 503 && result.error) {
+      say(result.error);
+      return;
+    }
+    if (result.status !== 200) {
+      say(result.error ?? "");
+      return;
+    }
+    note.hidden = true;
+    for (const key of result.keys) {
+      const row = document.createElement("li");
+      row.className = "member-row";
+      const label = document.createElement("p");
+      label.className = "member-name";
+      label.textContent = `${key.name} · ${key.last4}`;
+      row.append(label);
+      if (owner) {
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "btn quiet";
+        cloudI18n.text(remove, "cloud.keyDelete");
+        remove.addEventListener("click", () => {
+          void removeVaultKey(workspaceId, key.name).then((gone) => {
+            if (gone.status !== 200) say(gone.error ?? "");
+            else void paint();
+          });
+        });
+        row.append(remove);
+      }
+      list.append(row);
+    }
+  };
+  form.onsubmit = (event) => {
+    event.preventDefault();
+    const secret = value.value;
+    const keyName = name.value.trim();
+    value.value = "";
+    name.value = "";
+    const hostList = hosts.value.split(/\s+/).map((item) => item.trim()).filter(Boolean);
+    hosts.value = "";
+    if (!keyName || !secret) return;
+    void saveVaultKey(workspaceId, keyName, secret, hostList).then((saved) => {
+      if (saved.status !== 200) say(saved.error ?? "");
+      else void paint();
+    });
+  };
+  void paint();
+  dialog.showModal();
+}
+
+function setUpShareCopy(share: string | null, info: CloudReady): void {
+  if (!share) return;
+  const bar = document.querySelector(".app-bar");
+  if (!bar) return;
+  if (!info.me) {
+    const link = document.createElement("a");
+    link.className = "btn small primary";
+    link.href = "./index.html";
+    cloudI18n.text(link, "cloud.signInToCopy");
+    link.addEventListener("click", () => {
+      try {
+        sessionStorage.setItem("flowgit.cloud.next", `${location.pathname}${location.search}`);
+      } catch {
+        // private window: the person signs in and opens the link again
+      }
+    });
+    bar.append(link);
+    return;
+  }
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "btn small primary";
+  button.id = "cloud-copy";
+  cloudI18n.text(button, "cloud.copyToMine");
+  bar.append(button);
+  bindShareCopy(button, share);
+}

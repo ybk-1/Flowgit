@@ -452,6 +452,65 @@ on("DELETE", "/api/push/subscriptions", async (ctx) => {
   return json(200, { ok: true });
 });
 
+// ---- sharing and sessions (#172) ----
+
+{
+  // Registered in front of `/api/auth/:provider`, which would otherwise claim GET /api/auth/sessions.
+  const before = routes.length;
+  on("GET", "/api/auth/sessions", async (ctx) => {
+    const { listSessions } = await import("./auth/sessions-api.js");
+    return json(200, await listSessions(ctx.env, user(ctx)));
+  });
+  on("DELETE", "/api/auth/sessions/:id", async (ctx) => {
+    const { deleteOwnSession } = await import("./auth/sessions-api.js");
+    const { SESSION_COOKIE, clearCookie } = await import("./auth/session.js");
+    const current = await deleteOwnSession(ctx.env, user(ctx), ctx.params.id!);
+    return json(200, { ok: true }, current ? { "Set-Cookie": clearCookie(SESSION_COOKIE) } : {});
+  });
+  on("POST", "/api/flows/:flow/shares", async (ctx) => {
+    const { createShare } = await import("./share.js");
+    return json(201, await createShare(ctx.env, user(ctx).user.id, ctx.params.flow!));
+  });
+  on("GET", "/api/flows/:flow/shares", async (ctx) => {
+    const { listShares } = await import("./share.js");
+    return json(200, { shares: await listShares(ctx.env, user(ctx).user.id, ctx.params.flow!) });
+  });
+  on("DELETE", "/api/flows/:flow/shares/:share", async (ctx) => {
+    const { revokeShare } = await import("./share.js");
+    await revokeShare(ctx.env, user(ctx).user.id, ctx.params.flow!, ctx.params.share!);
+    return json(200, { ok: true });
+  });
+  on(
+    "GET",
+    "/api/share/:token",
+    async (ctx) => {
+      await limited(ctx.env.API_LIMITER, `share:${clientIp(ctx.request)}`);
+      const { shareName } = await import("./share.js");
+      return json(200, await shareName(ctx.env, ctx.params.token!));
+    },
+    { auth: false },
+  );
+  on(
+    "GET",
+    "/api/share/:token/board/:route",
+    async (ctx) => {
+      await limited(ctx.env.API_LIMITER, `share:${clientIp(ctx.request)}`);
+      const { shareBoard } = await import("./share.js");
+      return shareBoard(ctx.env, ctx.params.token!, ctx.params.route!, ctx.url);
+    },
+    { auth: false },
+  );
+  on("POST", "/api/share/:token/copy", async (ctx) => {
+    await limited(ctx.env.API_LIMITER, `share:${clientIp(ctx.request)}`);
+    const body = await readJson(ctx.request);
+    const workspace = str(body, "workspace", 80);
+    if (!workspace) throw new HttpError(400, "缺少工作区 / missing workspace");
+    const { copyShare } = await import("./share.js");
+    return json(201, { flow: await copyShare(ctx.env, user(ctx).user.id, ctx.params.token!, workspace, str(body, "name", 120)) });
+  });
+  routes.unshift(...routes.splice(before));
+}
+
 // ---- the test console (static files in public/console/) ----
 
 const CONSOLE_CSP = "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' https:; form-action 'self'; frame-ancestors 'none'; base-uri 'none'";

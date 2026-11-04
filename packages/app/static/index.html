@@ -24,11 +24,30 @@
         <button id="open-folder" class="btn" type="button" hidden data-i18n-raw="打开电脑上的文件夹 / Open a folder">打开电脑上的文件夹</button>
         <label class="btn file-button"><span data-i18n-raw="导入 zip / Import a zip">导入 zip</span><input id="zip-input" type="file" accept=".zip,application/zip" hidden /></label>
       </div>
+      <div id="cloud-root" class="cloud-root" hidden>
+        <div id="cloud-signed-out" class="cloud-auth" hidden></div>
+        <div id="cloud-signed-in" class="cloud-auth" hidden>
+          <p id="cloud-me" class="cloud-me"></p>
+          <button id="cloud-account" class="btn" type="button" data-i18n="cloud.account">账号</button>
+          <button id="cloud-logout" class="btn quiet" type="button" data-i18n="cloud.signOut">退出</button>
+        </div>
+      </div>
       <p id="folders-unsupported" class="hint" hidden data-i18n-raw="打开文件夹需要电脑上的 Chrome 或 Edge / Opening folders needs Chrome or Edge on a computer">打开文件夹需要电脑上的 Chrome 或 Edge</p>
     </div>
   </header>
   <p id="home-note" class="banner" hidden></p>
   <main class="home-main">
+    <section id="cloud-section" class="home-section" hidden aria-labelledby="cloud-heading">
+      <header class="section-head">
+        <span class="section-num">00</span>
+        <h2 id="cloud-heading" data-i18n="cloud.section">云端</h2>
+        <p class="hint" data-i18n="cloud.sectionHint">登录后，同一份流程可以在别的设备打开</p>
+      </header>
+      <div class="tile-actions">
+        <button id="cloud-new-workspace" class="btn" type="button" data-i18n="cloud.newWorkspace">新建工作区</button>
+      </div>
+      <ul id="cloud-workspaces" class="tile-grid"></ul>
+    </section>
     <section class="home-section" aria-labelledby="mine-heading">
       <header class="section-head">
         <span class="section-num">01</span>
@@ -64,6 +83,80 @@
       <ul id="community" class="tile-grid templates community"></ul>
     </section>
   </main>
+  <dialog id="members-dialog" class="cloud-dialog">
+    <div>
+      <h2 data-i18n="cloud.membersTitle">成员</h2>
+      <p class="hint" data-i18n="cloud.membersHint">只有拥有者可以邀请、改角色和移除。工作区至少留一个拥有者。</p>
+      <ul id="members-list" class="member-list"></ul>
+      <p id="members-note" class="hint warn" hidden></p>
+      <form id="members-invite" class="cloud-invite">
+        <label class="field"><span data-i18n="cloud.inviteRole">角色</span>
+          <select id="members-role">
+            <option value="editor" data-i18n="cloud.role.editor">编辑</option>
+            <option value="owner" data-i18n="cloud.role.owner">拥有者</option>
+            <option value="viewer" data-i18n="cloud.role.viewer">只看</option>
+          </select>
+        </label>
+        <button class="btn primary" type="submit" data-i18n="cloud.inviteCreate">创建邀请</button>
+      </form>
+      <label class="field"><span data-i18n="cloud.inviteUrl">邀请链接</span>
+        <input id="members-url" type="text" readonly hidden />
+      </label>
+      <div class="dialog-actions">
+        <button id="members-close" class="btn" type="button" data-i18n="cloud.close">关闭</button>
+      </div>
+    </div>
+  </dialog>
+  <dialog id="account-dialog" class="cloud-dialog">
+    <form method="dialog">
+      <h2 data-i18n="cloud.accountTitle">账号</h2>
+      <p class="hint" data-i18n="cloud.sessionsHint">这些是你的登录。可以撤销网页或命令行的会话。</p>
+      <ul id="account-sessions" class="member-list"></ul>
+      <p id="account-note" class="hint warn" hidden></p>
+      <div class="dialog-actions">
+        <button id="account-close" class="btn" type="button" data-i18n="cloud.close">关闭</button>
+      </div>
+    </form>
+  </dialog>
+  <dialog id="share-dialog" class="cloud-dialog">
+    <form method="dialog">
+      <h2 data-i18n="cloud.shareTitle">分享</h2>
+      <p id="share-once" class="hint" hidden data-i18n="cloud.shareOnce">链接只显示这一次，请复制保存。别人打开后只能看，也可以复制到自己的工作区。</p>
+      <label class="field"><span data-i18n="cloud.shareLink">只读链接</span>
+        <input id="share-url" type="text" readonly hidden />
+      </label>
+      <ul id="share-list" class="member-list"></ul>
+      <p id="share-note" class="hint warn" hidden></p>
+      <div class="dialog-actions">
+        <button id="share-create" class="btn primary" type="button" data-i18n="cloud.shareCreate">创建只读链接</button>
+        <button id="share-close" class="btn" type="button" data-i18n="cloud.close">关闭</button>
+      </div>
+    </form>
+  </dialog>
+  <dialog id="workspace-dialog" class="cloud-dialog">
+    <form id="workspace-form">
+      <h2 data-i18n="cloud.newWorkspace">新建工作区</h2>
+      <label class="field"><span data-i18n="cloud.workspaceName">工作区名字</span>
+        <input id="workspace-name" required maxlength="80" />
+      </label>
+      <div class="dialog-actions">
+        <button id="workspace-cancel" class="btn" type="button" data-i18n="cloud.cancel">取消</button>
+        <button class="btn primary" type="submit" data-i18n="cloud.create">创建</button>
+      </div>
+    </form>
+  </dialog>
+  <dialog id="put-dialog" class="cloud-dialog">
+    <form id="put-form">
+      <h2 data-i18n="cloud.put">放到云端</h2>
+      <label class="field"><span data-i18n="cloud.whichWorkspace">工作区</span>
+        <select id="put-workspace"></select>
+      </label>
+      <div class="dialog-actions">
+        <button id="put-cancel" class="btn" type="button" data-i18n="cloud.cancel">取消</button>
+        <button class="btn primary" type="submit" data-i18n="cloud.put">放到云端</button>
+      </div>
+    </form>
+  </dialog>
   <footer class="home-foot">
     <p class="hint" data-i18n-raw="开源 · Apache-2.0 · 不收集任何数据 / Open source · Apache-2.0 · No data collected">开源 · Apache-2.0 · 不收集任何数据</p>
   </footer>

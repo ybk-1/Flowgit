@@ -262,3 +262,40 @@ Files over 4 MB (video, audio, big pictures) stay out of memory: the content is 
 - Worker 的 secret（在 Cloudflare 后台 Workers & Pages → Worker → Settings → Variables and Secrets 填，不进仓库）：`GITHUB_CLIENT_ID`、`GITHUB_CLIENT_SECRET`、`GOOGLE_CLIENT_ID`、`GOOGLE_CLIENT_SECRET`；`VAULT_MASTER_KEY`（`openssl rand -base64 32`，设好以后不要换，换了旧 key 就解不开）；`VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`（`npx web-push generate-vapid-keys`）和 `VAPID_SUBJECT`（例如 `mailto:你的邮箱`）。没有 `VAULT_MASTER_KEY` 时存 key 返回 503；没有 VAPID 时只有站内通知。/ Worker secrets, set in the Cloudflare dashboard and never committed. `VAULT_MASTER_KEY` must not change once set (old keys would no longer decrypt). Without it, storing a key answers 503; without VAPID there are in-app notifications only.
 - OAuth 回调地址 / OAuth callback URLs：`https://<host>/api/auth/github/callback`、`https://<host>/api/auth/google/callback`（`<host>` 是 `flowgit.dev` 或 `staging.flowgit.dev`）。
 - 测试在 Cloudflare 官方的本机模拟环境里跑（`@cloudflare/vitest-plugin`），不连真的 Cloudflare：`pnpm --filter @flowgit/server test`。/ Tests run in Cloudflare's official local emulator (`@cloudflare/vitest-plugin`) and never reach the real Cloudflare.
+
+## 网页版 / The web app
+
+网页版（`packages/app`）在能访问云端时，首页先请求 `GET /api/auth/providers`。不是 200 就和以前一样，没有登录。登录后，云端工作区和里面的流程跟浏览器里、文件夹里的流程放在一起。云端流程的地址是 `board.html?flow=cloud-<流程 id>`（例如 `cloud-flw_…`）。公开分享是 `/app/?share=<token>`，会打开 `board.html?share=<token>`。首页把通知里的 `?flow=<流程 id>` 转到 `board.html?flow=cloud-<id>`。
+
+When the web app can reach the cloud it starts with `GET /api/auth/providers`. Anything but 200 leaves the page as it was, with no sign-in. Signed in, cloud workspaces and their flows sit next to the flows in the browser and in folders. A cloud flow's address is `board.html?flow=cloud-<flow id>` (for example `cloud-flw_…`). A public share is `/app/?share=<token>`, which opens `board.html?share=<token>`. The home page forwards a notification's `?flow=<flow id>` to `board.html?flow=cloud-<id>`.
+
+`board-shell.ts` 在看板模块加载前设置 `globalThis.flowgitTransport`。浏览器里的流程和文件夹流程仍用 `BrowserBoard`，没有 `cloud` 字段。云端流程是：
+
+`board-shell.ts` sets `globalThis.flowgitTransport` before the board's modules load. A flow in the browser or a folder still uses `BrowserBoard` and has no `cloud` field. A cloud flow is:
+
+```ts
+globalThis.flowgitTransport = {
+  fetch(url: string, init?: RequestInit): Promise<Response>,
+  events(url: string): EventSourceLike,
+  cloud: {
+    flowId: string | null,
+    role: "owner" | "editor" | "viewer",
+    share: boolean,
+    me: { id: string; name: string; avatar_url: string | null } | null,
+    send(message: unknown): void,
+    on(event: string, handler: (data: unknown) => void): () => void,
+  },
+};
+```
+
+`fetch` 把看板的 `/api/<route>?<query>` 改发到 `/api/flows/<id>/board/<route>?<query>`。分享链接改发到 `/api/share/<token>/board/<route>?<query>`，只读，不打开 WebSocket。`events` 连的是同一个来源的 WebSocket `/api/flows/<id>/events`（页面的 `connect-src 'self'` 已包含）。服务器的一帧是 `{ id, event, data }`，`data` 是对象；看板仍按 SSE 处理，所以 `data` 先 `JSON.stringify`，`lastEventId` 是 `String(id)`。文本 `ping` 得到文本 `pong`。断线后退避重连，并派发一次 `flow:changed`。`cloud.send` / `cloud.on` 用同一条连接。
+
+`fetch` sends the board's `/api/<route>?<query>` to `/api/flows/<id>/board/<route>?<query>`. A share link sends it to `/api/share/<token>/board/<route>?<query>`, read-only, and opens no WebSocket. `events` is a WebSocket to `/api/flows/<id>/events` on the same origin (the page's `connect-src 'self'` already allows it). A server frame is `{ id, event, data }` with `data` an object; the board still speaks SSE, so `data` is `JSON.stringify`'d and `lastEventId` is `String(id)`. Text `ping` gets text `pong`. A drop reconnects with backoff and dispatches one `flow:changed`. `cloud.send` / `cloud.on` use that same socket.
+
+只看的人和分享链接给 `<html>` 加上 `data-flowgit-readonly`，样式藏起运行、新增、编辑、上传、保存和回退。要在电脑上跑的阶段（`waiting.kind` 为 `"computer"`）会在页面上说明：用桌面应用或 `flowgit` 命令跑完再推上来。云端流程的 key 走工作区保管（只能写，输入框马上清空，不进 localStorage），浏览器里的流程仍只把 key 放在内存里。浏览器里的 key 不会发给云端。
+
+Viewers and share links set `data-flowgit-readonly` on `<html>`, and CSS hides run, add, edit, upload, save and restore. A stage that has to run on a computer (`waiting.kind` `"computer"`) says so on the page: use the desktop app or the `flowgit` CLI, then push. Keys for a cloud flow use the workspace vault (write-only, the input clears at once, never localStorage); a flow in the browser still keeps its key in memory. A cloud flow never sends the browser's keys.
+
+分享：`POST /api/flows/:flow/shares`（editor）返回一次 `/app/?share=<token>`，服务器只存哈希。`GET /api/share/:token/board/<route>` 只允许 `flow`、`graph`、`file`、`thumb`、`runs`、`diff`。`POST /api/share/:token/copy` 把流程复制进一个你能编辑的工作区：没有产物、没有 `runs/`、没有本地输入，`forkedFrom.source` 是 `flowgit:<来源流程 id>`。会话：`GET /api/auth/sessions` 只列自己的，`id` 是令牌哈希的前 16 位；`DELETE` 可以撤销命令行登录。
+
+Sharing: `POST /api/flows/:flow/shares` (editor) returns `/app/?share=<token>` once; the server stores the hash. `GET /api/share/:token/board/<route>` allows only `flow`, `graph`, `file`, `thumb`, `runs` and `diff`. `POST /api/share/:token/copy` copies the flow into a workspace you can edit: no outputs, no `runs/`, no local inputs, and `forkedFrom.source` is `flowgit:<source flow id>`. Sessions: `GET /api/auth/sessions` lists only your own, and `id` is the first 16 characters of the token hash; `DELETE` can revoke a CLI sign-in.

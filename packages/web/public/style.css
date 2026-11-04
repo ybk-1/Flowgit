@@ -1695,3 +1695,23 @@ body {
 .more:focus-visible {
   border-color: var(--accent);
 }
+
+/* Read-only cloud flows and share links (#172): hide run, add, edit, upload, save and restore. */
+html[data-flowgit-readonly] :is(
+  #run-all,
+  #add-stage,
+  #graph-edit,
+  #edit-flow,
+  #inputs-save,
+  #generate-go,
+  #generate-write,
+  #stage-save,
+  #remove-confirm,
+  #remove-force,
+  .run,
+  .save,
+  .restore,
+  .upload,
+  .menu-remove,
+  .generate-panel
+) { display: none !important; }

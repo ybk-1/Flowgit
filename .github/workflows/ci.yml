@@ -88,6 +88,9 @@ jobs:
       - name: 网页版在浏览器里跑 weekly-report / The web app runs weekly-report in the browser
         if: success() || failure()
         run: pnpm test:e2e:app
+      - name: 网页版接上本机云端 / The web app against the local cloud
+        if: success() || failure()
+        run: pnpm test:e2e:cloud
       - name: 失败时上传报告和 trace / Upload the report and traces on failure
         if: failure()
         uses: actions/upload-artifact@v4

@@ -64,3 +64,42 @@ export function applyKeys(env: Record<string, string | undefined>, settings: Key
   env[vendor.keyEnv] = settings.key;
   env.FLOWGIT_MODEL = vendor.model;
 }
+
+/** A workspace key as the vault lists it: the name and the last 4 characters, never the value. */
+export interface VaultKey {
+  name: string;
+  last4: string;
+  hosts: string[];
+}
+
+async function vaultResult(res: Response): Promise<{ status: number; error?: string; keys?: VaultKey[] }> {
+  const body = (await res.json().catch(() => ({}))) as { error?: string; keys?: VaultKey[] };
+  return { status: res.status, error: body.error, keys: body.keys };
+}
+
+/** Editors can list names and the last 4 characters. The value is never returned and never stored here. */
+export async function fetchVaultKeys(workspaceId: string): Promise<{ status: number; error?: string; keys: VaultKey[] }> {
+  const res = await fetch(`/api/workspaces/${encodeURIComponent(workspaceId)}/keys`, { credentials: "same-origin" });
+  const body = await vaultResult(res);
+  return { status: body.status, error: body.error, keys: body.keys ?? [] };
+}
+
+/** Owners write a key. The caller clears the input; this function does not keep the value. */
+export async function saveVaultKey(workspaceId: string, name: string, value: string, hosts: string[]): Promise<{ status: number; error?: string }> {
+  const payload: { value: string; hosts?: string[] } = { value };
+  if (hosts.length) payload.hosts = hosts;
+  const res = await fetch(`/api/workspaces/${encodeURIComponent(workspaceId)}/keys/${encodeURIComponent(name)}`, {
+    method: "PUT",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const body = await vaultResult(res);
+  return { status: body.status, error: body.error };
+}
+
+export async function removeVaultKey(workspaceId: string, name: string): Promise<{ status: number; error?: string }> {
+  const res = await fetch(`/api/workspaces/${encodeURIComponent(workspaceId)}/keys/${encodeURIComponent(name)}`, { method: "DELETE", credentials: "same-origin" });
+  const body = await vaultResult(res);
+  return { status: body.status, error: body.error };
+}

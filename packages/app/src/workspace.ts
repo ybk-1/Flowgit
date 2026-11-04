@@ -17,6 +17,24 @@ export function validFlowId(id: string | null): id is string {
   return !!id && /^[A-Za-z0-9][A-Za-z0-9_-]{0,80}$/.test(id);
 }
 
+/** Cloud flows open as `board.html?flow=cloud-<id>` (`flw_…` from the server). */
+export const CLOUD_FLOW_PREFIX = "cloud-";
+
+export function isCloudFlowAddress(id: string | null): id is string {
+  if (!id?.startsWith(CLOUD_FLOW_PREFIX)) return false;
+  const bare = id.slice(CLOUD_FLOW_PREFIX.length);
+  return validFlowId(id) && validFlowId(bare);
+}
+
+export function cloudFlowId(address: string): string {
+  return address.startsWith(CLOUD_FLOW_PREFIX) ? address.slice(CLOUD_FLOW_PREFIX.length) : address;
+}
+
+/** `flw_…` or an address that already has the prefix, as `cloud-<id>`. */
+export function cloudFlowAddress(id: string): string {
+  return id.startsWith(CLOUD_FLOW_PREFIX) ? id : `${CLOUD_FLOW_PREFIX}${id}`;
+}
+
 /** Bilingual message for a stage that has to run on a computer, naming the command. */
 export function computerOnly(options: HostExecOptions): Error {
   const stage = options.env.FLOWGIT_STAGE ?? "";

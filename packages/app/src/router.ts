@@ -54,7 +54,18 @@ import { needsComputer } from "./handoff.js";
  * The local board's HTTP API, answered inside the page. The board's api.js sends every request
  * here (globalThis.flowgitTransport), so the board modules run unchanged. Bodies and statuses
  * follow packages/web/src/routes; core does the work on the current host.
+ *
+ * Cloud flows do not construct BrowserBoard. They rewrite `/api/<route>` with `cloudBoardRequest`
+ * and leave this class's routes as they are.
  */
+
+/** A board URL (`/api/flow`, `/api/file?path=…`) addressed at one cloud flow or a public share. */
+export function cloudBoardRequest(url: string, target: { flowId: string | null; share: string | null }): string {
+  const path = url.startsWith("/api/") ? url.slice("/api/".length) : url.replace(/^\//, "");
+  if (target.share) return `/api/share/${encodeURIComponent(target.share)}/board/${path}`;
+  if (!target.flowId) throw new Error("缺少云端流程 / missing cloud flow");
+  return `/api/flows/${encodeURIComponent(target.flowId)}/board/${path}`;
+}
 
 class HttpError extends Error {
   constructor(

@@ -6,8 +6,14 @@ import { canOpenFolders } from "./folder.js";
 import { addFolder, forgetFolder, listFolders, type FolderEntry } from "./folders.js";
 import { fetchGitHub, type Files, parseGitHubUrl, prepareFlow, unzipFlow } from "./import.js";
 import type { ForkedFrom } from "@flowgit/core";
+import { addPutButtons, bindI18n, cloudError, downloadCloudZip, i18n as cloudI18n, listCloudFlows, loadMe, loadProviders, readJson, type CloudRole, type Dict, type Providers, type WorkspaceCard } from "./cloud.js";
+import { cloudFlowAddress, validFlowId } from "./workspace.js";
+import { bindAccount } from "./account.js";
+import { openMembers } from "./members.js";
+import { openShares } from "./share.js";
 
 const i18n = I18N as I18nApi;
+bindI18n(I18N as Dict);
 const decoder = new TextDecoder();
 
 function boardUrl(id: string): string {
@@ -64,6 +70,17 @@ function freeId(base: string, taken: string[]): string {
 }
 
 async function main(): Promise<void> {
+  const query = new URLSearchParams(location.search);
+  const share = query.get("share");
+  if (share) {
+    location.replace(`./board.html?share=${encodeURIComponent(share)}`);
+    return;
+  }
+  const flowQuery = query.get("flow");
+  if (flowQuery && validFlowId(cloudFlowAddress(flowQuery))) {
+    location.replace(`./board.html?flow=${encodeURIComponent(cloudFlowAddress(flowQuery))}`);
+    return;
+  }
   if (location.hash === "#missing") note("没有找到这个流程 / That flow was not found");
   const { store, persistent } = await defaultStore();
   if (!persistent) note("这个浏览器不能保存文件，关掉页面就没了 / This browser can't keep files; they are gone when the page closes");
@@ -92,6 +109,8 @@ async function main(): Promise<void> {
   await showFolders();
   setUpImport(store);
   void showCommunity(store);
+
+  void startCloud(store, query.get("invite"));
 
   const list = document.getElementById("templates")!;
   for (const template of await templateIndex()) {
@@ -281,6 +300,247 @@ async function showFolders(): Promise<void> {
     const entry = await addFolder(handle);
     location.href = boardUrl(entry.id);
   });
+}
+
+function signInHref(provider: "github" | "google", invite: string | null): string {
+  const next = "/app/";
+  const inviteQuery = invite ? `&invite=${encodeURIComponent(invite)}` : "";
+  return `/api/auth/${provider}?next=${encodeURIComponent(next)}${inviteQuery}`;
+}
+
+/** Sign-in and cloud workspaces. If the cloud API is absent, the page stays as it is. */
+async function startCloud(store: Store, invite: string | null): Promise<void> {
+  const providers = await loadProviders();
+  if (!providers) return;
+  const root = document.getElementById("cloud-root");
+  const section = document.getElementById("cloud-section");
+  if (!root) return;
+  root.hidden = false;
+  bindAccount();
+  document.getElementById("cloud-logout")?.addEventListener("click", () => {
+    void fetch("/api/auth/logout", { method: "POST", credentials: "same-origin" }).then(() => location.reload());
+  });
+  document.getElementById("cloud-new-workspace")?.addEventListener("click", () => {
+    (document.getElementById("workspace-dialog") as HTMLDialogElement | null)?.showModal();
+  });
+  const workspaceForm = document.getElementById("workspace-form") as HTMLFormElement | null;
+  workspaceForm?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const name = (document.getElementById("workspace-name") as HTMLInputElement | null)?.value.trim();
+    if (!name) return;
+    void (async () => {
+      const res = await fetch("/api/workspaces", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      const body = await readJson<{ error?: string }>(res);
+      if (!res.ok) {
+        note(cloudError(body, res.status));
+        return;
+      }
+      location.reload();
+    })();
+  });
+  document.getElementById("workspace-cancel")?.addEventListener("click", () => {
+    (document.getElementById("workspace-dialog") as HTMLDialogElement | null)?.close();
+  });
+
+  let me: Awaited<ReturnType<typeof loadMe>>;
+  try {
+    me = await loadMe();
+  } catch (err) {
+    note(err instanceof Error ? err.message : String(err));
+    return;
+  }
+  if (!me) {
+    showSignedOut(providers, invite);
+    return;
+  }
+  if (invite) {
+    const accepted = await fetch("/api/invites/accept", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code: invite }),
+    });
+    const body = await readJson<{ error?: string }>(accepted);
+    if (!accepted.ok) note(cloudError(body, accepted.status));
+    else {
+      const url = new URL(location.href);
+      url.searchParams.delete("invite");
+      location.replace(url.pathname + url.search);
+      return;
+    }
+  }
+  try {
+    const next = sessionStorage.getItem("flowgit.cloud.next");
+    if (next) {
+      sessionStorage.removeItem("flowgit.cloud.next");
+      location.href = next;
+      return;
+    }
+  } catch {
+    // private window
+  }
+  showSignedIn(me.user.name);
+  if (section) section.hidden = false;
+  await paintWorkspaces(me.workspaces);
+  addPutButtons(store, me.workspaces, (message) => note(message));
+}
+
+function showSignedOut(providers: Providers, invite: string | null): void {
+  const box = document.getElementById("cloud-signed-out");
+  if (!box) return;
+  box.hidden = false;
+  if (providers.github) {
+    const link = document.createElement("a");
+    link.className = "btn primary";
+    link.href = signInHref("github", invite);
+    cloudI18n.text(link, "cloud.signInGitHub");
+    box.append(link);
+  }
+  if (providers.google) {
+    const link = document.createElement("a");
+    link.className = "btn";
+    link.href = signInHref("google", invite);
+    cloudI18n.text(link, "cloud.signInGoogle");
+    box.append(link);
+  }
+  if (providers.test) {
+    const form = document.createElement("form");
+    form.id = "cloud-test-form";
+    form.className = "cloud-test";
+    const subject = document.createElement("input");
+    subject.id = "cloud-test-subject";
+    subject.required = true;
+    subject.autocomplete = "off";
+    cloudI18n.attr(subject, "placeholder", "cloud.testSubject");
+    const name = document.createElement("input");
+    name.id = "cloud-test-name";
+    name.autocomplete = "off";
+    cloudI18n.attr(name, "placeholder", "cloud.testName");
+    const inviteInput = document.createElement("input");
+    inviteInput.id = "cloud-test-invite";
+    inviteInput.autocomplete = "off";
+    inviteInput.value = invite ?? "";
+    cloudI18n.attr(inviteInput, "placeholder", "cloud.testInvite");
+    const button = document.createElement("button");
+    button.type = "submit";
+    button.className = "btn";
+    cloudI18n.text(button, "cloud.testSignIn");
+    form.append(subject, name, inviteInput, button);
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      void (async () => {
+        const res = await fetch("/api/auth/test", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            subject: subject.value.trim(),
+            name: name.value.trim() || subject.value.trim(),
+            invite: inviteInput.value.trim() || undefined,
+            kind: "web",
+          }),
+        });
+        const body = await readJson<{ error?: string }>(res);
+        if (!res.ok) {
+          note(cloudError(body, res.status));
+          return;
+        }
+        const url = new URL(location.href);
+        if (url.searchParams.has("invite")) {
+          url.searchParams.delete("invite");
+          location.href = `${url.pathname}${url.search}`;
+        } else location.reload();
+      })();
+    });
+    box.append(form);
+  }
+}
+
+function showSignedIn(name: string): void {
+  const box = document.getElementById("cloud-signed-in");
+  const who = document.getElementById("cloud-me");
+  if (!box || !who) return;
+  box.hidden = false;
+  cloudI18n.text(who, "cloud.signedInAs", { name });
+}
+
+async function paintWorkspaces(workspaces: WorkspaceCard[]): Promise<void> {
+  const list = document.getElementById("cloud-workspaces");
+  if (!list) return;
+  list.replaceChildren();
+  if (!workspaces.length) {
+    const empty = document.createElement("p");
+    empty.className = "hint";
+    cloudI18n.text(empty, "cloud.noWorkspace");
+    list.append(empty);
+    return;
+  }
+  for (const ws of workspaces) {
+    const item = document.createElement("li");
+    item.className = "tile accent";
+    item.dataset.workspace = ws.id;
+    const kicker = document.createElement("p");
+    kicker.className = "tile-kicker";
+    cloudI18n.text(kicker, "cloud.roleLine", { role: cloudI18n.t(`cloud.role.${ws.role}`), members: ws.members });
+    const title = document.createElement("h3");
+    title.className = "tile-title";
+    title.textContent = ws.name;
+    const flows = document.createElement("ul");
+    flows.className = "cloud-flows";
+    const actions = document.createElement("div");
+    actions.className = "tile-actions";
+    const members = document.createElement("button");
+    members.type = "button";
+    members.className = "btn";
+    members.dataset.members = ws.id;
+    cloudI18n.text(members, "cloud.members");
+    members.addEventListener("click", () => {
+      void openMembers(ws.id, ws.role as CloudRole);
+    });
+    actions.append(members);
+    item.append(kicker, title, flows, actions);
+    list.append(item);
+    try {
+      for (const flow of await listCloudFlows(ws.id)) {
+        const row = document.createElement("li");
+        row.dataset.cloudFlow = flow.id;
+        const open = document.createElement("a");
+        open.className = "btn primary";
+        open.href = `./board.html?flow=${encodeURIComponent(cloudFlowAddress(flow.id))}`;
+        cloudI18n.text(open, "cloud.open");
+        const label = document.createElement("span");
+        label.textContent = flow.name;
+        row.append(label, open);
+        if (ws.role !== "viewer") {
+          const share = document.createElement("button");
+          share.type = "button";
+          share.className = "btn";
+          share.dataset.shareFlow = flow.id;
+          cloudI18n.text(share, "cloud.share");
+          share.addEventListener("click", () => {
+            void openShares(flow.id, ws.role);
+          });
+          row.append(share);
+        }
+        const download = document.createElement("button");
+        download.type = "button";
+        download.className = "btn quiet";
+        cloudI18n.text(download, "cloud.download");
+        download.addEventListener("click", () => {
+          void downloadCloudZip(flow.id, `${flow.name || flow.id}.zip`).catch((err) => note(err instanceof Error ? err.message : String(err)));
+        });
+        row.append(download);
+        flows.append(row);
+      }
+    } catch (err) {
+      note(err instanceof Error ? err.message : String(err));
+    }
+  }
 }
 
 void main().catch((err) => note(err instanceof Error ? err.message : String(err)));
