@@ -39,6 +39,7 @@ export * from "./privacy.js";
 export * from "./actions.js";
 export * from "./plugins.js";
 export * from "./trust.js";
+export * from "./mcp-tools.js";
 export {
   ImportFormatError,
   NOT_DIFY,

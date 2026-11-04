@@ -152,13 +152,19 @@ At a human stage, `run_flow` returns `status: "waiting"` with the stage, its `in
 
 ### 安全 / Safety
 
-human 和 llm 阶段默认可以运行。流程里有 script、agent、service 或 mcp 阶段（包括子流程里的）时，要用 `--allow-exec` 启动服务器，否则 `run_flow` 返回双语说明并列出这些阶段，什么都不运行。`run_stage` 只看那一个阶段，所以这类流程里的人工阶段和 llm 阶段不加 `--allow-exec` 也能单独运行。
+human 和 llm 阶段默认可以运行。流程里有 script、agent、service、mcp、plugin 或 image 阶段（包括子流程里的）时，要用 `--allow-exec` 启动服务器，否则 `run_flow` 返回双语说明并列出这些阶段，什么都不运行。`run_stage` 只看那一个阶段，所以这类流程里的人工阶段和 llm 阶段不加 `--allow-exec` 也能单独运行。
 
-Human and llm stages run by default. When a flow has a script, agent, service or mcp stage (including inside a sub-flow), the server must be started with `--allow-exec`; otherwise `run_flow` returns a bilingual explanation that lists those stages and runs nothing. `run_stage` looks only at its own stage, so the human and llm stages of such a flow can still run one by one without `--allow-exec`.
+Human and llm stages run by default. When a flow has a script, agent, service, mcp, plugin or image stage (including inside a sub-flow), the server must be started with `--allow-exec`; otherwise `run_flow` returns a bilingual explanation that lists those stages and runs nothing. `run_stage` looks only at its own stage, so the human and llm stages of such a flow can still run one by one without `--allow-exec`.
 
 从 Git 地址复制来、还没确认的流程，`run_flow` 和 `run_stage` 都会拒绝，请先在终端里运行 `flowgit trust`。确认不能通过 MCP 完成。
 
 A flow copied from a Git URL that hasn't been confirmed is refused by both `run_flow` and `run_stage`; run `flowgit trust` in a terminal first. Confirming can't be done over MCP.
+
+### 云端 / In the cloud
+
+云端的流程也可以打开一个远端 MCP 地址，工具相同，用 OAuth 登录授权，见 [docs/cloud.md](cloud.md#远端-mcp--remote-mcp)。
+
+A cloud flow can also turn on a remote MCP URL with the same tools and OAuth sign-in; see [docs/cloud.md](cloud.md#远端-mcp--remote-mcp).
 
 ### 记录 / Records
 

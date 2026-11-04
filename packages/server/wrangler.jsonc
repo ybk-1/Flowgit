@@ -16,7 +16,8 @@
   "compatibility_flags": ["nodejs_compat"],
   // Templates (templates/<id>.json) and, on staging, the web app. Built by scripts/build.mjs.
   // https://developers.cloudflare.com/workers/static-assets/binding/
-  "assets": { "directory": "./public", "binding": "ASSETS", "run_worker_first": ["/api/*"] },
+  // /.well-known/oauth-*: the OAuth documents MCP clients look up for a flow's MCP URL (mcp/oauth.ts).
+  "assets": { "directory": "./public", "binding": "ASSETS", "run_worker_first": ["/api/*", "/.well-known/oauth-*"] },
   "vars": { "ENVIRONMENT": "local", "ADMINS": "test:admin" },
   "d1_databases": [{ "binding": "DB", "database_name": "flowgit-local", "database_id": "00000000-0000-0000-0000-000000000000", "migrations_dir": "migrations" }],
   "r2_buckets": [{ "binding": "FILES", "bucket_name": "flowgit-files-local" }],
@@ -50,9 +51,13 @@
     },
     "production": {
       "name": "flowgit-api",
-      // In front of the Pages site on the same hostname, for /api/* only:
+      // In front of the Pages site on the same hostname, for /api/* and the OAuth documents only:
       // https://developers.cloudflare.com/workers/configuration/routing/routes/
-      "routes": [{ "pattern": "flowgit.dev/api/*", "zone_name": "flowgit.dev" }],
+      // MCP clients find OAuth at the site's root: https://datatracker.ietf.org/doc/html/rfc8414#section-3
+      "routes": [
+        { "pattern": "flowgit.dev/api/*", "zone_name": "flowgit.dev" },
+        { "pattern": "flowgit.dev/.well-known/oauth-*", "zone_name": "flowgit.dev" }
+      ],
       "vars": { "ENVIRONMENT": "production", "ADMINS": "github:347400613" },
       "d1_databases": [{ "binding": "DB", "database_name": "flowgit-production", "database_id": "FILLED_BY_DEPLOY", "migrations_dir": "migrations" }],
       "r2_buckets": [{ "binding": "FILES", "bucket_name": "flowgit-files-production" }],

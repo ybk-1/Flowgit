@@ -343,9 +343,9 @@ An `mcp` stage calls an MCP tool. Servers live in `mcpServers`, the same shape a
 
 ### 把流程变成 MCP 服务器 / Serve a flow over MCP
 
-`flowgit serve --mcp` 把流程变成本机的 MCP 服务器，Claude Code、Claude Desktop、Cursor 可以直接调用：`run_flow` 的参数就是流程输入，跑到人工阶段会停下并说明要准备什么（客户端支持时直接问你），`get_output` 读产物，`status` 看状态。有 script、agent、service 或 mcp 阶段的流程要加 `--allow-exec`。`--print-config` 打印三种客户端的配置。每次运行在 `run.json` 记下 `via: "mcp"` 和客户端名字。说明见 [docs/mcp.md](docs/mcp.md#把流程变成-mcp-服务器--serve-a-flow-as-an-mcp-server)。
+`flowgit serve --mcp` 把流程变成本机的 MCP 服务器，Claude Code、Claude Desktop、Cursor 可以直接调用：`run_flow` 的参数就是流程输入，跑到人工阶段会停下并说明要准备什么（客户端支持时直接问你），`get_output` 读产物，`status` 看状态。有 script、agent、service、mcp、plugin 或 image 阶段的流程要加 `--allow-exec`。云端的流程可以打开远端 MCP 地址（OAuth 登录），见 [docs/cloud.md](docs/cloud.md#远端-mcp--remote-mcp)。`--print-config` 打印三种客户端的配置。每次运行在 `run.json` 记下 `via: "mcp"` 和客户端名字。说明见 [docs/mcp.md](docs/mcp.md#把流程变成-mcp-服务器--serve-a-flow-as-an-mcp-server)。
 
-`flowgit serve --mcp` turns a flow into a local MCP server that Claude Code, Claude Desktop and Cursor call directly: `run_flow` takes the flow inputs as parameters and stops at a human stage, saying what to prepare (or asking you, when the client supports it); `get_output` reads outputs and `status` shows the state. A flow with a script, agent, service or mcp stage needs `--allow-exec`. `--print-config` prints the setup for all three clients. Each run records `via: "mcp"` and the client's name in `run.json`. See [docs/mcp.md](docs/mcp.md#把流程变成-mcp-服务器--serve-a-flow-as-an-mcp-server).
+`flowgit serve --mcp` turns a flow into a local MCP server that Claude Code, Claude Desktop and Cursor call directly: `run_flow` takes the flow inputs as parameters and stops at a human stage, saying what to prepare (or asking you, when the client supports it); `get_output` reads outputs and `status` shows the state. A flow with a script, agent, service, mcp, plugin or image stage needs `--allow-exec`. A cloud flow can turn on a remote MCP URL (with OAuth sign-in); see [docs/cloud.md](docs/cloud.md#远端-mcp--remote-mcp). `--print-config` prints the setup for all three clients. Each run records `via: "mcp"` and the client's name in `run.json`. See [docs/mcp.md](docs/mcp.md#把流程变成-mcp-服务器--serve-a-flow-as-an-mcp-server).
 
 ## 自己的执行器 / Your own executor
 

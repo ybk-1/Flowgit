@@ -194,6 +194,40 @@ When a run waits for a person, needs a computer, finishes or fails, the person w
 | POST | `/api/push/subscriptions` | 浏览器 `PushSubscription.toJSON()`（`endpoint`、`keys.p256dh`、`keys.auth`）；每人最多 20 个 / at most 20 per person |
 | DELETE | `/api/push/subscriptions` | `{ endpoint }` |
 
+## 远端 MCP / Remote MCP
+
+每个云端流程可以有一个 MCP 地址：`https://<host>/api/mcp/<流程 id>`（Streamable HTTP）。默认关闭，工作区的 owner 打开。把地址加进 Claude（[自定义连接器](https://support.claude.com/en/articles/11175166-getting-started-with-custom-connectors-using-remote-mcp)：设置 → Connectors）、Claude Code（[`claude mcp add --transport http <名字> <地址>`](https://code.claude.com/docs/en/mcp)）或其他支持远端 MCP 的客户端，客户端会自己注册、打开 Flowgit 的登录和同意页；同意后它就能以你的身份用这个流程。工具和本机的 `flowgit serve --mcp` 是同一份（`packages/core/src/mcp-tools.ts`）：`run_flow`、`run_stage`、`get_output`、`status`，参数和结果的形状相同，只是不给服务器上的路径（没有 `absPath` 和 `dir`）。
+
+Every cloud flow can have an MCP URL: `https://<host>/api/mcp/<flow id>` (Streamable HTTP). It is off by default; a workspace owner turns it on. Add the URL to Claude ([custom connectors](https://support.claude.com/en/articles/11175166-getting-started-with-custom-connectors-using-remote-mcp): Settings → Connectors), Claude Code ([`claude mcp add --transport http <name> <url>`](https://code.claude.com/docs/en/mcp)) or another client that supports remote MCP. The client registers itself and opens Flowgit's sign-in and consent page; once you allow it, it uses this flow as you. The tools are the same code as the local `flowgit serve --mcp` (`packages/core/src/mcp-tools.ts`): `run_flow`, `run_stage`, `get_output` and `status`, with the same parameters and result shapes, except that no server paths are given (no `absPath` or `dir`).
+
+- **运行 / Runs**：`run_flow` 和 `run_stage` 就是一次云端运行（同一把运行锁、同样的配额、key 保管和通知），等它停下再回答。运行在 `run.json` 和 `runs` 表里记 `via: "mcp"` 和 `client`（客户端注册时报的名字）。不能在云端跑的阶段（script、agent、mcp、plugin、ComfyUI）让运行停下，`waiting.kind` 是 `"computer"`，`next` 说明怎么在电脑上跑完再继续。云端不会通过 elicitation 问人：人工阶段返回 `waiting`，可以用 `run_stage` 的 `files` 直接给文本，或在网页里上传后再调用 `run_flow`。/ `run_flow` and `run_stage` are cloud runs (the same lock, quotas, key vault and notifications), and answer once the run stops. Runs record `via: "mcp"` and `client` (the name the client registered with) in `run.json` and the `runs` table. A stage the cloud can't run (script, agent, mcp, plugin, ComfyUI) stops the run with `waiting.kind` `"computer"`, and `next` says how to finish it on a computer and go on. The cloud never asks through elicitation: a human stage returns `waiting`; pass text in `run_stage`'s `files`, or upload in the web app and call `run_flow` again.
+- **流程输入 / Flow inputs**：远端没有会话，调用里给的流程输入会像在看板里填写一样存进流程（`flowgit.local.json`），之后的调用和 `status` 都看得到。/ The remote URL keeps no session, so inputs given in a call are saved with the flow (`flowgit.local.json`), as when filled in on the board; later calls and `status` see them.
+- **权限 / Who can**：只有 editor 和 owner 能同意；每次请求都重新检查令牌、授权没被撤销、流程的 MCP 还开着、这个人还是 editor。少了任何一条都返回 401，客户端会重新走授权。/ Only editors and owners can allow a client. Every request checks again that the token is valid, the grant isn't revoked, the flow's MCP URL is still on and the person is still an editor; otherwise it answers 401 and the client starts over.
+- **撤销 / Revoking**：在流程的 MCP 设置里撤销一个连接，或关掉流程的 MCP（撤销全部），下一个请求就被拒绝；客户端也可以调用撤销接口。/ Revoke a connection in the flow's MCP settings, or turn the flow's MCP URL off (revoking all of them), and the next request is refused; clients can also call the revocation endpoint.
+- **记录 / Records**：每次 `tools/call` 记下谁、哪个客户端、哪个工具、开始或继续的运行和用掉的 token（`mcp_calls` 表）；token 和其他云端运行一样计入工作区用量。同意、撤销、开关都记进操作记录。/ Every `tools/call` records who, which client and tool, the run it started or continued, and its tokens (the `mcp_calls` table); the tokens count toward the workspace's usage like any cloud run. Consents, revocations and switching on or off are in the audit log.
+
+授权按 [MCP 规范的授权部分](https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization)（`packages/server/src/mcp/oauth.ts`）：没带令牌的请求得到 401 和 `WWW-Authenticate: Bearer resource_metadata="…"`；受保护资源元数据（RFC 9728）指向 Flowgit 自己的授权服务器；客户端用动态注册（RFC 7591），授权码流程只接受 PKCE S256；令牌用 `resource`（RFC 8707）绑在一个流程上，换不到别的流程。访问令牌 1 小时，刷新令牌 30 天、每用一次换一个新的；授权码 10 分钟、只能用一次。代码、令牌和客户端密钥都只存 SHA-256。协议在 `packages/server/src/mcp/server.ts`：无状态，每个 POST 一条 JSON-RPC 消息（2025-03-26 的批量也接受），回 JSON；没有服务器推送的流，所以 GET 和 DELETE 返回 405。支持的协议版本：2025-11-25、2025-06-18、2025-03-26。
+
+Authorization follows [the MCP spec](https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization) (`packages/server/src/mcp/oauth.ts`): a request without a token gets 401 with `WWW-Authenticate: Bearer resource_metadata="…"`; the Protected Resource Metadata (RFC 9728) points at Flowgit's own authorization server; clients use Dynamic Client Registration (RFC 7591), and the authorization code flow accepts PKCE S256 only; tokens are bound to one flow with `resource` (RFC 8707) and work for no other. Access tokens last 1 hour; refresh tokens 30 days and are replaced on every use; codes last 10 minutes and work once. Codes, tokens and client secrets are stored only as SHA-256. The protocol is in `packages/server/src/mcp/server.ts`: stateless, one JSON-RPC message per POST (2025-03-26 batches too), answered with JSON; there is no server-sent stream, so GET and DELETE answer 405. Protocol versions: 2025-11-25, 2025-06-18 and 2025-03-26.
+
+| 方法 / Method | 路径 / Path | 说明 / Notes |
+| --- | --- | --- |
+| POST | `/api/mcp/:flow` | MCP（`Authorization: Bearer <访问令牌 / access token>`）|
+| GET | `/.well-known/oauth-protected-resource/api/mcp/:flow` | RFC 9728 |
+| GET | `/.well-known/oauth-authorization-server` | RFC 8414 |
+| POST | `/api/oauth/register` | RFC 7591；`redirect_uris` 只能是 https、本机 http 或应用自己的 scheme / https, loopback http or an app's own scheme |
+| GET / POST | `/api/oauth/authorize` | 登录和同意页（POST 只接受本站表单）/ sign-in and consent (POST only from this site's form) |
+| POST | `/api/oauth/token` | `authorization_code`、`refresh_token` |
+| POST | `/api/oauth/revoke` | RFC 7009；撤销任一令牌就结束整个授权 / revoking either token ends the whole grant |
+| GET | `/api/flows/:flow/mcp` | viewer：`{ enabled, url, grants: [{ id, user_id, user_name, client, created_at, last_used_at }] }`；owner 看到全部连接，其他人只看到自己的 / owners see every connection, others their own |
+| PUT | `/api/flows/:flow/mcp` | owner：`{ "enabled": true \| false }`；关掉会撤销全部连接 / turning it off revokes every connection |
+| DELETE | `/api/flows/:flow/mcp/grants/:grant` | owner，或连接的本人 / owner, or the person who connected |
+| GET | `/api/workspaces/:ws/mcp-calls` | owner：`{ calls: [{ id, created_at, flow_id, user_id, user_name, client, tool, run_id, tokens, ok }] }`，`?before=` |
+
+正式环境的 Worker 路由除了 `flowgit.dev/api/*`，还有 `flowgit.dev/.well-known/oauth-*`（客户端在网站根目录找授权服务器）；staging 整个域名都到 Worker，静态文件之前先让 Worker 回答 `/.well-known/oauth-*`。运行一次可能要几分钟，客户端在这期间保持请求。
+
+In production the Worker's routes are `flowgit.dev/api/*` plus `flowgit.dev/.well-known/oauth-*` (clients look for the authorization server at the site's root); on staging the whole host goes to the Worker, which answers `/.well-known/oauth-*` before static files. A run can take minutes; the client keeps the request open meanwhile.
+
 ## 限制 / Limits
 
 | 什么 / What | 上限 / Limit |

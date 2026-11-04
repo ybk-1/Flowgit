@@ -9,7 +9,11 @@ describe("wrangler.jsonc", () => {
     const config = JSON.parse(text.replace(/^\s*\/\/.*$/gm, ""));
     expect(config.env.staging.vars.ENVIRONMENT).toBe("staging");
     expect(config.env.production.vars.ENVIRONMENT).toBe("production");
-    expect(config.env.production.routes).toEqual([{ pattern: "flowgit.dev/api/*", zone_name: "flowgit.dev" }]);
+    // The API, plus the OAuth documents MCP clients look up at the site's root (#171).
+    expect(config.env.production.routes).toEqual([
+      { pattern: "flowgit.dev/api/*", zone_name: "flowgit.dev" },
+      { pattern: "flowgit.dev/.well-known/oauth-*", zone_name: "flowgit.dev" },
+    ]);
     // Bindings are not inherited by environments: each one has every binding.
     for (const name of ["staging", "production"]) {
       const env = config.env[name];

@@ -1,6 +1,9 @@
 import { DurableObject } from "cloudflare:workers";
 import {
+  callMcpTool,
   findFlowFile,
+  mcpInstructions,
+  mcpTools,
   type Host,
   HumanInputNeededError,
   loadFlow,
@@ -24,6 +27,7 @@ import type { Env } from "../env.js";
 import { audit } from "../audit.js";
 import { errorResponse, HttpError, json, newId, readBytes, readJson, SECURITY_HEADERS, sha256Hex } from "../http.js";
 import { notify } from "../notify/notify.js";
+import { cloudMcpBackend } from "../mcp/backend.js";
 import { decideNext } from "../runs/next.js";
 import { sandboxExec } from "../runs/sandbox.js";
 import { addUsage, requireQuota, usageOf } from "../runs/usage.js";
@@ -79,10 +83,29 @@ export interface ActiveRun {
   state: "running" | "waiting";
   waiting?: Waiting;
   tokens: number;
+  /** Flow inputs given with the run (MCP's run_flow); the saved inputs fill in the rest. */
+  inputs?: Record<string, unknown>;
+  /** Who asked, recorded in run.json and the runs table (`via: "mcp"`). */
+  caller?: RunCaller;
+}
+
+export interface RunCaller {
+  via: "mcp";
+  client?: string;
+}
+
+/** What a run start asks for: the board's POST /api/run body, or an MCP tool call. */
+export interface RunAsk {
+  stage: string;
+  model?: string;
+  detach: boolean;
+  userId: string;
+  inputs?: Record<string, unknown>;
+  caller?: RunCaller;
 }
 
 type FinalState = "done" | "failed" | "budget" | "cancelled" | "expired";
-type StopAnswer = { status: number; body: Record<string, unknown> };
+export type StopAnswer = { status: number; body: Record<string, unknown> };
 
 /**
  * One room per flow (a Durable Object named by the flow id). It keeps the flow's files on a
@@ -127,6 +150,7 @@ export class FlowRoom extends DurableObject<Env> {
       if (url.pathname === "/destroy" && request.method === "POST") return await this.destroy();
       const host = await this.load();
       if (url.pathname.startsWith("/run")) return await withFlowHost(host, () => this.runRoute(request, url, host));
+      if (url.pathname === "/mcp" && request.method === "POST") return await withFlowHost(host, () => this.mcpRoute(request));
       return await withFlowHost(host, () => this.route(request, url, host));
     } catch (err) {
       return errorResponse(err);
@@ -323,6 +347,46 @@ export class FlowRoom extends DurableObject<Env> {
     }
   }
 
+  // ---- remote MCP (the Worker checked the token, the grant and the role) ----
+
+  /**
+   * `{ op: "info" }` → the flow's name, server instructions and tools;
+   * `{ op: "call", name, args, client }` → `{ result, runId, tokens }`, where `result` is the
+   * tools/call result and `tokens` what the call's run used.
+   */
+  private async mcpRoute(request: Request): Promise<Response> {
+    const body = await readJson(request, MAX_FILE_BYTES + 64 * 1024);
+    if (!findFlowFile(FLOW_DIR)) return json(404, { error: "没有 flow.json 或 flow.md / no flow.json or flow.md" });
+    const loaded = loadFlow(FLOW_DIR);
+    if (body.op === "info") {
+      return json(200, { name: loaded.flow.name, instructions: mcpInstructions(loaded, "in Flowgit Cloud"), tools: mcpTools(loaded) });
+    }
+    if (body.op !== "call" || typeof body.name !== "string") throw new HttpError(400, "不认识的 MCP 请求 / unknown MCP request");
+    const userId = request.headers.get(ROOM_USER)!;
+    const client = typeof body.client === "string" && body.client ? body.client.slice(0, 200) : undefined;
+    const caller: RunCaller = client ? { via: "mcp", client } : { via: "mcp" };
+    const before = await this.activeRun();
+    let run: { id?: string; tokens?: number } | undefined;
+    const backend = cloudMcpBackend({
+      load: () => loadFlow(FLOW_DIR),
+      active: this.stepping && before ? { ...before, state: "running" } : before,
+      begin: async (stage, inputs) => {
+        const answer = await this.beginRun({ stage, detach: false, userId, inputs, caller });
+        run = (answer.body as { run?: { id?: string; tokens?: number } }).run;
+        return answer;
+      },
+    });
+    const args = body.args && typeof body.args === "object" && !Array.isArray(body.args) ? (body.args as Record<string, unknown>) : {};
+    let result;
+    try {
+      result = await callMcpTool(backend, body.name, args);
+    } finally {
+      await this.settle();
+    }
+    const tokens = run?.id ? Math.max(0, (run.tokens ?? 0) - (before?.id === run.id ? before.tokens : 0)) : 0;
+    return json(200, { result, runId: run?.id ?? null, tokens });
+  }
+
   // ---- cloud runs ----
 
   private activeRun(): Promise<ActiveRun | undefined> {
@@ -378,30 +442,36 @@ export class FlowRoom extends DurableObject<Env> {
   private async startRun(request: Request): Promise<Response> {
     const body = await readJson(request, 64 * 1024);
     if (typeof body.stage !== "string" || !body.stage.trim()) throw new HttpError(400, "缺少阶段 / missing stage");
-    const stage = body.stage.trim();
     const model = typeof body.model === "string" && body.model.trim() ? body.model.trim().slice(0, 200) : undefined;
-    const detach = body.detach === true;
-    const userId = request.headers.get(ROOM_USER)!;
+    const answer = await this.beginRun({ stage: body.stage.trim(), model, detach: body.detach === true, userId: request.headers.get(ROOM_USER)! });
+    return json(answer.status, answer.body);
+  }
+
+  /** Start a run (or continue the one waiting at this stage) and answer once it stops, or at once with 202 when detached. */
+  private async beginRun(ask: RunAsk): Promise<StopAnswer> {
+    const { stage, model, detach, userId } = ask;
     const loaded = loadFlow(FLOW_DIR);
-    if (stage !== "all" && !loaded.flow.stages.some((item) => item.id === stage)) return json(404, { error: `没有这个阶段 / unknown stage: ${stage}` });
+    if (stage !== "all" && !loaded.flow.stages.some((item) => item.id === stage)) return { status: 404, body: { error: `没有这个阶段 / unknown stage: ${stage}` } };
     const active = await this.activeRun();
     if (active) {
       const same = stage === "all" || stage === active.stage || stage === active.waiting?.stage;
       if (active.state === "waiting" && same) {
         const stopped = detach ? undefined : this.whenStopped(active.id);
         await this.continueRun(active);
-        if (!stopped) return json(202, { ok: true, run: runSummary((await this.activeRun()) ?? active) });
-        const answer = await stopped;
-        return json(answer.status, answer.body);
+        if (!stopped) return { status: 202, body: { ok: true, run: runSummary((await this.activeRun()) ?? active) } };
+        return await stopped;
       }
-      return json(409, { error: "已有运行在进行 / a run is already in progress", run: runSummary(active) });
+      return { status: 409, body: { error: "已有运行在进行 / a run is already in progress", run: runSummary(active) } };
     }
     const trust = trustState(loaded);
     if (trust.needed) {
-      return json(409, {
-        error: new TrustNeededError(loaded, trust).message,
-        trust: { reason: trust.reason, source: trust.source ?? null, fingerprint: trust.fingerprint, actions: trust.actions },
-      });
+      return {
+        status: 409,
+        body: {
+          error: new TrustNeededError(loaded, trust).message,
+          trust: { reason: trust.reason, source: trust.source ?? null, fingerprint: trust.fingerprint, actions: trust.actions },
+        },
+      };
     }
     const flowRow = await this.env.DB.prepare("SELECT workspace_id FROM flows WHERE id = ?").bind(this.flowId!).first<{ workspace_id: string }>();
     if (!flowRow) throw new HttpError(404, "没有这个流程 / flow not found");
@@ -416,12 +486,14 @@ export class FlowRoom extends DurableObject<Env> {
       startedAt: new Date(now).toISOString(),
       state: "running",
       tokens: 0,
+      ...(ask.inputs && Object.keys(ask.inputs).length ? { inputs: ask.inputs } : {}),
+      ...(ask.caller ? { caller: ask.caller } : {}),
     };
     await this.saveRun(run);
     await this.env.DB.prepare(
-      "INSERT INTO runs (id, flow_id, workspace_id, user_id, stage, model, state, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'running', ?, ?)",
+      "INSERT INTO runs (id, flow_id, workspace_id, user_id, stage, model, state, created_at, updated_at, via, client) VALUES (?, ?, ?, ?, ?, ?, 'running', ?, ?, ?, ?)",
     )
-      .bind(run.id, this.flowId!, run.workspaceId, userId, stage, model ?? null, now, now)
+      .bind(run.id, this.flowId!, run.workspaceId, userId, stage, model ?? null, now, now, ask.caller?.via ?? null, ask.caller?.client ?? null)
       .run();
     await addUsage(this.env, run.workspaceId, { runs: 1 });
     this.runFrames = [];
@@ -434,9 +506,8 @@ export class FlowRoom extends DurableObject<Env> {
       await this.finish(run, "failed", `没能开始运行 / could not start the run: ${err instanceof Error ? err.message : String(err)}`);
       throw err;
     }
-    if (!stopped) return json(202, { ok: true, run: runSummary(run) });
-    const answer = await stopped;
-    return json(answer.status, answer.body);
+    if (!stopped) return { status: 202, body: { ok: true, run: runSummary(run) } };
+    return await stopped;
   }
 
   private whenStopped(runId: string): Promise<StopAnswer> {
@@ -523,7 +594,7 @@ export class FlowRoom extends DurableObject<Env> {
 
   private async advance(active: ActiveRun, takeKeys: () => string[]): Promise<StepAnswer> {
     const loaded = loadFlow(FLOW_DIR);
-    const next = decideNext(loaded, { stage: active.stage, model: active.model, since: active.startedAt, sandbox: Boolean(this.env.SANDBOX) });
+    const next = decideNext(loaded, { stage: active.stage, model: active.model, inputs: active.inputs, since: active.startedAt, sandbox: Boolean(this.env.SANDBOX) });
     takeKeys();
     for (const stage of next.skipped) {
       if (this.announced.has(stage.id)) continue;
@@ -539,7 +610,7 @@ export class FlowRoom extends DurableObject<Env> {
         await this.finish(active, "failed", next.error);
         return { state: "failed", error: next.error };
       case "keep": {
-        const kept = recordManualEdit(loaded, next.stage.id, loadFlowInputs(loaded.dir, loaded.flow));
+        const kept = recordManualEdit(loaded, next.stage.id, loadFlowInputs(loaded.dir, loaded.flow, active.inputs));
         this.dirty = true;
         this.broadcast("stage:skip", { stage: next.stage.id, name: next.stage.name, reason: `保留了你的手动修改，存为 v${kept.n} / kept your manual edit as v${kept.n}` }, true);
         return { state: "next" };
@@ -568,7 +639,12 @@ export class FlowRoom extends DurableObject<Env> {
     const onEvent = (event: RunEvent) => this.publishRunEvent(event);
     let params: Record<string, unknown> | undefined;
     try {
-      const record = await runStage(loaded, stage.id, { ...(active.model ? { model: active.model } : {}), onEvent });
+      const record = await runStage(loaded, stage.id, {
+        ...(active.model ? { model: active.model } : {}),
+        ...(active.inputs ? { inputs: active.inputs } : {}),
+        ...(active.caller ? { caller: active.caller } : {}),
+        onEvent,
+      });
       params = record.params;
       this.dirty = true;
       return { state: "next" };

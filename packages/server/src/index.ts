@@ -18,6 +18,8 @@ import type { Env, RateLimit } from "./env.js";
 import { checkFiles, createFlow, deleteFlow, flowAccess, listFlows, renameFlow, requireSpace, room, roomRequest, templateFiles } from "./flows.js";
 import { errorResponse, escapeHtml, HttpError, json, readJson, str, unauthorized } from "./http.js";
 import { acceptInvite, createInvite, isAdmin, listInvites, revokeInvite } from "./invites.js";
+import { mcpCalls, mcpSettings, revokeMcpGrant, setMcpEnabled } from "./mcp/manage.js";
+import { handleMcp } from "./mcp/server.js";
 import { listNotifications, markRead, subscribe, unsubscribe, vapidKeys } from "./notify/notify.js";
 import { page } from "./page.js";
 import { usageOf } from "./runs/usage.js";
@@ -390,6 +392,19 @@ for (const action of ["continue", "cancel"]) {
   });
 }
 
+// ---- remote MCP (the MCP URL itself and OAuth are in mcp/server.ts) ----
+
+on("GET", "/api/flows/:flow/mcp", async (ctx) => json(200, await mcpSettings(ctx.env, ctx.url.origin, ctx.params.flow!, user(ctx).user.id)));
+on("PUT", "/api/flows/:flow/mcp", async (ctx) => json(200, await setMcpEnabled(ctx.env, ctx.url.origin, ctx.params.flow!, user(ctx).user.id, (await readJson(ctx.request)).enabled)));
+on("DELETE", "/api/flows/:flow/mcp/grants/:grant", async (ctx) => {
+  await revokeMcpGrant(ctx.env, ctx.params.flow!, user(ctx).user.id, ctx.params.grant!);
+  return json(200, { ok: true });
+});
+on("GET", "/api/workspaces/:ws/mcp-calls", async (ctx) => {
+  const before = Number(ctx.url.searchParams.get("before") ?? "") || undefined;
+  return json(200, { calls: await mcpCalls(ctx.env, ctx.params.ws!, user(ctx).user.id, before) });
+});
+
 // ---- the key vault and usage ----
 
 on("GET", "/api/workspaces/:ws/keys", async (ctx) => {
@@ -479,6 +494,8 @@ export async function handle(request: Request, env: Env): Promise<Response> {
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+    const mcp = await handleMcp(request, env);
+    if (mcp) return mcp;
     if (url.pathname === "/api/console" || url.pathname.startsWith("/api/console/")) return consoleFile(request, env, url);
     if (url.pathname === "/api" || url.pathname.startsWith("/api/")) return handle(request, env);
     // Staging serves the web app next to the API; production's route only sends /api/* here.

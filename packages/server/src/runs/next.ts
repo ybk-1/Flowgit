@@ -30,6 +30,8 @@ export interface NextOptions {
   /** "all" or a stage id. */
   stage: string;
   model?: string;
+  /** Flow inputs given with the run; the saved inputs fill in the rest. */
+  inputs?: Record<string, unknown>;
   /** ISO time the run started. */
   since: string;
   sandbox?: boolean;
@@ -46,7 +48,7 @@ export function decideNext(loaded: LoadedFlow, options: NextOptions): Next {
     return { kind: "run", stage, skipped: [], callsModel: stage.executor.type === "llm" };
   }
   const skipped: Stage[] = [];
-  for (const step of planRunAll(loaded, options.model ? { model: options.model } : {})) {
+  for (const step of planRunAll(loaded, { ...(options.model ? { model: options.model } : {}), ...(options.inputs ? { inputs: options.inputs } : {}) })) {
     const stage = step.stage;
     switch (step.action) {
       case "skip":
