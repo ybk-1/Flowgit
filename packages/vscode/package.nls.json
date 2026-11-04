@@ -1,0 +1,16 @@
+{
+  "displayName": "Flowgit",
+  "description": "See a flow and run its stages from the sidebar.",
+  "view.container": "Flowgit",
+  "view.name": "Flows",
+  "command.category": "Flowgit",
+  "command.runStage": "Run This Stage",
+  "command.runAll": "Run All",
+  "command.board": "Open Board",
+  "command.diff": "Compare With Previous Version",
+  "command.trust": "Confirm Copied Flow",
+  "command.refresh": "Refresh",
+  "command.open": "Open Stage",
+  "config.cliPath": "Path to the Flowgit CLI. When empty, the extension looks in the workspace node_modules/.bin and then on PATH. It never downloads a CLI.",
+  "untrusted.description": "In Restricted Mode the sidebar and CodeLens stay visible, but Flowgit will not run commands. Trust the workspace to run a stage, run all stages, open the board, compare versions, or confirm a copied flow."
+}

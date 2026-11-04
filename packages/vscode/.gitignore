@@ -1,0 +1,4 @@
+dist/
+schema/
+*.vsix
+*.tsbuildinfo

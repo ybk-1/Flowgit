@@ -1,0 +1,179 @@
+{
+  "name": "flowgit-vscode",
+  "displayName": "%displayName%",
+  "description": "%description%",
+  "version": "0.1.0",
+  "private": true,
+  "publisher": "flowgit",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cgold9820-dotcom/Flowgit.git",
+    "directory": "packages/vscode"
+  },
+  "homepage": "https://github.com/cgold9820-dotcom/Flowgit/blob/main/docs/vscode.md",
+  "bugs": {
+    "url": "https://github.com/cgold9820-dotcom/Flowgit/issues"
+  },
+  "engines": {
+    "vscode": "^1.128.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "extensionKind": [
+    "workspace"
+  ],
+  "main": "./dist/extension.js",
+  "l10n": "./l10n",
+  "activationEvents": [
+    "onView:flowgit.flows",
+    "workspaceContains:flow.json",
+    "workspaceContains:flow.md"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "%untrusted.description%",
+      "restrictedConfigurations": [
+        "flowgit.cliPath"
+      ]
+    }
+  },
+  "contributes": {
+    "jsonValidation": [
+      {
+        "fileMatch": "flow.json",
+        "url": "./schema/flow.schema.json"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "flowgit",
+          "title": "%view.container%",
+          "icon": "media/flowgit.svg"
+        }
+      ]
+    },
+    "views": {
+      "flowgit": [
+        {
+          "id": "flowgit.flows",
+          "name": "%view.name%",
+          "contextualTitle": "%view.container%"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "flowgit.runStage",
+        "title": "%command.runStage%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "flowgit.runAll",
+        "title": "%command.runAll%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "flowgit.board",
+        "title": "%command.board%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "flowgit.diff",
+        "title": "%command.diff%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "flowgit.trust",
+        "title": "%command.trust%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "flowgit.refresh",
+        "title": "%command.refresh%",
+        "category": "%command.category%",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "flowgit.openStage",
+        "title": "%command.open%",
+        "category": "%command.category%"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "flowgit.openStage",
+          "when": "false"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "flowgit.refresh",
+          "when": "view == flowgit.flows",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "flowgit.runStage",
+          "when": "view == flowgit.flows && viewItem == stage",
+          "group": "navigation@1"
+        },
+        {
+          "command": "flowgit.diff",
+          "when": "view == flowgit.flows && viewItem == stage",
+          "group": "1_flow@2"
+        },
+        {
+          "command": "flowgit.runAll",
+          "when": "view == flowgit.flows && viewItem == flow",
+          "group": "navigation@1"
+        },
+        {
+          "command": "flowgit.board",
+          "when": "view == flowgit.flows && viewItem == flow",
+          "group": "1_flow@2"
+        },
+        {
+          "command": "flowgit.diff",
+          "when": "view == flowgit.flows && viewItem == flow",
+          "group": "1_flow@3"
+        },
+        {
+          "command": "flowgit.trust",
+          "when": "view == flowgit.flows && viewItem == flow",
+          "group": "1_flow@4"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "%view.container%",
+      "properties": {
+        "flowgit.cliPath": {
+          "type": "string",
+          "default": "",
+          "description": "%config.cliPath%",
+          "scope": "machine-overridable"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "vscode:prepublish": "node scripts/build.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "jsonc-parser": "^3.3.1",
+    "yaml": "^2.9.1"
+  },
+  "devDependencies": {
+    "@types/vscode": "1.125.0",
+    "esbuild": "^0.25.12"
+  }
+}

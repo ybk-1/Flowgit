@@ -1,0 +1,16 @@
+{
+  "displayName": "Flowgit",
+  "description": "在侧边栏查看流程并运行阶段。",
+  "view.container": "Flowgit",
+  "view.name": "流程",
+  "command.category": "Flowgit",
+  "command.runStage": "运行这个阶段",
+  "command.runAll": "运行全部",
+  "command.board": "打开看板",
+  "command.diff": "和上一版比较",
+  "command.trust": "确认复制来的流程",
+  "command.refresh": "刷新",
+  "command.open": "打开阶段",
+  "config.cliPath": "Flowgit 命令行的路径。留空时先找工作区的 node_modules/.bin，再找 PATH。不会自动下载。",
+  "untrusted.description": "受限模式下侧边栏和 CodeLens 仍然显示，但 Flowgit 不会运行命令。信任工作区后才能运行阶段、运行全部、打开看板、对比或确认复制来的流程。"
+}

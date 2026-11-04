@@ -6,6 +6,10 @@ What changed in each version. The format follows [Keep a Changelog](https://keep
 
 ## [未发布 / Unreleased]
 
+### 编辑器 / Editor
+
+- VS Code 和 Cursor 插件（`packages/vscode`，不发布到 npm）：侧边栏按依赖顺序列出阶段和状态（与 `flowgit status --json` 一致），CodeLens 可运行阶段，命令通过编辑器任务执行，不读取、不保存密钥。说明见 [docs/vscode.md](docs/vscode.md)。 / A VS Code and Cursor extension (`packages/vscode`, not published to npm): the sidebar lists stages in dependency order with the same states as `flowgit status --json`, CodeLens can run a stage, and commands run as editor tasks. It never reads or stores a key. See [docs/vscode.md](docs/vscode.md).
+
 ### 云端 / Cloud
 
 - Flowgit 云端第一版的地基（`packages/server`，跑在 Cloudflare）：用 GitHub 或 Google 登录（测试版凭邀请码注册），建工作区，按拥有者、编辑、只看邀请别人；流程连同 `runs/` 版本存在云端，看板的接口（看版本、对比、回退、改文件和阶段）原样可用；一个人改了文件，打开这个流程的人马上收到通知。命令行可以用设备码登录（命令在 #174）。云端运行还没上线。接口见 `docs/cloud.md`。 / The foundation of Flowgit Cloud (`packages/server`, on Cloudflare): sign in with GitHub or Google (an invite-only beta), create workspaces and invite people as owners, editors or viewers; flows live in the cloud with their `runs/` versions, the board's API (versions, diffs, restores, editing files and stages) works as it is, and when someone changes a file everyone with the flow open hears about it at once. The CLI can sign in with a device code (the commands come in #174). Cloud runs are not available yet. The API is in `docs/cloud.md`.
